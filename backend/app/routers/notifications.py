@@ -57,7 +57,7 @@ _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 _MAX_LIMIT = 100
 
 
-@router.get("/", response_model=PaginatedNotifications)
+@router.get("", response_model=PaginatedNotifications)
 async def list_notifications(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
