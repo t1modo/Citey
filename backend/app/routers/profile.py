@@ -35,7 +35,7 @@ def _doc_to_profile(uid: str, data: dict) -> UserProfile:
     )
 
 
-@router.get("/", response_model=UserProfile)
+@router.get("", response_model=UserProfile)
 async def get_profile(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
@@ -64,7 +64,7 @@ async def get_profile(
     return _doc_to_profile(uid, default_data)
 
 
-@router.put("/", response_model=UserProfile)
+@router.put("", response_model=UserProfile)
 async def update_profile(
     body: UpdateProfileRequest,
     uid: str = Depends(get_current_user),

@@ -90,7 +90,7 @@ def _doc_to_tracked_work(doc_id: str, data: dict) -> TrackedWork:
     )
 
 
-@router.post("/", response_model=TrackedWork, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TrackedWork, status_code=status.HTTP_201_CREATED)
 async def add_work(
     body: AddWorkRequest,
     uid: str = Depends(get_current_user),
@@ -347,7 +347,7 @@ async def import_works_by_author(
     return {"imported": imported, "skipped": skipped}
 
 
-@router.get("/", response_model=list[TrackedWork])
+@router.get("", response_model=list[TrackedWork])
 async def list_works(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
