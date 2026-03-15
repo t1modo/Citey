@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}{{ total_citations }} New Citation{% if total_citations != 1 %}s{% endif %} — {{ app_name }}{% endblock %}
+
+{% block preheader %}
+{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} detected across {{ total_papers }} of your paper{% if total_papers != 1 %}s{% endif %}.
+{% endblock %}
+
+{% block body_content %}
+
+<p class="greeting">New citation{% if total_citations != 1 %}s{% endif %} detected, {{ recipient_name }}</p>
+<p class="intro">
+  {{ app_name }} found <strong>{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %}</strong>
+  across <strong>{{ total_papers }} of your paper{% if total_papers != 1 %}s{% endif %}</strong>.
+  A summary is provided below.
+</p>
+
+{% for group in citation_groups %}
+
+<!-- Paper group -->
+<div style="margin-bottom: 28px;">
+
+  <!-- Your paper -->
+  <div class="paper-header">
+    <div class="paper-header-label">
+      Your paper &mdash; {{ group.citations | length }} new citation{% if group.citations | length != 1 %}s{% endif %}
+    </div>
+    <div class="paper-header-title">
+      {% if group.cited_work_doi %}
+        <a href="https://doi.org/{{ group.cited_work_doi }}" target="_blank" rel="noopener">{{ group.cited_work_title }}</a>
+      {% else %}
+        {{ group.cited_work_title }}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Citing papers -->
+  {% for n in group.citations %}
+  <div class="citation-card">
+    <div class="citation-card-label">Citing paper</div>
+
+    <div class="citation-title">
+      {% if n.citing_work_url %}
+        <a href="{{ n.citing_work_url }}" target="_blank" rel="noopener">{{ n.citing_work_title }}</a>
+      {% elif n.citing_work_doi %}
+        <a href="https://doi.org/{{ n.citing_work_doi }}" target="_blank" rel="noopener">{{ n.citing_work_title }}</a>
+      {% else %}
+        {{ n.citing_work_title }}
+      {% endif %}
+    </div>
+
+    {% if n.citing_authors %}
+    <div class="citation-meta">
+      <strong>Authors:</strong>
+      {{ n.citing_authors[:4] | join(', ') }}{% if n.citing_authors | length > 4 %} &middot; +{{ n.citing_authors | length - 4 }} more{% endif %}
+    </div>
+    {% endif %}
+
+    {% if n.citing_affiliations %}
+    <div class="citation-meta">
+      <strong>Affiliations:</strong> {{ n.citing_affiliations | join(' &middot; ') }}
+    </div>
+    {% endif %}
+
+    {% if n.citing_publication_date %}
+    <div class="citation-meta"><strong>Published:</strong> {{ n.citing_publication_date }}</div>
+    {% elif n.citing_year %}
+    <div class="citation-meta"><strong>Year:</strong> {{ n.citing_year }}</div>
+    {% endif %}
+
+    {% if n.citing_work_doi %}
+    <div class="citation-meta" style="margin-top: 8px;">
+      <a href="https://doi.org/{{ n.citing_work_doi }}" class="citation-doi" target="_blank" rel="noopener">doi.org/{{ n.citing_work_doi }}</a>
+    </div>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+
+</div>
+
+{% if not loop.last %}<hr class="section-divider" />{% endif %}
+{% endfor %}
+
+<div class="btn-wrap">
+  <a href="{{ app_url }}/dashboard" class="btn-primary">View Full Dashboard</a>
+</div>
+
+<p style="font-size: 13px; color: #9aa3b5; margin-top: 24px; line-height: 1.6;">
+  Citation data is sourced from OpenAlex and Semantic Scholar. Coverage may differ
+  from Google Scholar. To adjust your notification preferences, visit your
+  <a href="{{ app_url }}/settings" style="color: #7b849a;">account settings</a>.
+</p>
+
+{% endblock %}

@@ -1,0 +1,65 @@
+{{ app_name }} — {{ notification_count }} new citation{% if notification_count != 1 %}s{% endif %} for your work
+================================================================================
+
+Hi {{ recipient_name }},
+
+{% if notification_count == 1 %}
+A new paper has cited your work. Here are the details:
+{% else %}
+{{ notification_count }} new papers have cited your work. Here are the details:
+{% endif %}
+
+================================================================================
+{% for notification in notifications %}
+
+YOUR PAPER
+----------
+{{ notification.cited_work_title }}
+{% set cited_doi = notification.cited_work_id | replace('__', '/') %}
+{% if cited_doi and '/' in cited_doi %}
+  https://doi.org/{{ cited_doi }}
+{% endif %}
+
+WAS CITED BY
+------------
+{{ notification.citing_work_title }}
+{% if notification.citing_work_url %}
+  {{ notification.citing_work_url }}
+{% elif notification.citing_work_doi %}
+  https://doi.org/{{ notification.citing_work_doi }}
+{% endif %}
+
+{% if notification.citing_authors %}
+Authors:       {{ notification.citing_authors | join(', ') }}
+{% endif %}
+{% if notification.citing_affiliations %}
+Affiliations:  {{ notification.citing_affiliations | join(', ') }}
+{% endif %}
+{% if notification.citing_year %}
+Year:          {{ notification.citing_year }}
+{% endif %}
+{% if notification.citing_work_doi %}
+DOI:           https://doi.org/{{ notification.citing_work_doi }}
+{% endif %}
+
+{% if not loop.last %}
+--------------------------------------------------------------------------------
+{% endif %}
+{% endfor %}
+
+================================================================================
+
+View all your notifications:
+{{ app_url }}/notifications
+
+Keep up the great work! Citations reflect the impact your research is having on
+the scientific community.
+
+—————————————————————————————————————————
+© {{ current_year | default('2025') }} {{ app_name }}
+{{ support_email }}
+
+Manage your notification preferences:
+{{ app_url }}/settings
+
+You're receiving this email because you track citations on {{ app_name }}.

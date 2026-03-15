@@ -1,0 +1,59 @@
+{{ app_name }} — New Citation Notification
+{{ "=" * 72 }}
+
+Dear {{ recipient_name }},
+
+{{ app_name }} has detected {{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} across {{ total_papers }} of your paper{% if total_papers != 1 %}s{% endif %}. A summary is provided below.
+
+{{ "=" * 72 }}
+
+{% for group in citation_groups %}
+YOUR PAPER ({{ group.citations | length }} new citation{% if group.citations | length != 1 %}s{% endif %})
+{{ group.cited_work_title }}
+{% if group.cited_work_doi %}https://doi.org/{{ group.cited_work_doi }}{% endif %}
+
+{{ "-" * 60 }}
+
+{% for n in group.citations %}
+  [{{ loop.index }}] {{ n.citing_work_title }}
+{% if n.citing_work_url %}
+      Link:         {{ n.citing_work_url }}
+{% elif n.citing_work_doi %}
+      Link:         https://doi.org/{{ n.citing_work_doi }}
+{% endif %}
+{% if n.citing_authors %}
+      Authors:      {{ n.citing_authors[:4] | join(', ') }}{% if n.citing_authors | length > 4 %} (+{{ n.citing_authors | length - 4 }} more){% endif %}
+
+{% endif %}
+{% if n.citing_affiliations %}
+      Affiliations: {{ n.citing_affiliations | join(' · ') }}
+{% endif %}
+{% if n.citing_publication_date %}
+      Published:    {{ n.citing_publication_date }}
+{% elif n.citing_year %}
+      Year:         {{ n.citing_year }}
+{% endif %}
+{% if n.citing_work_doi %}
+      DOI:          {{ n.citing_work_doi }}
+{% endif %}
+
+{% endfor %}
+{% if not loop.last %}
+{{ "=" * 72 }}
+
+{% endif %}
+{% endfor %}
+{{ "=" * 72 }}
+
+View your dashboard:
+{{ app_url }}/dashboard
+
+Citation data is sourced from OpenAlex and Semantic Scholar. Coverage may
+differ from Google Scholar.
+
+Manage notification preferences:
+{{ app_url }}/settings
+
+—
+© {{ current_year }} {{ app_name }} · {{ support_email }}
+You are receiving this because you track citations on {{ app_name }}.

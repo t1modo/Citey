@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}{{ notification_count }} new citation{% if notification_count != 1 %}s{% endif %} — {{ app_name }}{% endblock %}
+
+{% block preheader %}
+You have {{ notification_count }} new citation{% if notification_count != 1 %}s{% endif %} for your work. See who's citing you.
+{% endblock %}
+
+{% block body_content %}
+<h2>You have {{ notification_count }} new citation{% if notification_count != 1 %}s{% endif %}!</h2>
+
+<p>Hi {{ recipient_name }},</p>
+
+<p>
+  {% if notification_count == 1 %}
+    A new paper has cited your work. Here are the details:
+  {% else %}
+    {{ notification_count }} new papers have cited your work. Here are the details:
+  {% endif %}
+</p>
+
+{% for notification in notifications %}
+<div class="notification-card">
+
+  <!-- Cited work (the user's own paper) -->
+  <div class="label">Your paper</div>
+  <div class="work-title">
+    {% set cited_doi = notification.cited_work_id | replace('__', '/') %}
+    {% if cited_doi and '/' in cited_doi %}
+      <a href="https://doi.org/{{ cited_doi }}" target="_blank" rel="noopener">{{ notification.cited_work_title }}</a>
+    {% else %}
+      {{ notification.cited_work_title }}
+    {% endif %}
+  </div>
+
+  <!-- Was cited by -->
+  <div class="label">Was cited by</div>
+  <div class="citing-title">
+    {% if notification.citing_work_url %}
+      <a href="{{ notification.citing_work_url }}" target="_blank" rel="noopener">{{ notification.citing_work_title }}</a>
+    {% elif notification.citing_work_doi %}
+      <a href="https://doi.org/{{ notification.citing_work_doi }}" target="_blank" rel="noopener">{{ notification.citing_work_title }}</a>
+    {% else %}
+      {{ notification.citing_work_title }}
+    {% endif %}
+  </div>
+
+  <!-- Metadata -->
+  {% if notification.citing_authors %}
+  <div class="meta">
+    <strong>Authors:</strong> {{ notification.citing_authors | join(', ') }}
+  </div>
+  {% endif %}
+
+  {% if notification.citing_affiliations %}
+  <div class="meta">
+    <strong>Affiliations:</strong> {{ notification.citing_affiliations | join(', ') }}
+  </div>
+  {% endif %}
+
+  {% if notification.citing_year %}
+  <div class="meta">
+    <strong>Year:</strong> {{ notification.citing_year }}
+  </div>
+  {% endif %}
+
+  {% if notification.citing_work_doi %}
+  <div class="meta">
+    <strong>DOI:</strong>
+    <a href="https://doi.org/{{ notification.citing_work_doi }}" target="_blank" rel="noopener">
+      {{ notification.citing_work_doi }}
+    </a>
+  </div>
+  {% endif %}
+
+</div>
+{% if not loop.last %}<hr class="divider" />{% endif %}
+{% endfor %}
+
+<p style="margin-top: 32px;">
+  <a href="{{ app_url }}/notifications" class="btn-primary">View all notifications</a>
+</p>
+
+<p style="font-size: 14px; color: #718096; margin-top: 24px;">
+  Keep up the great work! Citations reflect the impact your research is having on the scientific community.
+</p>
+{% endblock %}
+
+{% block footer_extra %}{% endblock %}

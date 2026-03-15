@@ -1,0 +1,194 @@
+"""
+Jobs router.
+
+Two approaches to trigger the citation-check job:
+  1. POST /jobs/run          — protected by X-Cron-Secret header (for cron/Cloud Scheduler)
+  2. POST /jobs/run          — also accepts a valid Firebase Bearer token (for manual triggers)
+  3. POST /jobs/email-test   — requires Firebase Bearer token
+"""
+
+import logging
+from typing import Any
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from app.config import Settings, get_settings
+from app.firebase_client import verify_token
+from app.models import JobRunRequest
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+
+async def _authorize_job_request(
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        HTTPBearer(auto_error=False)
+    ),
+    x_cron_secret: str | None = Header(default=None, alias="X-Cron-Secret"),
+    settings: Settings = Depends(get_settings),
+) -> str:
+    """
+    Accept either:
+    - A valid X-Cron-Secret header value, or
+    - A valid Firebase Bearer token.
+
+    Returns a string identity label (e.g. "cron" or the uid) for logging.
+    Raises HTTP 401/403 if neither credential is valid.
+    """
+    # 1. Check cron secret first (cheap, no network call).
+    if x_cron_secret is not None:
+        if x_cron_secret == settings.cron_secret:
+            return "cron"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid cron secret.",
+        )
+
+    # 2. Fall back to Firebase Bearer token.
+    if credentials and credentials.credentials:
+        try:
+            decoded = verify_token(credentials.credentials)
+            uid: str = decoded.get("uid") or decoded.get("user_id", "")
+            if uid:
+                return uid
+        except Exception as exc:
+            logger.warning("Token verification failed in job auth: %s", exc)
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=(
+            "Provide a valid X-Cron-Secret header or a Firebase Bearer token "
+            "to trigger this job."
+        ),
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+@router.post("/run")
+async def run_job(
+    body: JobRunRequest,
+    caller_id: str = Depends(_authorize_job_request),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    Trigger the citation-check job.
+
+    - When called via X-Cron-Secret (scheduled cron): checks all users.
+    - When called via Firebase Bearer token (manual user trigger): checks only that user.
+
+    Authorization: X-Cron-Secret header **or** Firebase Bearer token.
+    """
+    from app.firebase_client import get_db as _get_db
+    from app.services import email_service as email_svc
+
+    _db = _get_db()
+    logger.info("Job /run triggered by caller_id=%s dry_run=%s", caller_id, body.dry_run)
+
+    if caller_id == "cron":
+        from app.services.citation_service import run_job_for_all_users
+        summary = await run_job_for_all_users(
+            db=_db,
+            email_service=email_svc,
+            dry_run=body.dry_run,
+            settings=settings,
+        )
+    else:
+        # Manual trigger by an authenticated user — scope to their papers only.
+        from app.services.citation_service import run_job_for_user
+        user_doc = _db.collection("users").document(caller_id).get()
+        user_data: dict = user_doc.to_dict() or {} if user_doc.exists else {}
+        works_processed, new_notifications = await run_job_for_user(
+            uid=caller_id,
+            user_data=user_data,
+            db=_db,
+            email_service=email_svc,
+            dry_run=body.dry_run,
+            settings=settings,
+        )
+        summary = {
+            "users_processed": 1,
+            "works_processed": works_processed,
+            "new_notifications": new_notifications,
+        }
+
+    logger.info("Job complete: %s", summary)
+    n = summary["new_notifications"]
+    w = summary["works_processed"]
+    if n > 0:
+        summary["message"] = f"Found {n} new citation(s) across {w} paper(s)."
+    else:
+        summary["message"] = f"Checked {w} paper(s) — all citations already up to date."
+    return summary
+
+
+@router.post("/email-test")
+async def email_test(
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        HTTPBearer(auto_error=False)
+    ),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Send a test email to the authenticated user's notification_email."""
+    # Verify token
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    try:
+        decoded = verify_token(credentials.credentials)
+        uid: str = decoded.get("uid") or decoded.get("user_id", "")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired authentication token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+    if not uid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token does not contain a valid user ID.",
+        )
+
+    from app.firebase_client import get_db as _get_db
+    from app.services.email_service import send_test_email
+
+    db = _get_db()
+    user_ref = db.collection("users").document(uid)
+    snapshot = user_ref.get()
+    if not snapshot.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found. Create a profile first.",
+        )
+
+    data = snapshot.to_dict() or {}
+    to_email: str | None = data.get("notification_email") or data.get("email")
+    if not to_email:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No email address found on profile. Set a notification_email first.",
+        )
+
+    recipient_name: str = data.get("display_name") or to_email
+    try:
+        await send_test_email(
+            to_email=to_email,
+            recipient_name=recipient_name,
+            settings=settings,
+        )
+    except Exception as exc:
+        logger.error("Failed to send test email to %s: %s", to_email, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Email delivery failed: {exc}",
+        ) from exc
+
+    logger.info("Test email sent to %s for uid=%s", to_email, uid)
+    return {"message": f"Test email sent to {to_email}."}

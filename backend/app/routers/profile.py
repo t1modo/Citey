@@ -1,0 +1,125 @@
+import logging
+from datetime import datetime, timezone
+from typing import Any
+
+from fastapi import APIRouter, Depends, status
+from firebase_admin import firestore
+
+from app.deps import get_current_user
+from app.firebase_client import get_db
+from app.models import UpdateProfileRequest, UserProfile
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/profile", tags=["profile"])
+
+
+def _doc_to_profile(uid: str, data: dict) -> UserProfile:
+    """Convert a raw Firestore document dict to a UserProfile."""
+    created_at = data.get("created_at")
+    if hasattr(created_at, "timestamp"):
+        # Firestore DatetimeWithNanoseconds → Python datetime
+        created_at = created_at.replace(tzinfo=timezone.utc) if created_at.tzinfo is None else created_at
+
+    return UserProfile(
+        uid=uid,
+        email=data.get("email", ""),
+        display_name=data.get("display_name"),
+        notification_email=data.get("notification_email"),
+        notify_enabled=data.get("notify_enabled", True),
+        scholar_url=data.get("scholar_url"),
+        linked_author_id=data.get("linked_author_id"),
+        linked_author_name=data.get("linked_author_name"),
+        name_aliases=data.get("name_aliases") or [],
+        created_at=created_at,
+    )
+
+
+@router.get("/", response_model=UserProfile)
+async def get_profile(
+    uid: str = Depends(get_current_user),
+    db: Any = Depends(get_db),
+) -> UserProfile:
+    """
+    Fetch the current user's profile from Firestore.
+    If no document exists, a default profile is created and returned.
+    """
+    ref = db.collection("users").document(uid)
+    snapshot = ref.get()
+
+    if snapshot.exists:
+        data = snapshot.to_dict() or {}
+        return _doc_to_profile(uid, data)
+
+    # First-time user: create a minimal default document.
+    now = datetime.now(tz=timezone.utc)
+    default_data: dict = {
+        "uid": uid,
+        "email": "",
+        "notify_enabled": True,
+        "created_at": now,
+    }
+    ref.set(default_data)
+    logger.info("Created default profile for uid=%s", uid)
+    return _doc_to_profile(uid, default_data)
+
+
+@router.put("/", response_model=UserProfile)
+async def update_profile(
+    body: UpdateProfileRequest,
+    uid: str = Depends(get_current_user),
+    db: Any = Depends(get_db),
+) -> UserProfile:
+    """Update mutable fields of the current user's profile."""
+    ref = db.collection("users").document(uid)
+
+    # Only include fields that were explicitly provided (not None).
+    updates: dict = {}
+    if body.display_name is not None:
+        updates["display_name"] = body.display_name
+    if body.notification_email is not None:
+        updates["notification_email"] = body.notification_email
+    if body.notify_enabled is not None:
+        updates["notify_enabled"] = body.notify_enabled
+    if body.scholar_url is not None:
+        # Empty string means the user deliberately cleared the field.
+        updates["scholar_url"] = body.scholar_url if body.scholar_url else firestore.DELETE_FIELD
+    if body.name_aliases is not None:
+        updates["name_aliases"] = body.name_aliases
+
+    if updates:
+        ref.set(updates, merge=True)
+        logger.info("Updated profile for uid=%s: fields=%s", uid, list(updates.keys()))
+
+    snapshot = ref.get()
+    data = snapshot.to_dict() or {}
+    return _doc_to_profile(uid, data)
+
+
+@router.delete("/linked-author", status_code=status.HTTP_204_NO_CONTENT)
+async def unlink_author(
+    uid: str = Depends(get_current_user),
+    db: Any = Depends(get_db),
+) -> None:
+    """
+    Unlink the current author profile and delete all tracked works + notifications.
+    This resets the account so the user can link a different author.
+    """
+    user_ref = db.collection("users").document(uid)
+
+    # Delete all notifications first.
+    for ndoc in user_ref.collection("notifications").stream():
+        ndoc.reference.delete()
+
+    # Delete all tracked works.
+    for wdoc in user_ref.collection("trackedWorks").stream():
+        wdoc.reference.delete()
+
+    # Remove linked-author fields and aliases from the user document.
+    user_ref.update({
+        "linked_author_id": firestore.DELETE_FIELD,
+        "linked_author_name": firestore.DELETE_FIELD,
+        "name_aliases": firestore.DELETE_FIELD,
+    })
+
+    logger.info("Unlinked author and cleared all works/notifications for uid=%s", uid)
