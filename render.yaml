@@ -33,7 +33,7 @@ services:
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     schedule: "0 8 * * *"   # 08:00 UTC daily — adjust as you like
-    command: >
+    startCommand: >
       python -c "
       import httpx, os;
       r = httpx.post(
