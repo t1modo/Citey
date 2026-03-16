@@ -2,10 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNotifications } from "@/contexts/NotificationsContext";
-import { labsToText } from "@/lib/labs";
 
 const navLinks = [
   { label: "Home",      href: "/" },
@@ -14,111 +12,10 @@ const navLinks = [
   { label: "FAQ",       href: "/faq" },
 ];
 
-function formatRelativeDate(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-function BellIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-      />
-    </svg>
-  );
-}
-
-function NotificationDropdown({
-  onClose,
-}: {
-  onClose: () => void;
-}) {
-  const { notifications, unreadCount, loading, markSeen } = useNotifications();
-  const recent = notifications.slice(0, 6);
-
-  const handleItemClick = async (id: string, seen: boolean) => {
-    if (!seen) {
-      await markSeen(id);
-      window.dispatchEvent(new CustomEvent("citey:markRead", { detail: id }));
-    }
-  };
-
-  return (
-    <div className="absolute right-0 top-full mt-2 w-80 rounded-xl border border-white/10 bg-gray-900 shadow-2xl overflow-hidden z-50">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-        <span className="text-sm font-semibold text-white">Notifications</span>
-      </div>
-
-      {/* Notification list */}
-      <div className="max-h-80 overflow-y-auto">
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <svg className="h-5 w-5 animate-spin text-gray-400" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
-            </svg>
-          </div>
-        ) : recent.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-8 text-center">
-            <BellIcon className="h-8 w-8 text-gray-600" />
-            <p className="text-sm text-gray-500">No notifications yet</p>
-          </div>
-        ) : (
-          recent.map((n) => {
-            const byLine = labsToText(n.citing_affiliations);
-            const yourPaper = n.cited_work_title || n.cited_work_id;
-            return (
-              <button
-                key={n.id}
-                onClick={() => handleItemClick(n.id, n.seen)}
-                className={`w-full border-b border-white/5 px-4 py-3 text-left transition-colors last:border-0 hover:bg-white/5 ${
-                  !n.seen ? "bg-white/5" : ""
-                }`}
-              >
-                <div className="flex items-start gap-2">
-                  {!n.seen && (
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-white" />
-                  )}
-                  <div className={`flex-1 min-w-0 ${n.seen ? "pl-3.5" : ""}`}>
-                    <p className="truncate text-sm font-medium text-white">
-                      Cited by {byLine}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-gray-500">
-                      &ldquo;{yourPaper}&rdquo;
-                    </p>
-                    {n.created_at && (
-                      <p className="mt-1 text-xs text-gray-600">{formatRelativeDate(n.created_at)}</p>
-                    )}
-                  </div>
-                </div>
-              </button>
-            );
-          })
-        )}
-      </div>
-
-    </div>
-  );
-}
-
 export default function Nav() {
   const { user, signOut } = useAuth();
-  const { unreadCount } = useNotifications();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [bellOpen, setBellOpen] = useState(false);
-  const bellRef = useRef<HTMLDivElement>(null);
 
   const handleSignOut = async () => {
     try {
@@ -130,25 +27,6 @@ export default function Nav() {
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
-
-  // Close bell dropdown on outside click
-  useEffect(() => {
-    if (!bellOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
-        setBellOpen(false);
-      }
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setBellOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [bellOpen]);
 
   return (
     <nav className="sticky top-0 z-50 border-b border-white/10 bg-gray-950/80 backdrop-blur-md">
@@ -200,27 +78,6 @@ export default function Nav() {
 
           {/* Desktop right section */}
           <div className="hidden items-center gap-2 md:flex">
-            {/* Bell icon */}
-            {user && (
-              <div className="relative" ref={bellRef}>
-                <button
-                  onClick={() => setBellOpen((prev) => !prev)}
-                  className="relative flex items-center justify-center rounded-md p-2 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
-                  aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
-                  aria-expanded={bellOpen}
-                >
-                  <BellIcon className="h-5 w-5" />
-                  {unreadCount > 0 && (
-                    <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-bold text-gray-950">
-                      {unreadCount > 9 ? "9+" : unreadCount}
-                    </span>
-                  )}
-                </button>
-                {bellOpen && <NotificationDropdown onClose={() => setBellOpen(false)} />}
-              </div>
-            )}
-
-            {/* Auth */}
             {user ? (
               <>
                 <span className="max-w-[180px] truncate text-sm text-gray-400">
@@ -243,32 +100,11 @@ export default function Nav() {
             )}
           </div>
 
-          {/* Mobile right: bell + hamburger */}
+          {/* Mobile right: hamburger */}
           <div className="flex items-center gap-1 md:hidden">
-            {user && (
-              <div className="relative" ref={bellOpen ? bellRef : undefined}>
-                <button
-                  onClick={() => { setBellOpen((prev) => !prev); setMenuOpen(false); }}
-                  className="relative flex items-center justify-center rounded-md p-2 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
-                  aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
-                >
-                  <BellIcon className="h-5 w-5" />
-                  {unreadCount > 0 && (
-                    <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-bold text-gray-950">
-                      {unreadCount > 9 ? "9+" : unreadCount}
-                    </span>
-                  )}
-                </button>
-                {bellOpen && (
-                  <div ref={bellRef} className="absolute right-0 top-full mt-2 w-72">
-                    <NotificationDropdown onClose={() => setBellOpen(false)} />
-                  </div>
-                )}
-              </div>
-            )}
             <button
               className="flex items-center justify-center rounded-md p-2 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
-              onClick={() => { setMenuOpen((prev) => !prev); setBellOpen(false); }}
+              onClick={() => setMenuOpen((prev) => !prev)}
               aria-label="Toggle menu"
               aria-expanded={menuOpen}
             >
