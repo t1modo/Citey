@@ -236,11 +236,57 @@ _CANONICAL_MAP: list[tuple[str, str]] = [
     ("columbia university", "Columbia"),
     ("new york university", "NYU"),
     ("cornell university", "Cornell"),
+    ("cornell", "Cornell"),
+    ("johns hopkins university", "Johns Hopkins"),
+    ("johns hopkins", "Johns Hopkins"),
+    ("jhu", "Johns Hopkins"),
+    ("duke university", "Duke"),
+    ("duke", "Duke"),
+    ("dartmouth college", "Dartmouth"),
+    ("dartmouth", "Dartmouth"),
+    ("northwestern university", "Northwestern"),
+    ("northwestern", "Northwestern"),
+    ("notre dame", "Notre Dame"),
+    ("university of notre dame", "Notre Dame"),
+    ("vanderbilt university", "Vanderbilt"),
+    ("vanderbilt", "Vanderbilt"),
+    ("emory university", "Emory"),
+    ("emory", "Emory"),
+    ("tufts university", "Tufts"),
+    ("tufts", "Tufts"),
+    ("brown university", "Brown"),
+    ("rice university", "Rice"),
+    ("georgetown university", "Georgetown"),
+    ("purdue university", "Purdue"),
+    ("purdue", "Purdue"),
+    ("pennsylvania state university", "Penn State"),
+    ("penn state", "Penn State"),
+    ("university of north carolina", "UNC"),
+    ("university of maryland", "UMD"),
+    ("umd", "UMD"),
+    ("university of florida", "U. Florida"),
+    ("university of virginia", "UVA"),
+    ("virginia polytechnic", "Virginia Tech"),
+    ("virginia tech", "Virginia Tech"),
+    ("university of southern california", "USC"),
+    ("boston university", "Boston University"),
+    ("northeastern university", "Northeastern"),
+    ("university of california, santa barbara", "UCSB"),
+    ("uc santa barbara", "UCSB"),
+    ("university of california, davis", "UC Davis"),
+    ("uc davis", "UC Davis"),
+    ("university of california, irvine", "UC Irvine"),
+    ("uc irvine", "UC Irvine"),
+    ("university of california, san francisco", "UCSF"),
     ("university of pennsylvania", "UPenn"),
+    ("upenn", "UPenn"),
     ("university of michigan", "U. Michigan"),
+    ("umich", "U. Michigan"),
     ("university of washington", "UW"),
     ("university of chicago", "U. Chicago"),
-    ("university of texas", "UT"),
+    ("uchicago", "U. Chicago"),
+    ("university of texas", "UT Austin"),
+    ("ut austin", "UT Austin"),
     ("georgia institute of technology", "Georgia Tech"),
     ("georgia tech", "Georgia Tech"),
     ("university of toronto", "U. Toronto"),
@@ -255,6 +301,16 @@ _CANONICAL_MAP: list[tuple[str, str]] = [
     ("imperial college london", "Imperial College"),
     ("imperial college", "Imperial College"),
     ("university college london", "UCL"),
+    ("university of edinburgh", "Edinburgh"),
+    ("technical university of munich", "TU Munich"),
+    ("technische universität münchen", "TU Munich"),
+    ("tum", "TU Munich"),
+    ("rwth aachen", "RWTH Aachen"),
+    ("ku leuven", "KU Leuven"),
+    ("university of british columbia", "UBC"),
+    ("ubc", "UBC"),
+    ("mcgill university", "McGill"),
+    ("mcgill", "McGill"),
     ("eth zurich", "ETH Zürich"),
     ("eth zürich", "ETH Zürich"),
     ("epfl", "EPFL"),
@@ -274,12 +330,23 @@ _CANONICAL_MAP: list[tuple[str, str]] = [
     ("sun yat-sen university", "SYSU"),
     ("harbin institute of technology", "HIT"),
     ("korea advanced institute of science and technology", "KAIST"),
+    ("kaist", "KAIST"),
     ("seoul national university", "SNU"),
+    ("postech", "POSTECH"),
+    ("hong kong university of science and technology", "HKUST"),
+    ("hkust", "HKUST"),
+    ("university of hong kong", "HKU"),
+    ("chinese university of hong kong", "CUHK"),
+    ("australian national university", "ANU"),
+    ("university of melbourne", "U. Melbourne"),
+    ("monash university", "Monash"),
     ("hebrew university", "Hebrew University"),
     ("technion", "Technion"),
     ("weizmann institute", "Weizmann Institute"),
     ("max planck institute", "Max Planck Institute"),
     ("inria", "INRIA"),
+    ("cnrs", "CNRS"),
+    ("sorbonne", "Sorbonne"),
     # Companies (broad match — place after specific lab variants)
     ("microsoft", "Microsoft"),
     ("google", "Google"),
@@ -391,8 +458,43 @@ def _match_canonical(text: str) -> str | None:
     return None
 
 _EMAIL_RE = re.compile(r"[\w.+{},\s]+@[\w.]+")
+_EMAIL_DOMAIN_RE = re.compile(r"@([\w][\w.-]*\.[a-z]{2,})", re.IGNORECASE)
 _MARKER_LEADING = re.compile(r"^[\d\s*†‡§¶#◦○●,;:\-]+")
 _MARKER_TRAILING = re.compile(r"[,;:\-\s]+$")
+
+
+def _infer_from_email_domains(text: str) -> list[str]:
+    """Return canonical institution names inferred from email domains in *text*.
+
+    Only processes academic TLDs (.edu and .ac.xx).  The domain segment that
+    identifies the institution (e.g. "dartmouth" in dartmouth.edu, or "ox" in
+    ox.ac.uk) is passed through ``_match_canonical`` so results are already in
+    display-friendly form.
+    """
+    results: list[str] = []
+    seen: set[str] = set()
+    for m in _EMAIL_DOMAIN_RE.finditer(text):
+        domain = m.group(1).lower()
+        parts = [p for p in domain.split(".") if p]
+        if len(parts) < 2:
+            continue
+        tld = parts[-1]
+        second_tld = parts[-2] if len(parts) >= 2 else ""
+        if tld == "edu":
+            # dartmouth.edu → "dartmouth";  cs.dartmouth.edu → "dartmouth"
+            candidate = parts[-2]
+        elif second_tld == "ac":
+            # ox.ac.uk → "ox";  dcs.ox.ac.uk → "ox"
+            candidate = parts[-3] if len(parts) >= 3 else ""
+        else:
+            continue
+        if not candidate:
+            continue
+        hit = _match_canonical(candidate)
+        if hit and hit not in seen:
+            results.append(hit)
+            seen.add(hit)
+    return results
 
 
 def _parse_affiliations_from_first_page(text: str) -> list[str]:
@@ -401,23 +503,32 @@ def _parse_affiliations_from_first_page(text: str) -> list[str]:
 
     Strategy:
       1. Truncate to everything before the "Abstract" heading.
-      2. Pre-split combined lines where mid-line superscript numbers mark a
+      2. Infer institutions from email domains in the header (e.g. @dartmouth.edu).
+      3. Pre-split combined lines where mid-line superscript numbers mark a
          new affiliation (e.g. "Watson AI Lab 3IBM Research").
-      3. Strip leading markers and email addresses from each candidate line.
-      4. Keep lines that contain an academic or corporate keyword.
+      4. Strip leading markers and email addresses from each candidate line.
+      5. Keep lines that contain an academic or corporate keyword, start with
+         an uppercase letter or digit, and are short enough to be a name (not
+         a prose sentence).
     """
     abstract_match = re.search(r"\bAbstract\b", text, re.IGNORECASE)
     header = text[: abstract_match.start()] if abstract_match else text[:3000]
 
-    # Split mid-line affiliation markers so "Lab 3IBM" → "Lab\nIBM"
-    header = re.sub(r"(\w)\s+(\d+)(?=[A-Z])", r"\1\n\2", header)
-
     affiliations: list[str] = []
     seen: set[str] = set()
 
+    # --- Step 1: email-domain inference (runs on raw header before any stripping) ---
+    for inst in _infer_from_email_domains(header):
+        if inst.lower() not in seen:
+            affiliations.append(inst)
+            seen.add(inst.lower())
+
+    # Split mid-line affiliation markers so "Lab 3IBM" → "Lab\nIBM"
+    header = re.sub(r"(\w)\s+(\d+)(?=[A-Z])", r"\1\n\2", header)
+
     for line in header.splitlines():
         line = line.strip()
-        if not line or len(line) < 5 or len(line) > 300:
+        if not line or len(line) < 5 or len(line) > 200:
             continue
 
         # Remove email addresses from line before checking keywords
@@ -432,9 +543,21 @@ def _parse_affiliations_from_first_page(text: str) -> list[str]:
         clean = _MARKER_LEADING.sub("", no_email).strip()
         clean = _MARKER_TRAILING.sub("", clean).strip()
 
-        if clean and len(clean) >= 5 and clean.lower() not in seen:
-            affiliations.append(clean)
-            seen.add(clean.lower())
+        if not clean or len(clean) < 5 or clean.lower() in seen:
+            continue
+
+        # Reject prose sentences: institution names start with an uppercase
+        # letter or digit, never with a lowercase word like "who", "the", "a".
+        if not (clean[0].isupper() or clean[0].isdigit()):
+            continue
+
+        # Reject lines that are too long to be an institution name (prose
+        # sentences tend to have many words; a real affiliation is concise).
+        if len(clean.split()) > 10:
+            continue
+
+        affiliations.append(clean)
+        seen.add(clean.lower())
 
     return affiliations[:6]
 
