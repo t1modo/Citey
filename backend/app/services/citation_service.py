@@ -83,22 +83,25 @@ async def process_tracked_work(
     )
 
     # 2. Fetch from OpenAlex and Semantic Scholar in parallel.
-    #    OpenAlex requires an OpenAlex ID; S2 works directly from DOI.
-    #    Both are queried without a date filter — deduplication against
-    #    existing Firestore notification documents prevents re-writing
-    #    citations already on record.  Using a publication-date filter
-    #    caused citations to be missed whenever a paper's OpenAlex
-    #    indexing date lagged behind its publication date.
+    #    Only citing papers published within the last 30 days are considered.
+    #    The date filter is applied as early as possible:
+    #      - OpenAlex: passed as a server-side filter to avoid fetching stale pages.
+    #      - S2: applied after raw fetch but before expensive affiliation enrichment.
+    #    A final post-normalization filter acts as a strict backstop.
+    thirty_days_ago: str = (
+        datetime.now(tz=timezone.utc) - timedelta(days=30)
+    ).strftime("%Y-%m-%d")
+
     async def _empty() -> list:
         return []
 
     oa_task = (
-        openalex_svc.get_citing_works(openalex_id)
+        openalex_svc.get_citing_works(openalex_id, since_date=thirty_days_ago)
         if openalex_id
         else _empty()
     )
     s2_task = (
-        s2_svc.get_citing_papers(work.doi)
+        s2_svc.get_citing_papers(work.doi, since_date=thirty_days_ago)
         if work.doi
         else _empty()
     )
@@ -134,10 +137,22 @@ async def process_tracked_work(
             merged[key] = n
 
     all_normalized = list(merged.values())
+
+    # Strict 30-day backstop: discard any paper whose publication_date is
+    # absent or older than the cutoff.  This catches anything that slipped
+    # past the per-source filters (e.g. missing dates from either API).
+    before_date_filter = len(all_normalized)
+    all_normalized = [
+        n for n in all_normalized
+        if (n.get("publication_date") or "") >= thirty_days_ago
+    ]
+    date_filtered_count = before_date_filter - len(all_normalized)
+
     logger.info(
         "Merged citing works for %s (uid=%s): %d unique after dedup "
-        "(%d OA + %d S2 before merge)",
+        "(%d OA + %d S2 before merge); %d dropped by 30-day date filter",
         work.id, uid, len(all_normalized), len(oa_normalized), len(s2_normalized),
+        date_filtered_count,
     )
 
     notifications_ref = db.collection("users").document(uid).collection("notifications")

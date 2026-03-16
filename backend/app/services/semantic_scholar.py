@@ -76,15 +76,26 @@ async def _resolve_s2_paper_id(doi: str) -> str | None:
     return None
 
 
-async def get_citing_papers(doi: str) -> list[dict]:
+async def get_citing_papers(doi: str, since_date: str | None = None) -> list[dict]:
     """
     Fetch all papers that cite *doi* from Semantic Scholar.
+
+    Parameters
+    ----------
+    doi:
+        The DOI of the paper to find citations for.
+    since_date:
+        Optional ISO date string (``YYYY-MM-DD``).  When provided, only citing
+        papers with a ``publicationDate`` on or after this date are kept, and
+        the expensive affiliation-enrichment steps are skipped for papers that
+        don't pass the filter.
 
     Strategy:
       1. Resolve the DOI to a native S2 paperId via the batch endpoint.
          This handles arXiv DOIs, ACL Anthology DOIs, and any encoding
          quirks without hitting path-based URL issues.
       2. Page through /paper/{paperId}/citations using the numeric S2 ID.
+      3. Filter by since_date (if provided) BEFORE affiliation enrichment.
 
     Returns a list of raw S2 citingPaper dicts.
     """
@@ -132,6 +143,19 @@ async def get_citing_papers(doi: str) -> list[dict]:
             offset += _PAGE_LIMIT
 
     logger.info("S2: found %d citing paper(s) for DOI %s (paperId=%s)", len(results), doi, s2_id)
+
+    # Filter by publication date BEFORE enrichment to avoid downloading author
+    # profiles and arXiv PDFs for papers we'll discard anyway.
+    if since_date:
+        before = len(results)
+        results = [
+            p for p in results
+            if (p.get("publicationDate") or "") >= since_date
+        ]
+        logger.info(
+            "S2: %d/%d citing paper(s) kept after date filter (since %s) for DOI %s",
+            len(results), before, since_date, doi,
+        )
 
     if results:
         await _enrich_author_affiliations(results)
