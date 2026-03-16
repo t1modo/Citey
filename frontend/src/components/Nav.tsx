@@ -47,7 +47,10 @@ function NotificationDropdown({
   const recent = notifications.slice(0, 6);
 
   const handleItemClick = async (id: string, seen: boolean) => {
-    if (!seen) await markSeen(id);
+    if (!seen) {
+      await markSeen(id);
+      window.dispatchEvent(new CustomEvent("citey:markRead", { detail: id }));
+    }
   };
 
   return (
@@ -105,19 +108,6 @@ function NotificationDropdown({
         )}
       </div>
 
-      {/* Footer */}
-      <div className="border-t border-white/10 px-4 py-2.5">
-        <Link
-          href="/dashboard"
-          onClick={onClose}
-          className="flex items-center justify-center gap-1 text-xs font-medium text-gray-400 transition-colors hover:text-white"
-        >
-          View all on Dashboard
-          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </Link>
-      </div>
     </div>
   );
 }
