@@ -242,23 +242,13 @@ export default function DashboardPage() {
     contextMarkSeen(id);
   }, [contextMarkSeen]);
 
-  // Listen for mark-read events dispatched by the nav dropdown so the local
-  // citations state stays in sync without a full refetch.
+  // Listen for the "mark all as read" event dispatched by the context so the
+  // local citations state stays in sync without a full refetch.
   useEffect(() => {
-    const handleAll = () =>
+    const handler = () =>
       setCitations((prev) => prev.map((n) => ({ ...n, seen: true })));
-    const handleOne = (e: Event) => {
-      const id = (e as CustomEvent<string>).detail;
-      setCitations((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, seen: true } : n))
-      );
-    };
-    window.addEventListener("citey:markAllRead", handleAll);
-    window.addEventListener("citey:markRead", handleOne);
-    return () => {
-      window.removeEventListener("citey:markAllRead", handleAll);
-      window.removeEventListener("citey:markRead", handleOne);
-    };
+    window.addEventListener("citey:markAllRead", handler);
+    return () => window.removeEventListener("citey:markAllRead", handler);
   }, []);
   const [citationPage, setCitationPage] = useState(1);
   const [citationPages, setCitationPages] = useState(1);
