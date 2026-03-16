@@ -464,8 +464,8 @@ export default function DashboardPage() {
         onAliasesUpdated={(aliases) => setNameAliases(aliases)}
       />
 
-      <div className="relative min-h-screen overflow-hidden">
-      <Galaxy speedMultiplier={2} />
+      <div className="relative min-h-screen">
+      <Galaxy speedMultiplier={3} />
       <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
         {/* Header */}
         <ScrollReveal className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

@@ -47,8 +47,8 @@ export default function Galaxy({ className = "", speedMultiplier = 1 }: GalaxyPr
       return {
         angle: Math.random() * Math.PI * 2,
         distance,
-        size: Math.random() * 1.6 + 0.2,
-        opacity: Math.random() * 0.55 + 0.25,
+        size: Math.random() * 1.8 + 0.3,
+        opacity: Math.random() * 0.5 + 0.4,
         speed: ((0.00012 + Math.random() * 0.00008) * speedMultiplier) / Math.sqrt(distance / 80),
         twinkleOffset: Math.random() * Math.PI * 2,
         twinkleSpeed: Math.random() * 0.018 + 0.004,
@@ -72,7 +72,7 @@ export default function Galaxy({ className = "", speedMultiplier = 1 }: GalaxyPr
         const y = cy + Math.sin(s.angle) * s.distance * 0.38;
 
         const twinkle =
-          Math.sin(t * s.twinkleSpeed + s.twinkleOffset) * 0.28 + 0.72;
+          Math.sin(t * s.twinkleSpeed + s.twinkleOffset) * 0.18 + 0.82;
         const alpha = s.opacity * twinkle;
 
         ctx.beginPath();
@@ -103,14 +103,10 @@ export default function Galaxy({ className = "", speedMultiplier = 1 }: GalaxyPr
   }, []);
 
   return (
-    <>
-      <canvas
-        ref={canvasRef}
-        className={`pointer-events-none absolute inset-0 h-full w-full ${className}`}
-        aria-hidden="true"
-      />
-      {/* Fade to background at the bottom so it blends into the content below */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-gray-950" />
-    </>
+    <canvas
+      ref={canvasRef}
+      className={`pointer-events-none absolute inset-0 h-full w-full ${className}`}
+      aria-hidden="true"
+    />
   );
 }
