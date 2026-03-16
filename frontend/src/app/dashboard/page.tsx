@@ -225,7 +225,7 @@ export default function DashboardPage() {
   const {
     unreadCount,
     refresh: refreshContext,
-    markSeen: handleMarkSeen,
+    markSeen: contextMarkSeen,
     markAllSeen,
   } = useNotifications();
 
@@ -233,14 +233,32 @@ export default function DashboardPage() {
   // dashboard can page through large citation histories.
   const [citations, setCitations] = useState<Notification[]>([]);
 
-  // Listen for the "mark all as read" event dispatched by the nav dropdown.
-  // Using a native window event guarantees the handler fires immediately on
-  // click, independent of React's render batching.
+  // Optimistically clear the dot on the local citations list, then let the
+  // context handle the API call and badge decrement.
+  const handleMarkSeen = useCallback((id: string) => {
+    setCitations((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, seen: true } : n))
+    );
+    contextMarkSeen(id);
+  }, [contextMarkSeen]);
+
+  // Listen for mark-read events dispatched by the nav dropdown so the local
+  // citations state stays in sync without a full refetch.
   useEffect(() => {
-    const handler = () =>
+    const handleAll = () =>
       setCitations((prev) => prev.map((n) => ({ ...n, seen: true })));
-    window.addEventListener("citey:markAllRead", handler);
-    return () => window.removeEventListener("citey:markAllRead", handler);
+    const handleOne = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      setCitations((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, seen: true } : n))
+      );
+    };
+    window.addEventListener("citey:markAllRead", handleAll);
+    window.addEventListener("citey:markRead", handleOne);
+    return () => {
+      window.removeEventListener("citey:markAllRead", handleAll);
+      window.removeEventListener("citey:markRead", handleOne);
+    };
   }, []);
   const [citationPage, setCitationPage] = useState(1);
   const [citationPages, setCitationPages] = useState(1);
