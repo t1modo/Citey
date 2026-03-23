@@ -164,6 +164,16 @@ function RecentCitationCard({
         </p>
       )}
 
+      {/* Authors — directly below citing title */}
+      {notification.citing_authors.length > 0 && (
+        <p className="text-xs text-gray-400 leading-relaxed -mt-1">
+          {notification.citing_authors.slice(0, 3).join(" · ")}
+          {notification.citing_authors.length > 3 && (
+            <span className="text-gray-600"> +{notification.citing_authors.length - 3} more</span>
+          )}
+        </p>
+      )}
+
       {/* "cites your paper" divider */}
       <div className="flex items-center gap-2">
         <div className="h-px flex-1 bg-white/5" />
@@ -180,16 +190,6 @@ function RecentCitationCard({
           {notification.cited_work_title || notification.cited_work_id}
         </p>
       </div>
-
-      {/* Authors */}
-      {notification.citing_authors.length > 0 && (
-        <p className="text-xs text-gray-400 leading-relaxed">
-          {notification.citing_authors.slice(0, 3).join(" · ")}
-          {notification.citing_authors.length > 3 && (
-            <span className="text-gray-600"> +{notification.citing_authors.length - 3} more</span>
-          )}
-        </p>
-      )}
 
       {/* Affiliation pills */}
       <div className="flex flex-wrap gap-1.5">
