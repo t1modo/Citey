@@ -2,7 +2,7 @@
 
 Get email notifications whenever one of your papers is cited by a new work.
 
-**Want to try it out? Visit [citey.app](https://citey.app)**
+**Want to try it out? Visit [citey.email](https://www.citey.email/)**
 
 ---
 
