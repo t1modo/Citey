@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { sendVerificationEmail } from "@/lib/api";
 import { FirebaseError } from "firebase/app";
+import { auth } from "@/lib/firebase";
 
 function firebaseErrorMessage(err: unknown): string {
   if (err instanceof FirebaseError) {
@@ -45,6 +46,24 @@ export default function SignUpPage() {
   const [verifyScreen, setVerifyScreen] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
+
+  // Poll Firebase every 3 s while on the verify screen.
+  // As soon as emailVerified flips to true, redirect to home.
+  useEffect(() => {
+    if (!verifyScreen) return;
+
+    const interval = setInterval(async () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+      await currentUser.reload();
+      if (currentUser.emailVerified) {
+        clearInterval(interval);
+        router.push("/");
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [verifyScreen, router]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
