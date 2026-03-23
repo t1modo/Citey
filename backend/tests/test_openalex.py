@@ -4,13 +4,16 @@ Tests for app.services.openalex using respx to mock outbound HTTP calls.
 
 import re
 
+import httpx
 import pytest
 import respx
 from httpx import Response
 
 from app.services.openalex import (
+    _get_with_retry,
     extract_topics,
     extract_venue,
+    get_citing_works,
     get_work_by_doi,
     normalize_citing_work,
 )
@@ -245,3 +248,159 @@ def test_extract_venue_no_source() -> None:
 def test_extract_venue_empty_name() -> None:
     raw = {**_RAW_WORK, "primary_location": {"source": {"display_name": ""}}}
     assert extract_venue(raw) is None
+
+
+# ---------------------------------------------------------------------------
+# _get_with_retry
+# ---------------------------------------------------------------------------
+
+_RE_ANY_OA = re.compile(r"https://api\.openalex\.org/.*")
+
+
+async def test_get_with_retry_succeeds_immediately(respx_mock) -> None:
+    """A 200 response is returned without any retry."""
+    respx_mock.get(_RE_ANY_OA).mock(return_value=Response(200, json={"results": []}))
+    async with httpx.AsyncClient() as client:
+        resp = await _get_with_retry(client, "https://api.openalex.org/works", {})
+    assert resp is not None
+    assert resp.status_code == 200
+
+
+async def test_get_with_retry_retries_on_429(respx_mock) -> None:
+    """A 429 then 200 succeeds after one retry (Retry-After: 0)."""
+    respx_mock.get(_RE_ANY_OA).mock(
+        side_effect=[
+            Response(429, headers={"Retry-After": "0"}),
+            Response(200, json={"results": []}),
+        ]
+    )
+    async with httpx.AsyncClient() as client:
+        resp = await _get_with_retry(client, "https://api.openalex.org/works", {})
+    assert resp is not None
+    assert resp.status_code == 200
+
+
+async def test_get_with_retry_all_429_returns_none(respx_mock) -> None:
+    """Exhausting all retries on 429 returns None."""
+    respx_mock.get(_RE_ANY_OA).mock(
+        return_value=Response(429, headers={"Retry-After": "0"})
+    )
+    async with httpx.AsyncClient() as client:
+        resp = await _get_with_retry(
+            client, "https://api.openalex.org/works", {}, context="test"
+        )
+    assert resp is None
+
+
+async def test_get_with_retry_network_error_returns_none(respx_mock) -> None:
+    """A network error returns None without retrying."""
+    respx_mock.get(_RE_ANY_OA).mock(side_effect=httpx.ConnectError("refused"))
+    async with httpx.AsyncClient() as client:
+        resp = await _get_with_retry(client, "https://api.openalex.org/works", {})
+    assert resp is None
+
+
+async def test_get_with_retry_500_returned_immediately(respx_mock) -> None:
+    """Non-429 errors (500) are returned as-is without retry."""
+    respx_mock.get(_RE_ANY_OA).mock(return_value=Response(500))
+    async with httpx.AsyncClient() as client:
+        resp = await _get_with_retry(client, "https://api.openalex.org/works", {})
+    assert resp is not None
+    assert resp.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# get_citing_works — pagination
+# ---------------------------------------------------------------------------
+
+
+def _citing_work_stub(n: int) -> dict:
+    return {
+        "id": f"https://openalex.org/W{n:010d}",
+        "doi": f"https://doi.org/10.9999/page{n}",
+        "title": f"Citing Work {n}",
+        "publication_year": 2024,
+        "publication_date": "2026-03-01",
+        "landing_page_url": None,
+        "authorships": [],
+    }
+
+
+async def test_get_citing_works_single_page(respx_mock) -> None:
+    """A response with no next_cursor stops after one page."""
+    payload = {
+        "results": [_citing_work_stub(1), _citing_work_stub(2)],
+        "meta": {"next_cursor": None},
+    }
+    respx_mock.get(_RE_OA_WORKS).mock(return_value=Response(200, json=payload))
+
+    results = await get_citing_works("W2741809807")
+    assert len(results) == 2
+
+
+async def test_get_citing_works_multiple_pages(respx_mock) -> None:
+    """Cursor pagination collects results from all pages."""
+    page1 = {
+        "results": [_citing_work_stub(1)],
+        "meta": {"next_cursor": "cursor_page2"},
+    }
+    page2 = {
+        "results": [_citing_work_stub(2)],
+        "meta": {"next_cursor": None},
+    }
+    respx_mock.get(_RE_OA_WORKS).mock(side_effect=[
+        Response(200, json=page1),
+        Response(200, json=page2),
+    ])
+
+    results = await get_citing_works("W2741809807")
+    assert len(results) == 2
+    titles = {r["title"] for r in results}
+    assert "Citing Work 1" in titles
+    assert "Citing Work 2" in titles
+
+
+async def test_get_citing_works_429_mid_pagination_retries(respx_mock) -> None:
+    """A 429 mid-pagination is retried and pagination resumes correctly."""
+    page1 = {
+        "results": [_citing_work_stub(1)],
+        "meta": {"next_cursor": "cursor_page2"},
+    }
+    page2 = {
+        "results": [_citing_work_stub(2)],
+        "meta": {"next_cursor": None},
+    }
+    respx_mock.get(_RE_OA_WORKS).mock(side_effect=[
+        Response(200, json=page1),
+        Response(429, headers={"Retry-After": "0"}),  # 429 on page 2 request
+        Response(200, json=page2),                     # retry succeeds
+    ])
+
+    results = await get_citing_works("W2741809807")
+    assert len(results) == 2
+
+
+async def test_get_citing_works_error_returns_partial(respx_mock) -> None:
+    """A non-retryable error mid-pagination returns whatever was collected so far."""
+    page1 = {
+        "results": [_citing_work_stub(1)],
+        "meta": {"next_cursor": "cursor_page2"},
+    }
+    respx_mock.get(_RE_OA_WORKS).mock(side_effect=[
+        Response(200, json=page1),
+        Response(500),  # hard error on page 2 — no retry
+    ])
+
+    results = await get_citing_works("W2741809807")
+    # Only page 1 was collected before the error
+    assert len(results) == 1
+    assert results[0]["title"] == "Citing Work 1"
+
+
+async def test_get_citing_works_empty_results(respx_mock) -> None:
+    """An empty results page returns an empty list."""
+    respx_mock.get(_RE_OA_WORKS).mock(
+        return_value=Response(200, json={"results": [], "meta": {"next_cursor": None}})
+    )
+    results = await get_citing_works("W2741809807")
+    assert results == []

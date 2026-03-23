@@ -4,6 +4,7 @@ OpenAlex REST API client.
 Docs: https://docs.openalex.org/
 """
 
+import asyncio
 import logging
 from typing import Any
 
@@ -17,6 +18,39 @@ _HEADERS = {
 }
 _PER_PAGE = 200  # Maximum allowed by the API
 _MAILTO = "support@citey.app"
+_MAX_RETRIES = 4
+
+
+async def _get_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    params: dict[str, Any],
+    context: str = "",
+) -> httpx.Response | None:
+    """
+    GET *url* with automatic retry on HTTP 429 (rate-limit) responses.
+
+    Waits for the duration given in the ``Retry-After`` header, falling back
+    to exponential back-off (2^attempt seconds) when the header is absent.
+    Returns ``None`` on network errors or when all retries are exhausted.
+    All other status codes are returned immediately so the caller can decide.
+    """
+    for attempt in range(_MAX_RETRIES):
+        try:
+            response = await client.get(url, params=params)
+        except httpx.RequestError as exc:
+            logger.error("OpenAlex request error [%s]: %s", context, exc)
+            return None
+        if response.status_code != 429:
+            return response
+        wait = int(response.headers.get("Retry-After", 2 ** attempt))
+        logger.warning(
+            "OpenAlex rate limited (429) [%s]; waiting %ds (attempt %d/%d)",
+            context, wait, attempt + 1, _MAX_RETRIES,
+        )
+        await asyncio.sleep(wait)
+    logger.error("OpenAlex rate limit not resolved after %d attempts [%s]", _MAX_RETRIES, context)
+    return None
 
 
 async def get_work_by_doi(doi: str) -> dict | None:
@@ -105,16 +139,11 @@ async def get_citing_works(
             logger.debug(
                 "OpenAlex citing works page, cursor=%s, filter=%s", cursor, filter_str
             )
-            try:
-                response = await client.get(f"{_BASE_URL}/works", params=params)
-            except httpx.RequestError as exc:
-                logger.error(
-                    "OpenAlex request error fetching citing works for %s: %s",
-                    openalex_work_id,
-                    exc,
-                )
+            response = await _get_with_retry(
+                client, f"{_BASE_URL}/works", params, context=f"citing:{openalex_work_id}"
+            )
+            if response is None:
                 break
-
             if response.status_code != 200:
                 logger.warning(
                     "OpenAlex unexpected status %s for citing works of %s",
@@ -130,9 +159,11 @@ async def get_citing_works(
             meta: dict = payload.get("meta", {})
             next_cursor = meta.get("next_cursor")
 
-            # No more pages when next_cursor is absent or we got fewer results
-            # than requested.
-            if not next_cursor or len(page_results) < _PER_PAGE:
+            # next_cursor being absent/null is the authoritative end-of-pagination
+            # signal from OpenAlex.  A partial page is NOT a reliable stop condition
+            # because the API can return fewer than _PER_PAGE results mid-stream
+            # (e.g. after server-side filtering) while still having more pages.
+            if not next_cursor:
                 break
 
             cursor = next_cursor
@@ -171,12 +202,11 @@ async def get_citation_counts(openalex_ids: list[str]) -> dict[str, int]:
                 "per_page": batch_size,
                 "mailto": _MAILTO,
             }
-            try:
-                response = await client.get(f"{_BASE_URL}/works", params=params)
-            except httpx.RequestError as exc:
-                logger.error("OpenAlex batch citation count request error: %s", exc)
+            response = await _get_with_retry(
+                client, f"{_BASE_URL}/works", params, context="citation_counts_batch"
+            )
+            if response is None:
                 continue
-
             if response.status_code != 200:
                 logger.warning(
                     "OpenAlex batch citation count status %s", response.status_code
@@ -232,12 +262,11 @@ async def get_works_by_author(author_id: str) -> list[dict]:
                 "cursor": cursor,
                 "mailto": _MAILTO,
             }
-            try:
-                response = await client.get(f"{_BASE_URL}/works", params=params)
-            except httpx.RequestError as exc:
-                logger.error("OpenAlex error fetching works for author %s: %s", author_id, exc)
+            response = await _get_with_retry(
+                client, f"{_BASE_URL}/works", params, context=f"author:{author_id}"
+            )
+            if response is None:
                 break
-
             if response.status_code != 200:
                 logger.warning(
                     "OpenAlex status %s fetching works for author %s",
@@ -252,7 +281,7 @@ async def get_works_by_author(author_id: str) -> list[dict]:
 
             meta = payload.get("meta", {})
             next_cursor = meta.get("next_cursor")
-            if not next_cursor or len(page_results) < _PER_PAGE:
+            if not next_cursor:
                 break
             cursor = next_cursor
 

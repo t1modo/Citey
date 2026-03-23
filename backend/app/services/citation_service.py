@@ -11,6 +11,7 @@ This module is responsible for:
 import asyncio
 import logging
 import re
+import unicodedata
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from types import ModuleType
@@ -138,9 +139,11 @@ async def process_tracked_work(
 
     all_normalized = list(merged.values())
 
-    # Strict 30-day backstop: discard any paper whose publication_date is
-    # absent or older than the cutoff.  This catches anything that slipped
-    # past the per-source filters (e.g. missing dates from either API).
+    # Strict 30-day backstop.
+    # Papers whose publication_date is missing are intentionally excluded —
+    # they cannot be date-verified so we skip them rather than risk surfacing
+    # stale results (Google Scholar will pick them up when a date is available).
+    # Papers with a date older than the cutoff are also dropped.
     before_date_filter = len(all_normalized)
     all_normalized = [
         n for n in all_normalized
@@ -243,10 +246,13 @@ async def process_tracked_work(
             cited_work_id=work.id,
             cited_work_title=work.title,
             citing_work_id=citing_id,
-            citing_work_title=normalized["title"],
+            citing_work_title=_truncate(normalized["title"], _TITLE_MAX_CHARS),
             citing_work_doi=citing_doi or None,
             citing_work_url=normalized.get("url"),
-            citing_authors=normalized.get("authors", []),
+            citing_authors=[
+                _truncate(a, _AUTHOR_NAME_MAX_CHARS)
+                for a in normalized.get("authors", [])
+            ],
             citing_affiliations=normalized.get("affiliations", []),
             citing_year=normalized.get("year"),
             citing_publication_date=normalized.get("publication_date"),
@@ -484,14 +490,37 @@ def _group_notifications(notifications: list[Notification]) -> list[dict]:
     return list(groups.values())
 
 
+_TITLE_MAX_CHARS = 300
+_AUTHOR_NAME_MAX_CHARS = 100
+
+
+def _truncate(text: str, limit: int) -> str:
+    """Truncate *text* to *limit* characters, appending '…' if shortened."""
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "…"
+
+
 def _safe_doc_id(value: str) -> str:
     """Replace characters that are invalid in Firestore document IDs."""
     return value.replace("/", "__").replace(".", "_")
 
 
 def _normalize_title(title: str) -> str:
-    """Lowercase and strip all non-alphanumeric characters for fuzzy dedup."""
-    return re.sub(r"[^a-z0-9]", "", title.lower())
+    """
+    Lowercase and normalize a title for fuzzy dedup.
+
+    - NFKD decomposition maps accented characters to their ASCII base form
+      (e.g. 'résumé' → 'resume') so encoding differences between sources
+      don't produce false misses.
+    - Non-ASCII word characters (CJK, Arabic, etc.) are preserved so that
+      titles composed entirely of non-ASCII text still produce a usable key
+      instead of collapsing to an empty string.
+    - All punctuation, symbols, and whitespace are stripped.
+    """
+    nfkd = unicodedata.normalize("NFKD", title.lower())
+    no_combining = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return re.sub(r"[^\w]", "", no_combining, flags=re.UNICODE)
 
 
 def _dedup_key(normalized: dict) -> str:

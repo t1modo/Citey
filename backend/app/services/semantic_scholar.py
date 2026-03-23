@@ -20,6 +20,39 @@ _BASE_URL = "https://api.semanticscholar.org/graph/v1"
 _HEADERS = {"User-Agent": "Citey/0.1 (mailto:support@citey.app)"}
 _CITATION_FIELDS = "paperId,title,year,authors,externalIds,publicationDate,url"
 _PAGE_LIMIT = 500
+_MAX_RETRIES = 4
+
+
+async def _get_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    params: dict,
+    context: str = "",
+) -> httpx.Response | None:
+    """
+    GET *url* with automatic retry on HTTP 429 (rate-limit) responses.
+
+    Waits for the duration given in the ``Retry-After`` header, falling back
+    to exponential back-off (2^attempt seconds) when the header is absent.
+    Returns ``None`` on network errors or when all retries are exhausted.
+    All other status codes are returned immediately so the caller can decide.
+    """
+    for attempt in range(_MAX_RETRIES):
+        try:
+            response = await client.get(url, params=params)
+        except httpx.RequestError as exc:
+            logger.error("S2 request error [%s]: %s", context, exc)
+            return None
+        if response.status_code != 429:
+            return response
+        wait = int(response.headers.get("Retry-After", 2 ** attempt))
+        logger.warning(
+            "S2 rate limited (429) [%s]; waiting %ds (attempt %d/%d)",
+            context, wait, attempt + 1, _MAX_RETRIES,
+        )
+        await asyncio.sleep(wait)
+    logger.error("S2 rate limit not resolved after %d attempts [%s]", _MAX_RETRIES, context)
+    return None
 
 
 def _clean_doi(doi: str) -> str:
@@ -116,14 +149,14 @@ async def get_citing_papers(doi: str, since_date: str | None = None) -> list[dic
                 "offset": offset,
                 "limit": _PAGE_LIMIT,
             }
-            try:
-                response = await client.get(
-                    f"{_BASE_URL}/paper/{s2_id}/citations", params=params
-                )
-            except httpx.RequestError as exc:
-                logger.error("S2 citations request error for %s (DOI %s): %s", s2_id, doi, exc)
+            response = await _get_with_retry(
+                client,
+                f"{_BASE_URL}/paper/{s2_id}/citations",
+                params,
+                context=f"citations:{s2_id}",
+            )
+            if response is None:
                 break
-
             if response.status_code != 200:
                 logger.warning(
                     "S2 citations returned %s for paperId=%s (DOI %s)",
