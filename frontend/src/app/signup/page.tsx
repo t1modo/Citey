@@ -4,7 +4,7 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
-import { sendEmailVerification } from "firebase/auth";
+import { sendVerificationEmail } from "@/lib/api";
 import { FirebaseError } from "firebase/app";
 
 function firebaseErrorMessage(err: unknown): string {
@@ -59,6 +59,7 @@ export default function SignUpPage() {
     try {
       if (mode === "signup") {
         await signUp(email, password);
+        await sendVerificationEmail();
         setVerifyScreen(true);
       } else {
         await signIn(email, password);
@@ -72,13 +73,12 @@ export default function SignUpPage() {
   };
 
   const handleResend = async () => {
-    if (!user) return;
     setResendLoading(true);
     try {
-      await sendEmailVerification(user);
+      await sendVerificationEmail();
       setResendSent(true);
     } catch {
-      // ignore — Firebase rate-limits resends automatically
+      // ignore
     } finally {
       setResendLoading(false);
     }

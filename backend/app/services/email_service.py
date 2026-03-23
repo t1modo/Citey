@@ -171,6 +171,76 @@ async def send_digest_email(
     )
 
 
+async def send_verification_email(
+    to_email: str,
+    verification_link: str,
+    settings: Settings,
+) -> None:
+    """Send a custom email verification email via Resend."""
+    resend.api_key = settings.resend_api_key
+
+    from_address = f"{settings.email_from_name} <{settings.email_from_address}>"
+    subject = f"Verify your email address — {settings.app_name}"
+
+    html_body = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background-color:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <div style="padding:40px 16px;">
+    <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+      <div style="background:linear-gradient(135deg,#0d9488 0%,#4f46e5 100%);padding:36px 48px;">
+        <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">{settings.app_name}<span style="color:rgba(255,255,255,0.6);">.</span></div>
+        <div style="font-size:12px;font-weight:500;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.1em;margin-top:5px;">Citation Intelligence</div>
+      </div>
+      <div style="padding:40px 48px 36px;">
+        <p style="font-size:17px;font-weight:600;color:#1e2530;margin:0 0 8px;">Verify your email address</p>
+        <p style="font-size:14px;color:#5a6478;margin:0 0 24px;line-height:1.7;">
+          Thanks for signing up. Click the button below to verify your email address and activate your account.
+        </p>
+        <a href="{verification_link}" style="display:inline-block;background:linear-gradient(135deg,#0d9488 0%,#4f46e5 100%);color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:7px;font-weight:600;font-size:14px;">Verify Email</a>
+        <p style="font-size:13px;color:#9aa3b5;margin:28px 0 0;line-height:1.7;">
+          If the button doesn&apos;t work, paste this link into your browser:<br />
+          <a href="{verification_link}" style="color:#6366f1;word-break:break-all;">{verification_link}</a>
+        </p>
+        <p style="font-size:13px;color:#9aa3b5;margin:16px 0 0;line-height:1.7;">
+          If you didn&apos;t create a {settings.app_name} account, you can safely ignore this email.
+        </p>
+      </div>
+      <div style="background:#f4f6f9;border-top:1px solid #e8ecf2;padding:24px 48px;font-size:11px;color:#9aa3b5;line-height:2;">
+        Best regards,<br />
+        <strong style="color:#5a6478;">{settings.app_name} Team</strong><br />
+        <a href="mailto:{settings.support_email}" style="color:#7b849a;">{settings.support_email}</a>
+      </div>
+    </div>
+  </div>
+</body></html>"""
+
+    text_body = (
+        f"Verify your email address — {settings.app_name}\n"
+        f"{'=' * 60}\n\n"
+        f"Thanks for signing up. Please verify your email address by visiting the link below:\n\n"
+        f"{verification_link}\n\n"
+        f"If you didn't create a {settings.app_name} account, you can safely ignore this email.\n\n"
+        f"Best regards,\n"
+        f"{settings.app_name} Team\n"
+        f"{settings.support_email}"
+    )
+
+    params: resend.Emails.SendParams = {
+        "from": from_address,
+        "to": [to_email],
+        "subject": subject,
+        "html": html_body,
+        "text": text_body,
+    }
+
+    result = await _send(params)
+    logger.info(
+        "Verification email sent to %s — Resend ID: %s",
+        to_email,
+        result.get("id", "<unknown>"),
+    )
+
+
 async def send_test_email(
     to_email: str,
     recipient_name: str,

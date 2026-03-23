@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { sendEmailVerification } from "firebase/auth";
 import { useAuth } from "@/contexts/AuthContext";
+import { sendVerificationEmail } from "@/lib/api";
 import { useNotifications } from "@/contexts/NotificationsContext";
 import {
   getWorks,
@@ -220,15 +220,13 @@ function RecentCitationCard({
 }
 
 function VerificationBanner({ onToast }: { onToast: (msg: string, type: ToastType) => void }) {
-  const { user } = useAuth();
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleResend = async () => {
-    if (!user) return;
     setLoading(true);
     try {
-      await sendEmailVerification(user);
+      await sendVerificationEmail();
       setSent(true);
       onToast("Verification email resent. Check your inbox.", "info");
     } catch {
