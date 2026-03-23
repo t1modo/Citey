@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.config import get_settings
-from app.routers import chat, health, jobs, notifications, profile, works
+from app.routers import auth, chat, health, jobs, notifications, profile, works
 
 logging.basicConfig(
     level=logging.INFO,
@@ -89,6 +89,7 @@ def create_app() -> FastAPI:
 
     # ---- Routers -------------------------------------------------------------
     application.include_router(health.router)
+    application.include_router(auth.router)
     application.include_router(profile.router)
     application.include_router(works.router)
     application.include_router(notifications.router)
