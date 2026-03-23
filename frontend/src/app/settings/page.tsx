@@ -8,7 +8,6 @@ import {
   updateProfile,
   getWorks,
   deleteWork,
-  sendTestEmail,
   deleteAccount,
 } from "@/lib/api";
 import type { UserProfile, TrackedWork } from "@/lib/types";
@@ -70,13 +69,6 @@ export default function SettingsPage() {
 
   // Scholar URL confirmation — shown when URL changes and a linked author exists
   const [scholarConfirmPending, setScholarConfirmPending] = useState(false);
-
-  // Test email state
-  const [testEmailSending, setTestEmailSending] = useState(false);
-  const [testEmailResult, setTestEmailResult] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
 
   // Works state
   const [works, setWorks] = useState<TrackedWork[]>([]);
@@ -176,22 +168,6 @@ export default function SettingsPage() {
     }
 
     doSave();
-  };
-
-  const handleTestEmail = async () => {
-    setTestEmailSending(true);
-    setTestEmailResult(null);
-    try {
-      const result = await sendTestEmail();
-      setTestEmailResult({ type: "success", message: result.message ?? "Test email sent!" });
-    } catch (err) {
-      setTestEmailResult({
-        type: "error",
-        message: err instanceof Error ? err.message : "Failed to send test email.",
-      });
-    } finally {
-      setTestEmailSending(false);
-    }
   };
 
   const handleRemoveWork = async (workId: string) => {
@@ -413,29 +389,7 @@ export default function SettingsPage() {
                   {saving && <Spinner className="h-4 w-4" />}
                   {saving ? "Saving…" : "Save Changes"}
                 </button>
-
-                <button
-                  type="button"
-                  onClick={handleTestEmail}
-                  disabled={testEmailSending}
-                  className="flex items-center gap-2 rounded-lg border border-white/10 px-5 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 disabled:opacity-50"
-                >
-                  {testEmailSending && <Spinner className="h-4 w-4 text-current" />}
-                  {testEmailSending ? "Sending…" : "Send Test Email"}
-                </button>
               </div>
-
-              {testEmailResult && (
-                <div
-                  className={`rounded-lg border px-4 py-3 text-sm ${
-                    testEmailResult.type === "success"
-                      ? "border-white/20 bg-white/5 text-gray-300"
-                      : "border-red-500/30 bg-red-500/10 text-red-400"
-                  }`}
-                >
-                  {testEmailResult.message}
-                </div>
-              )}
             </form>
           )}
         </SectionCard>
