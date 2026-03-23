@@ -1,43 +1,54 @@
-{{ app_name }} — New Citation Notification
-{{ "=" * 72 }}
+{{ app_name }} — {{ total_citations }} New Citation{% if total_citations != 1 %}s{% endif %}
 
 Dear {{ recipient_name }},
 
-{{ app_name }} has detected {{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} across {{ total_papers }} of your paper{% if total_papers != 1 %}s{% endif %}. A summary is provided below.
+{% if total_citations == 1 %}
+{{ app_name }} has detected 1 new citation of your work. The details are
+provided below.
+{% else %}
+{{ app_name }} has detected {{ total_citations }} new citations across
+{{ total_papers }} of your publication{% if total_papers != 1 %}s{% endif %}.
+The details are provided below.
+{% endif %}
 
 {{ "=" * 72 }}
 
 {% for group in citation_groups %}
-YOUR PAPER ({{ group.citations | length }} new citation{% if group.citations | length != 1 %}s{% endif %})
+{% set shown = group.citations[:5] %}
+{% set overflow = (group.citations | length) - 5 %}
+YOUR PAPER  ({{ group.citations | length }} new citation{% if group.citations | length != 1 %}s{% endif %})
 {{ group.cited_work_title }}
 {% if group.cited_work_doi %}https://doi.org/{{ group.cited_work_doi }}{% endif %}
 
-{{ "-" * 60 }}
 
-{% for n in group.citations %}
-  [{{ loop.index }}] {{ n.citing_work_title }}
+{{ "-" * 72 }}
+
+{% for n in shown %}
+  [{{ loop.index }}]  {{ n.citing_work_title }}
 {% if n.citing_work_url %}
-      Link:         {{ n.citing_work_url }}
+       {{ n.citing_work_url }}
 {% elif n.citing_work_doi %}
-      Link:         https://doi.org/{{ n.citing_work_doi }}
+       https://doi.org/{{ n.citing_work_doi }}
 {% endif %}
 {% if n.citing_authors %}
-      Authors:      {{ n.citing_authors[:4] | join(', ') }}{% if n.citing_authors | length > 4 %} (+{{ n.citing_authors | length - 4 }} more){% endif %}
+       {{ n.citing_authors[:3] | join(', ') }}{% if n.citing_authors | length > 3 %} (+{{ n.citing_authors | length - 3 }} more){% endif %}
 
 {% endif %}
-{% if n.citing_affiliations %}
-      Affiliations: {{ n.citing_affiliations | join(' · ') }}
-{% endif %}
 {% if n.citing_publication_date %}
-      Published:    {{ n.citing_publication_date }}
+       Published: {{ n.citing_publication_date }}
 {% elif n.citing_year %}
-      Year:         {{ n.citing_year }}
+       Year:      {{ n.citing_year }}
 {% endif %}
 {% if n.citing_work_doi %}
-      DOI:          {{ n.citing_work_doi }}
+       DOI:       {{ n.citing_work_doi }}
 {% endif %}
 
 {% endfor %}
+{% if overflow > 0 %}
+  + {{ overflow }} more citation{% if overflow != 1 %}s{% endif %} — view all at:
+  {{ app_url }}/dashboard
+
+{% endif %}
 {% if not loop.last %}
 {{ "=" * 72 }}
 
@@ -48,12 +59,10 @@ YOUR PAPER ({{ group.citations | length }} new citation{% if group.citations | l
 View your dashboard:
 {{ app_url }}/dashboard
 
-Citation data is sourced from OpenAlex and Semantic Scholar. Coverage may
-differ from Google Scholar.
+Citation data is provided by OpenAlex and Semantic Scholar.
+Coverage may differ from Google Scholar.
 
-Manage notification preferences:
-{{ app_url }}/settings
-
-—
-© {{ current_year }} {{ app_name }} · {{ support_email }}
+────────────────────────────────────────────────────────────────────────
+© {{ current_year | default('2025') }} {{ app_name }}  ·  {{ support_email }}
+Notification preferences:  {{ app_url }}/settings
 You are receiving this because you track citations on {{ app_name }}.

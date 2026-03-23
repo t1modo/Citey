@@ -260,6 +260,38 @@ async def get_works_by_author(author_id: str) -> list[dict]:
     return results
 
 
+def extract_topics(raw: dict) -> list[str]:
+    """
+    Extract up to 3 subject topic display names from a raw OpenAlex work dict.
+    Uses ``primary_topic`` first (highest-scoring), then the ``topics`` array.
+    """
+    seen: set[str] = set()
+    topics: list[str] = []
+    primary = ((raw.get("primary_topic") or {}).get("display_name") or "").strip()
+    if primary:
+        topics.append(primary)
+        seen.add(primary)
+    for t in raw.get("topics", []):
+        name = (t.get("display_name") or "").strip()
+        if name and name not in seen:
+            topics.append(name)
+            seen.add(name)
+        if len(topics) >= 3:
+            break
+    return topics
+
+
+def extract_venue(raw: dict) -> str | None:
+    """
+    Extract the primary publication venue name (journal, conference, repository)
+    from a raw OpenAlex work dict.
+    """
+    loc = raw.get("primary_location") or {}
+    source = loc.get("source") or {}
+    name = (source.get("display_name") or "").strip()
+    return name or None
+
+
 def normalize_citing_work(raw: dict) -> dict[str, Any]:
     """
     Convert a raw OpenAlex work dict into the normalised shape used throughout

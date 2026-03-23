@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Scheduler
     scheduler_interval_hours: int = 24
 
+    # Anthropic
+    anthropic_api_key: str = ""
+
     # CORS
     allowed_origins: str = "*"
 

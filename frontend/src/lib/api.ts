@@ -136,6 +136,10 @@ export async function unlinkAuthor(): Promise<void> {
   await authFetch("/profile/linked-author", { method: "DELETE" });
 }
 
+export async function deleteAccount(): Promise<void> {
+  await authFetch("/profile", { method: "DELETE" });
+}
+
 export async function deleteWork(workId: string): Promise<void> {
   await authFetch(`/works/${workId}`, { method: "DELETE" });
 }
@@ -170,6 +174,20 @@ export async function runJob(dryRun: boolean = false): Promise<{ message: string
 export async function sendTestEmail(): Promise<{ message: string }> {
   const res = await authFetch("/jobs/email-test", { method: "POST" });
   return res.json();
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export async function sendChatMessage(messages: ChatMessage[]): Promise<string> {
+  const res = await authFetch("/chat", {
+    method: "POST",
+    body: JSON.stringify({ messages }),
+  });
+  const data = await res.json();
+  return data.message as string;
 }
 
 export async function searchAuthors(query: string): Promise<AuthorCandidate[]> {

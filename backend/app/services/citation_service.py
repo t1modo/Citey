@@ -215,7 +215,10 @@ async def process_tracked_work(
     for normalized in all_normalized:
         # Prefer DOI as the stable cross-source identifier; fall back to
         # source-specific ID (OpenAlex W-id or S2 paper ID).
-        citing_doi: str = normalized.get("doi") or ""
+        # Lowercase the DOI for a consistent doc ID — DOIs are case-insensitive
+        # and mixed-case variants from different sources would otherwise create
+        # duplicate notification documents for the same citing paper.
+        citing_doi: str = (normalized.get("doi") or "").lower()
         citing_id: str = citing_doi or normalized["id"] or ""
         if not citing_id:
             logger.debug("Skipping citing work with no usable ID: %s", normalized.get("title"))
@@ -523,8 +526,12 @@ def _doc_to_tracked_work(doc_id: str, data: dict) -> TrackedWork:
         title=data.get("title", ""),
         authors=data.get("authors", []),
         year=data.get("year"),
+        venue=data.get("venue"),
+        work_type=data.get("work_type"),
+        topics=data.get("topics", []),
         added_at=_to_dt(data.get("added_at")),
         last_checked_at=_to_dt(data.get("last_checked_at")),
+        s2_citation_count=data.get("s2_citation_count"),
         openalex_citation_count=data.get("openalex_citation_count"),
     )
 

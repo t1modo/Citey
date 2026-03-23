@@ -9,6 +9,7 @@ import {
   getWorks,
   deleteWork,
   sendTestEmail,
+  deleteAccount,
 } from "@/lib/api";
 import type { UserProfile, TrackedWork } from "@/lib/types";
 
@@ -82,6 +83,12 @@ export default function SettingsPage() {
   const [worksLoading, setWorksLoading] = useState(true);
   const [worksError, setWorksError] = useState<string | null>(null);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
+
+  // Account deletion state
+  const [deleteAccountPending, setDeleteAccountPending] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -206,6 +213,22 @@ export default function SettingsPage() {
   const handleSignOut = async () => {
     await signOut();
     router.replace("/");
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== "DELETE") return;
+    setDeletingAccount(true);
+    setDeleteAccountError(null);
+    try {
+      await deleteAccount();
+      await signOut();
+      router.replace("/");
+    } catch (err) {
+      setDeleteAccountError(
+        err instanceof Error ? err.message : "Failed to delete account. Please try again."
+      );
+      setDeletingAccount(false);
+    }
   };
 
   if (authLoading || profileLoading) {
@@ -499,6 +522,7 @@ export default function SettingsPage() {
           description="Irreversible actions for your account."
         >
           <div className="flex flex-col gap-4">
+            {/* Sign out */}
             <div className="flex items-center justify-between rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-white">Sign out</p>
@@ -512,6 +536,88 @@ export default function SettingsPage() {
               >
                 Sign Out
               </button>
+            </div>
+
+            {/* Delete account */}
+            <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-white">Delete account</p>
+                  <p className="text-xs text-gray-400">
+                    Permanently remove your account and all tracked papers.
+                  </p>
+                </div>
+                {!deleteAccountPending && (
+                  <button
+                    onClick={() => {
+                      setDeleteAccountPending(true);
+                      setDeleteConfirmText("");
+                      setDeleteAccountError(null);
+                    }}
+                    className="rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:border-red-500/50"
+                  >
+                    Delete Account
+                  </button>
+                )}
+              </div>
+
+              {deleteAccountPending && (
+                <div className="mt-4 flex flex-col gap-3">
+                  <div className="rounded-lg border border-red-500/30 bg-red-950/40 px-4 py-3 text-xs text-red-300">
+                    <p className="mb-1.5 font-semibold text-red-200">
+                      This will permanently delete:
+                    </p>
+                    <ul className="list-disc pl-4 space-y-0.5 text-red-300/80">
+                      <li>All {works.length} tracked paper{works.length !== 1 ? "s" : ""} and their citation history</li>
+                      <li>All notifications and alerts</li>
+                      <li>Your profile, settings, and linked author</li>
+                      <li>Your login — you will not be able to sign in again</li>
+                    </ul>
+                    <p className="mt-2 font-medium text-red-200">
+                      This action cannot be undone.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-gray-400">
+                      Type <span className="font-mono font-bold text-red-300">DELETE</span> to confirm
+                    </label>
+                    <input
+                      type="text"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      placeholder="DELETE"
+                      className="w-full rounded-lg border border-red-500/20 bg-gray-900 px-3 py-2 font-mono text-sm text-white placeholder-gray-600 outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20"
+                    />
+                  </div>
+
+                  {deleteAccountError && (
+                    <p className="text-xs text-red-400">{deleteAccountError}</p>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deleteConfirmText !== "DELETE" || deletingAccount}
+                      className="flex items-center gap-2 rounded-lg bg-red-600/80 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {deletingAccount && <Spinner className="h-3.5 w-3.5" />}
+                      {deletingAccount ? "Deleting…" : "Delete My Account"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDeleteAccountPending(false);
+                        setDeleteConfirmText("");
+                        setDeleteAccountError(null);
+                      }}
+                      disabled={deletingAccount}
+                      className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-gray-400 transition-colors hover:bg-white/5 disabled:opacity-40"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </SectionCard>
