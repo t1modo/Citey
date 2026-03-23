@@ -308,6 +308,7 @@ def normalize_citing_work(raw: dict) -> dict[str, Any]:
             if doi.startswith(prefix):
                 doi = doi[len(prefix):]
                 break
+        doi = doi.lower()
 
     title: str = raw.get("title") or "Untitled"
 
@@ -336,7 +337,7 @@ def normalize_citing_work(raw: dict) -> dict[str, Any]:
     if doi:
         url = f"https://doi.org/{doi}"
     else:
-        url = raw.get("landing_page_url") or openalex_id
+        url = raw.get("landing_page_url") or None
 
     return {
         "id": openalex_id,

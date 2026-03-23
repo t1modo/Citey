@@ -2,18 +2,21 @@
 Tests for app.services.openalex using respx to mock outbound HTTP calls.
 """
 
+import re
+
 import pytest
 import respx
 from httpx import Response
 
-from app.services.openalex import get_work_by_doi, normalize_citing_work
-
-# ---------------------------------------------------------------------------
-# Sample data
-# ---------------------------------------------------------------------------
+from app.services.openalex import (
+    extract_topics,
+    extract_venue,
+    get_work_by_doi,
+    normalize_citing_work,
+)
 
 _DOI = "10.1038/nature12345"
-_OPENALEX_WORK_URL = f"https://api.openalex.org/works/doi:{_DOI}"
+_RE_OA_WORKS = re.compile(r"https://api\.openalex\.org/works")
 
 _RAW_WORK = {
     "id": "https://openalex.org/W2741809807",
@@ -21,6 +24,15 @@ _RAW_WORK = {
     "title": "A Landmark Study in Genomics",
     "publication_year": 2021,
     "landing_page_url": "https://www.nature.com/articles/nature12345",
+    "primary_topic": {"display_name": "Genomics"},
+    "topics": [
+        {"display_name": "Genomics"},
+        {"display_name": "CRISPR"},
+        {"display_name": "Molecular Biology"},
+    ],
+    "primary_location": {
+        "source": {"display_name": "Nature"}
+    },
     "authorships": [
         {
             "author": {"display_name": "Jane Smith"},
@@ -31,9 +43,7 @@ _RAW_WORK = {
         },
         {
             "author": {"display_name": "John Doe"},
-            "institutions": [
-                {"display_name": "Harvard University"},
-            ],
+            "institutions": [{"display_name": "Harvard University"}],
         },
     ],
 }
@@ -47,9 +57,7 @@ _SAMPLE_RAW_CITING = {
     "authorships": [
         {
             "author": {"display_name": "Alice Researcher"},
-            "institutions": [
-                {"display_name": "Stanford University"},
-            ],
+            "institutions": [{"display_name": "Stanford University"}],
         },
         {
             "author": {"display_name": "Bob Scientist"},
@@ -60,15 +68,15 @@ _SAMPLE_RAW_CITING = {
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# get_work_by_doi (uses filter query param: ?filter=doi:...)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-@respx.mock
-async def test_get_work_by_doi_found() -> None:
-    """A successful OpenAlex lookup should return the raw work dict."""
-    respx.get(_OPENALEX_WORK_URL).mock(return_value=Response(200, json=_RAW_WORK))
+async def test_get_work_by_doi_found(respx_mock) -> None:
+    """A successful OpenAlex lookup returns the raw work dict."""
+    respx_mock.get(_RE_OA_WORKS).mock(
+        return_value=Response(200, json={"results": [_RAW_WORK]})
+    )
 
     result = await get_work_by_doi(_DOI)
 
@@ -77,39 +85,49 @@ async def test_get_work_by_doi_found() -> None:
     assert result["title"] == "A Landmark Study in Genomics"
 
 
-@pytest.mark.asyncio
-@respx.mock
-async def test_get_work_by_doi_found_strips_prefix() -> None:
-    """Passing a full doi.org URL should still resolve correctly."""
-    respx.get(_OPENALEX_WORK_URL).mock(return_value=Response(200, json=_RAW_WORK))
+async def test_get_work_by_doi_found_strips_prefix(respx_mock) -> None:
+    """Passing a full doi.org URL still resolves correctly."""
+    respx_mock.get(_RE_OA_WORKS).mock(
+        return_value=Response(200, json={"results": [_RAW_WORK]})
+    )
 
     result = await get_work_by_doi(f"https://doi.org/{_DOI}")
     assert result is not None
     assert result["id"] == "https://openalex.org/W2741809807"
 
 
-@pytest.mark.asyncio
-@respx.mock
-async def test_get_work_by_doi_not_found() -> None:
-    """A 404 from OpenAlex should return None (not raise an exception)."""
-    respx.get(_OPENALEX_WORK_URL).mock(return_value=Response(404))
+async def test_get_work_by_doi_not_found(respx_mock) -> None:
+    """An empty results list returns None."""
+    respx_mock.get(_RE_OA_WORKS).mock(
+        return_value=Response(200, json={"results": []})
+    )
 
     result = await get_work_by_doi(_DOI)
     assert result is None
 
 
-@pytest.mark.asyncio
-@respx.mock
-async def test_get_work_by_doi_server_error_returns_none() -> None:
-    """A 500 from OpenAlex should return None gracefully."""
-    respx.get(_OPENALEX_WORK_URL).mock(return_value=Response(500))
+async def test_get_work_by_doi_server_error_returns_none(respx_mock) -> None:
+    """A 500 from OpenAlex returns None gracefully."""
+    respx_mock.get(_RE_OA_WORKS).mock(return_value=Response(500))
 
     result = await get_work_by_doi(_DOI)
     assert result is None
+
+
+async def test_get_work_by_doi_404_returns_none(respx_mock) -> None:
+    """A 404 from OpenAlex returns None."""
+    respx_mock.get(_RE_OA_WORKS).mock(return_value=Response(404))
+
+    result = await get_work_by_doi(_DOI)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# normalize_citing_work
+# ---------------------------------------------------------------------------
 
 
 def test_normalize_citing_work_full() -> None:
-    """normalize_citing_work should extract all expected fields correctly."""
     normalized = normalize_citing_work(_SAMPLE_RAW_CITING)
 
     assert normalized["id"] == "https://openalex.org/W9999999999"
@@ -123,7 +141,6 @@ def test_normalize_citing_work_full() -> None:
 
 
 def test_normalize_citing_work_no_doi_uses_landing_page() -> None:
-    """When doi is absent, url should fall back to landing_page_url."""
     raw = {**_SAMPLE_RAW_CITING, "doi": None}
     normalized = normalize_citing_work(raw)
 
@@ -132,7 +149,6 @@ def test_normalize_citing_work_no_doi_uses_landing_page() -> None:
 
 
 def test_normalize_citing_work_deduplicates_affiliations() -> None:
-    """The same institution should not appear twice in affiliations."""
     raw = {
         "id": "https://openalex.org/W111",
         "doi": None,
@@ -140,14 +156,8 @@ def test_normalize_citing_work_deduplicates_affiliations() -> None:
         "publication_year": 2023,
         "landing_page_url": None,
         "authorships": [
-            {
-                "author": {"display_name": "Author One"},
-                "institutions": [{"display_name": "MIT"}],
-            },
-            {
-                "author": {"display_name": "Author Two"},
-                "institutions": [{"display_name": "MIT"}],  # duplicate
-            },
+            {"author": {"display_name": "Author One"}, "institutions": [{"display_name": "MIT"}]},
+            {"author": {"display_name": "Author Two"}, "institutions": [{"display_name": "MIT"}]},
         ],
     }
     normalized = normalize_citing_work(raw)
@@ -155,7 +165,6 @@ def test_normalize_citing_work_deduplicates_affiliations() -> None:
 
 
 def test_normalize_citing_work_empty_authorships() -> None:
-    """Works with no authorships should return empty author and affiliation lists."""
     raw = {
         "id": "https://openalex.org/W222",
         "doi": "https://doi.org/10.9999/test",
@@ -170,7 +179,69 @@ def test_normalize_citing_work_empty_authorships() -> None:
 
 
 def test_normalize_citing_work_no_year() -> None:
-    """Works with no publication_year should have year=None."""
     raw = {**_SAMPLE_RAW_CITING, "publication_year": None}
+    assert normalize_citing_work(raw)["year"] is None
+
+
+def test_normalize_citing_work_doi_lowercased() -> None:
+    """DOI in normalized output is always lowercase."""
+    raw = {**_SAMPLE_RAW_CITING, "doi": "https://doi.org/10.1016/J.CELL.2022.01.001"}
     normalized = normalize_citing_work(raw)
-    assert normalized["year"] is None
+    assert normalized["doi"] == normalized["doi"].lower()
+
+
+def test_normalize_citing_work_no_doi_no_landing_page() -> None:
+    """Works with neither doi nor landing_page_url have url=None."""
+    raw = {**_SAMPLE_RAW_CITING, "doi": None, "landing_page_url": None}
+    normalized = normalize_citing_work(raw)
+    assert normalized["url"] is None
+
+
+# ---------------------------------------------------------------------------
+# extract_topics
+# ---------------------------------------------------------------------------
+
+
+def test_extract_topics_primary_first() -> None:
+    assert extract_topics(_RAW_WORK)[0] == "Genomics"
+
+
+def test_extract_topics_deduplicates() -> None:
+    assert extract_topics(_RAW_WORK).count("Genomics") == 1
+
+
+def test_extract_topics_max_three() -> None:
+    assert len(extract_topics(_RAW_WORK)) <= 3
+
+
+def test_extract_topics_no_topics() -> None:
+    raw = {**_RAW_WORK, "primary_topic": None, "topics": []}
+    assert extract_topics(raw) == []
+
+
+def test_extract_topics_primary_only() -> None:
+    raw = {**_RAW_WORK, "topics": []}
+    topics = extract_topics(raw)
+    assert topics == ["Genomics"]
+
+
+# ---------------------------------------------------------------------------
+# extract_venue
+# ---------------------------------------------------------------------------
+
+
+def test_extract_venue_returns_source_name() -> None:
+    assert extract_venue(_RAW_WORK) == "Nature"
+
+
+def test_extract_venue_no_location() -> None:
+    assert extract_venue({**_RAW_WORK, "primary_location": None}) is None
+
+
+def test_extract_venue_no_source() -> None:
+    assert extract_venue({**_RAW_WORK, "primary_location": {"source": None}}) is None
+
+
+def test_extract_venue_empty_name() -> None:
+    raw = {**_RAW_WORK, "primary_location": {"source": {"display_name": ""}}}
+    assert extract_venue(raw) is None
