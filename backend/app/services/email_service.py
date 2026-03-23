@@ -198,11 +198,11 @@ async def send_verification_email(
         </p>
         <a href="{verification_link}" style="display:inline-block;background:linear-gradient(135deg,#0d9488 0%,#4f46e5 100%);color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:7px;font-weight:600;font-size:14px;">Verify Email</a>
         <p style="font-size:13px;color:#9aa3b5;margin:28px 0 0;line-height:1.7;">
-          If the button doesn&apos;t work, paste this link into your browser:<br />
+          If the button does not work, paste this link into your browser:<br />
           <a href="{verification_link}" style="color:#6366f1;word-break:break-all;">{verification_link}</a>
         </p>
         <p style="font-size:13px;color:#9aa3b5;margin:16px 0 0;line-height:1.7;">
-          If you didn&apos;t create a {settings.app_name} account, you can safely ignore this email.
+          If you did not create a {settings.app_name} account, you can safely ignore this email.
         </p>
       </div>
       <div style="background:#f4f6f9;border-top:1px solid #e8ecf2;padding:24px 48px;font-size:11px;color:#9aa3b5;line-height:2;">
