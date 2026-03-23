@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, status
+from firebase_admin import auth as firebase_auth
 from firebase_admin import firestore
 
 from app.deps import get_current_user
@@ -53,9 +54,15 @@ async def get_profile(
 
     # First-time user: create a minimal default document.
     now = datetime.now(tz=timezone.utc)
+    try:
+        fb_user = firebase_auth.get_user(uid)
+        user_email = fb_user.email or ""
+    except Exception:
+        user_email = ""
     default_data: dict = {
         "uid": uid,
-        "email": "",
+        "email": user_email,
+        "notification_email": user_email,
         "notify_enabled": True,
         "created_at": now,
     }
