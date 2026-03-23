@@ -12,6 +12,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   signOut as firebaseSignOut,
   UserCredential,
 } from "firebase/auth";
@@ -42,8 +43,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = (email: string, password: string) =>
     signInWithEmailAndPassword(auth, email, password);
 
-  const signUp = (email: string, password: string) =>
-    createUserWithEmailAndPassword(auth, email, password);
+  const signUp = async (email: string, password: string) => {
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    await sendEmailVerification(credential.user);
+    return credential;
+  };
 
   const signOut = () => firebaseSignOut(auth);
 

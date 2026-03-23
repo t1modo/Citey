@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
+import { sendEmailVerification } from "firebase/auth";
 import { FirebaseError } from "firebase/app";
 
 function firebaseErrorMessage(err: unknown): string {
@@ -32,7 +33,7 @@ function firebaseErrorMessage(err: unknown): string {
 }
 
 export default function SignUpPage() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, user } = useAuth();
   const router = useRouter();
 
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -41,6 +42,9 @@ export default function SignUpPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verifyScreen, setVerifyScreen] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSent, setResendSent] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -55,14 +59,28 @@ export default function SignUpPage() {
     try {
       if (mode === "signup") {
         await signUp(email, password);
+        setVerifyScreen(true);
       } else {
         await signIn(email, password);
+        router.push("/dashboard");
       }
-      router.push("/dashboard");
     } catch (err) {
       setError(firebaseErrorMessage(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!user) return;
+    setResendLoading(true);
+    try {
+      await sendEmailVerification(user);
+      setResendSent(true);
+    } catch {
+      // ignore — Firebase rate-limits resends automatically
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -94,6 +112,39 @@ export default function SignUpPage() {
             </Link>
           </div>
 
+          {verifyScreen ? (
+            <div className="flex flex-col items-center gap-5 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-2xl">
+                ✉
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">Check your inbox</h1>
+                <p className="mt-2 text-sm text-gray-400">
+                  We sent a verification link to{" "}
+                  <span className="font-medium text-gray-200">{email}</span>.
+                  Click the link to activate your account.
+                </p>
+              </div>
+              {resendSent ? (
+                <p className="text-sm text-gray-400">Verification email resent.</p>
+              ) : (
+                <button
+                  onClick={handleResend}
+                  disabled={resendLoading}
+                  className="text-sm font-medium text-gray-300 underline decoration-dotted underline-offset-2 hover:text-white disabled:opacity-50 transition-colors"
+                >
+                  {resendLoading ? "Sending…" : "Resend verification email"}
+                </button>
+              )}
+              <Link
+                href="/dashboard"
+                className="mt-1 w-full rounded-xl bg-white py-3 text-center text-sm font-bold text-gray-950 shadow-lg transition-all hover:bg-gray-100"
+              >
+                Continue to dashboard
+              </Link>
+            </div>
+          ) : (
+            <>
           <h1 className="mb-2 text-center text-2xl font-bold text-white">
             {mode === "signin" ? "Welcome back" : "Create your account"}
           </h1>
@@ -217,6 +268,8 @@ export default function SignUpPage() {
               </>
             )}
           </div>
+            </>
+          )}
         </div>
 
         <p className="mt-6 text-center text-xs text-gray-600">

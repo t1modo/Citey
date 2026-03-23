@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { sendEmailVerification } from "firebase/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/contexts/NotificationsContext";
 import {
@@ -212,6 +213,46 @@ function RecentCitationCard({
           <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-white/5 text-gray-500 ring-1 ring-white/10">
             +{affiliations.length - 4} more
           </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function VerificationBanner({ onToast }: { onToast: (msg: string, type: ToastType) => void }) {
+  const { user } = useAuth();
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleResend = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      await sendEmailVerification(user);
+      setSent(true);
+      onToast("Verification email resent. Check your inbox.", "info");
+    } catch {
+      onToast("Could not resend — please try again later.", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+        <p>
+          <span className="font-semibold">Verify your email</span> to receive citation notification emails.
+          Check your inbox for the verification link.
+        </p>
+        {!sent && (
+          <button
+            onClick={handleResend}
+            disabled={loading}
+            className="shrink-0 font-medium underline decoration-dotted underline-offset-2 hover:text-amber-100 disabled:opacity-50 transition-colors"
+          >
+            {loading ? "Sending…" : "Resend"}
+          </button>
         )}
       </div>
     </div>
@@ -442,6 +483,7 @@ export default function DashboardPage() {
   return (
     <>
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      {!user.emailVerified && <VerificationBanner onToast={addToast} />}
       <ImportModal
         isOpen={addModalOpen}
         onClose={() => setAddModalOpen(false)}

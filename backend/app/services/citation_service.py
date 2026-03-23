@@ -17,6 +17,8 @@ from datetime import datetime, timedelta, timezone
 from types import ModuleType
 from typing import Any
 
+from firebase_admin import auth as firebase_auth
+
 from app.models import Notification, TrackedWork
 from app.services import openalex as openalex_svc
 from app.services import semantic_scholar as s2_svc
@@ -387,7 +389,17 @@ async def run_job_for_user(
     to_email: str | None = user_data.get("notification_email") or user_data.get("email")
     notify_enabled: bool = user_data.get("notify_enabled", True)
 
-    if user_new_notifications and to_email and notify_enabled:
+    email_verified = True
+    try:
+        user_record = firebase_auth.get_user(uid)
+        email_verified = user_record.email_verified
+    except Exception as exc:
+        logger.warning("Could not check email_verified for uid=%s: %s", uid, exc)
+
+    if user_new_notifications and to_email and not email_verified:
+        logger.info("Skipping citation email — uid=%s email not verified.", uid)
+
+    if user_new_notifications and to_email and notify_enabled and email_verified:
         if dry_run:
             logger.info(
                 "[DRY RUN] Would email %s with %d new citation(s).",
@@ -615,6 +627,14 @@ async def send_daily_digest_for_all_users(
         to_email: str | None = user_data.get("notification_email") or user_data.get("email")
         if not notify_enabled or not to_email:
             continue
+
+        try:
+            user_record = firebase_auth.get_user(uid)
+            if not user_record.email_verified:
+                logger.info("Skipping digest — uid=%s email not verified.", uid)
+                continue
+        except Exception as exc:
+            logger.warning("Could not check email_verified for uid=%s: %s", uid, exc)
 
         # Collect notifications created in the last 24 hours.
         recent: list[Notification] = []
