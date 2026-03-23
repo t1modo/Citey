@@ -96,6 +96,52 @@ async def update_profile(
     return _doc_to_profile(uid, data)
 
 
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    uid: str = Depends(get_current_user),
+    db: Any = Depends(get_db),
+) -> None:
+    """
+    Permanently delete the account.
+
+    Cascade order:
+      1. All notification documents in the notifications subcollection.
+      2. All tracked work documents in the trackedWorks subcollection.
+      3. The top-level users/{uid} profile document.
+      4. The Firebase Authentication record (so the email can be re-used or the
+         user simply cannot log in again).
+
+    The endpoint returns 204 on success.  If the Firebase Auth deletion fails
+    (e.g. the record was already removed), the error is logged but does NOT
+    cause the endpoint to fail — all Firestore data has already been wiped.
+    """
+    from firebase_admin import auth as firebase_auth
+
+    user_ref = db.collection("users").document(uid)
+
+    # 1. Wipe notifications subcollection.
+    for ndoc in user_ref.collection("notifications").stream():
+        ndoc.reference.delete()
+
+    # 2. Wipe trackedWorks subcollection.
+    for wdoc in user_ref.collection("trackedWorks").stream():
+        wdoc.reference.delete()
+
+    # 3. Delete the profile document itself.
+    user_ref.delete()
+
+    # 4. Remove the Firebase Auth record so the user cannot sign in again.
+    try:
+        firebase_auth.delete_user(uid)
+        logger.info("Deleted Firebase Auth record for uid=%s", uid)
+    except Exception as exc:
+        logger.error(
+            "Could not delete Firebase Auth user %s (data already wiped): %s", uid, exc
+        )
+
+    logger.info("Account fully deleted for uid=%s", uid)
+
+
 @router.delete("/linked-author", status_code=status.HTTP_204_NO_CONTENT)
 async def unlink_author(
     uid: str = Depends(get_current_user),

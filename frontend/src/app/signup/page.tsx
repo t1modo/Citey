@@ -87,17 +87,7 @@ export default function SignUpPage() {
           {/* Logo */}
           <div className="mb-8 flex justify-center">
             <Link href="/" className="flex items-center gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-lg text-gray-950">
-                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
-                  <line x1="5.5" y1="5.5" x2="10" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
-                  <line x1="18.5" y1="5.5" x2="14" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
-                  <line x1="12" y1="19.5" x2="12" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
-                  <circle cx="4.5" cy="4.5" r="2" fill="currentColor" opacity="0.6"/>
-                  <circle cx="19.5" cy="4.5" r="2" fill="currentColor" opacity="0.6"/>
-                  <circle cx="12" cy="20.5" r="2" fill="currentColor" opacity="0.6"/>
-                  <circle cx="12" cy="12" r="3.5" fill="currentColor"/>
-                </svg>
-              </span>
+              <img src="/logo.svg" alt="Citey logo" className="h-9 w-9" />
               <span className="text-xl font-bold text-white" style={{ fontFamily: "var(--font-syne)" }}>
                 Citey
               </span>

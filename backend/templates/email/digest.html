@@ -3,21 +3,28 @@
 {% block title %}{{ total_citations }} New Citation{% if total_citations != 1 %}s{% endif %} — {{ app_name }}{% endblock %}
 
 {% block preheader %}
-{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} detected across {{ total_papers }} of your paper{% if total_papers != 1 %}s{% endif %}.
+{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} across {{ total_papers }} of your paper{% if total_papers != 1 %}s{% endif %}.
 {% endblock %}
 
 {% block body_content %}
 
-<p class="greeting">New citation{% if total_citations != 1 %}s{% endif %} detected, {{ recipient_name }}</p>
+<p class="greeting">Dear {{ recipient_name }},</p>
 <p class="intro">
-  {{ app_name }} found <strong>{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %}</strong>
-  across <strong>{{ total_papers }} of your paper{% if total_papers != 1 %}s{% endif %}</strong>.
-  A summary is provided below.
+  {% if total_citations == 1 %}
+    {{ app_name }} has detected <strong>1 new citation</strong> of your work.
+  {% else %}
+    {{ app_name }} has detected <strong>{{ total_citations }} new citations</strong>
+    across <strong>{{ total_papers }} of your publication{% if total_papers != 1 %}s{% endif %}</strong>.
+  {% endif %}
+  The details are summarised below.
 </p>
 
 {% for group in citation_groups %}
 
-<!-- Paper group -->
+{# Cap displayed citations at 5 per paper to keep the email scannable. #}
+{% set shown = group.citations[:5] %}
+{% set overflow = (group.citations | length) - 5 %}
+
 <div style="margin-bottom: 28px;">
 
   <!-- Your paper -->
@@ -34,10 +41,10 @@
     </div>
   </div>
 
-  <!-- Citing papers -->
-  {% for n in group.citations %}
+  <!-- Citing papers (max 5) -->
+  {% for n in shown %}
   <div class="citation-card">
-    <div class="citation-card-label">Citing paper</div>
+    <div class="citation-card-label">Cited by</div>
 
     <div class="citation-title">
       {% if n.citing_work_url %}
@@ -51,31 +58,32 @@
 
     {% if n.citing_authors %}
     <div class="citation-meta">
-      <strong>Authors:</strong>
-      {{ n.citing_authors[:4] | join(', ') }}{% if n.citing_authors | length > 4 %} &middot; +{{ n.citing_authors | length - 4 }} more{% endif %}
+      {{ n.citing_authors[:3] | join(', ') }}{% if n.citing_authors | length > 3 %}&nbsp;&middot;&nbsp;<em>+{{ n.citing_authors | length - 3 }} more</em>{% endif %}
     </div>
     {% endif %}
 
-    {% if n.citing_affiliations %}
-    <div class="citation-meta">
-      <strong>Affiliations:</strong> {{ n.citing_affiliations | join(' &middot; ') }}
+    <div class="citation-meta" style="margin-top: 5px;">
+      {% if n.citing_publication_date %}
+        {{ n.citing_publication_date }}
+      {% elif n.citing_year %}
+        {{ n.citing_year }}
+      {% endif %}
+      {% if n.citing_work_doi %}
+        &nbsp;&middot;&nbsp;<a href="https://doi.org/{{ n.citing_work_doi }}" class="citation-doi" target="_blank" rel="noopener">doi:{{ n.citing_work_doi }}</a>
+      {% endif %}
     </div>
-    {% endif %}
-
-    {% if n.citing_publication_date %}
-    <div class="citation-meta"><strong>Published:</strong> {{ n.citing_publication_date }}</div>
-    {% elif n.citing_year %}
-    <div class="citation-meta"><strong>Year:</strong> {{ n.citing_year }}</div>
-    {% endif %}
-
-    {% if n.citing_work_doi %}
-    <div class="citation-meta" style="margin-top: 8px;">
-      <a href="https://doi.org/{{ n.citing_work_doi }}" class="citation-doi" target="_blank" rel="noopener">doi.org/{{ n.citing_work_doi }}</a>
-    </div>
-    {% endif %}
 
   </div>
   {% endfor %}
+
+  <!-- Overflow link when > 5 citations for this paper -->
+  {% if overflow > 0 %}
+  <div class="overflow-row">
+    <a href="{{ app_url }}/dashboard">
+      +{{ overflow }} more citation{% if overflow != 1 %}s{% endif %} &mdash; view in dashboard &rarr;
+    </a>
+  </div>
+  {% endif %}
 
 </div>
 
@@ -83,13 +91,13 @@
 {% endfor %}
 
 <div class="btn-wrap">
-  <a href="{{ app_url }}/dashboard" class="btn-primary">View Full Dashboard</a>
+  <a href="{{ app_url }}/dashboard" class="btn-primary">Open Dashboard</a>
 </div>
 
-<p style="font-size: 13px; color: #9aa3b5; margin-top: 24px; line-height: 1.6;">
-  Citation data is sourced from OpenAlex and Semantic Scholar. Coverage may differ
-  from Google Scholar. To adjust your notification preferences, visit your
-  <a href="{{ app_url }}/settings" style="color: #7b849a;">account settings</a>.
+<p style="font-size: 12px; color: #9ca3af; margin-top: 22px; line-height: 1.7;">
+  Citation data is provided by OpenAlex and Semantic Scholar. Coverage may
+  differ from Google Scholar. To update your notification preferences, visit
+  your <a href="{{ app_url }}/settings" style="color: #6b7280;">account settings</a>.
 </p>
 
 {% endblock %}

@@ -10,6 +10,7 @@ from app.deps import get_current_user
 from app.firebase_client import get_db
 from app.models import AddWorkRequest, ImportByAuthorRequest, TrackedWork
 from app.services.crossref import resolve_doi
+from app.services.openalex import extract_topics, extract_venue
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,9 @@ def _doc_to_tracked_work(doc_id: str, data: dict) -> TrackedWork:
         title=data.get("title", ""),
         authors=data.get("authors", []),
         year=data.get("year"),
+        venue=data.get("venue"),
+        work_type=data.get("work_type"),
+        topics=data.get("topics", []),
         added_at=_to_dt(data.get("added_at")),
         last_checked_at=_to_dt(data.get("last_checked_at")),
         s2_citation_count=data.get("s2_citation_count"),
@@ -127,16 +131,21 @@ async def add_work(
 
     # If Crossref didn't return an OpenAlex ID (the normal case), resolve it
     # eagerly now so that the first citation check can proceed immediately
-    # without a separate lookup step.
+    # without a separate lookup step.  Also extract topics/venue/type here.
     if not work_info.get("openalex_id"):
         from app.services.openalex import get_work_by_doi as _oa_lookup
         oa_raw = await _oa_lookup(work_info["doi"])
         if oa_raw:
             work_info["openalex_id"] = oa_raw.get("id")
             work_info["openalex_citation_count"] = oa_raw.get("cited_by_count")
+            work_info["topics"] = extract_topics(oa_raw)
+            work_info["venue"] = extract_venue(oa_raw)
+            work_info["work_type"] = oa_raw.get("type")
             logger.info("Resolved OpenAlex ID for %s: %s", work_info["doi"], work_info["openalex_id"])
 
-    # Sanitize the DOI to form a valid Firestore document ID.
+    # Normalise DOI to lowercase for consistent Firestore document IDs.
+    # DOIs are case-insensitive; mixing cases creates phantom duplicates.
+    work_info["doi"] = work_info["doi"].lower()
     work_id = work_info["doi"].replace("/", "__")
 
     ref = db.collection("users").document(uid).collection("trackedWorks").document(work_id)
@@ -154,6 +163,9 @@ async def add_work(
         "title": work_info["title"],
         "authors": work_info.get("authors", []),
         "year": work_info.get("year"),
+        "venue": work_info.get("venue"),
+        "work_type": work_info.get("work_type"),
+        "topics": work_info.get("topics", []),
         "added_at": now,
         "last_checked_at": None,
         "openalex_citation_count": work_info.get("openalex_citation_count"),
@@ -245,6 +257,30 @@ async def import_works_by_author(
 
     raw_works = await openalex_svc.get_works_by_author(body.author_id)
 
+    # If the frontend didn't supply the author's display name, recover it from
+    # the authorships data on the fetched works.  Without a stored name the
+    # author-presence check on future manual add_work calls is silently skipped.
+    author_display_name: str | None = body.author_name or None
+    if not author_display_name:
+        for raw in raw_works[:20]:
+            for authorship in raw.get("authorships", []):
+                author_info = authorship.get("author", {})
+                if _short_id(author_info.get("id", "")) == incoming_short:
+                    author_display_name = author_info.get("display_name", "").strip() or None
+                    break
+            if author_display_name:
+                break
+        if author_display_name:
+            logger.info(
+                "Resolved display name for author %s from works: %s",
+                incoming_short, author_display_name,
+            )
+        else:
+            logger.warning(
+                "Could not resolve display name for author %s — author-presence check will be inactive.",
+                incoming_short,
+            )
+
     # Deduplicate by title: for papers published in multiple venues (e.g. arXiv
     # preprint + conference proceedings), keep only the best version per title.
     # Uses fuzzy matching (SequenceMatcher ratio >= 0.85) to catch near-duplicate
@@ -276,6 +312,7 @@ async def import_works_by_author(
         doi_raw = _strip_doi(raw.get("doi"))
         if not doi_raw:
             continue
+        doi_raw = doi_raw.lower()  # Normalise to lowercase — DOIs are case-insensitive
         norm = _norm_title(raw.get("title") or "")
         if not norm:
             continue
@@ -328,6 +365,9 @@ async def import_works_by_author(
             "title": title,
             "authors": authors,
             "year": year,
+            "venue": extract_venue(raw),
+            "work_type": raw.get("type"),
+            "topics": extract_topics(raw),
             "added_at": now,
             "last_checked_at": None,
             "openalex_citation_count": openalex_citation_count,
@@ -338,10 +378,10 @@ async def import_works_by_author(
     # Lock the account to this author on first successful import.
     if not stored_id:
         link_data: dict = {"linked_author_id": incoming_short}
-        if body.author_name:
-            link_data["linked_author_name"] = body.author_name
+        if author_display_name:
+            link_data["linked_author_name"] = author_display_name
         user_ref.set(link_data, merge=True)
-        logger.info("Linked uid=%s to author %s (%s)", uid, incoming_short, body.author_name)
+        logger.info("Linked uid=%s to author %s (%s)", uid, incoming_short, author_display_name)
 
     logger.info("Bulk import: %d imported, %d skipped for uid=%s", imported, skipped, uid)
     return {"imported": imported, "skipped": skipped}

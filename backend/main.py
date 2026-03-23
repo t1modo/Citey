@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.config import get_settings
-from app.routers import health, jobs, notifications, profile, works
+from app.routers import chat, health, jobs, notifications, profile, works
 
 logging.basicConfig(
     level=logging.INFO,
@@ -93,6 +93,7 @@ def create_app() -> FastAPI:
     application.include_router(works.router)
     application.include_router(notifications.router)
     application.include_router(jobs.router)
+    application.include_router(chat.router)
 
     # ---- Root redirect -------------------------------------------------------
     @application.get("/", include_in_schema=False)

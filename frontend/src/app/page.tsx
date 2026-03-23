@@ -223,17 +223,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
             <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-gray-950">
-                <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
-                  <line x1="5.5" y1="5.5" x2="10" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
-                  <line x1="18.5" y1="5.5" x2="14" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
-                  <line x1="12" y1="19.5" x2="12" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
-                  <circle cx="4.5" cy="4.5" r="2" fill="currentColor" opacity="0.6"/>
-                  <circle cx="19.5" cy="4.5" r="2" fill="currentColor" opacity="0.6"/>
-                  <circle cx="12" cy="20.5" r="2" fill="currentColor" opacity="0.6"/>
-                  <circle cx="12" cy="12" r="3.5" fill="currentColor"/>
-                </svg>
-              </span>
+              <img src="/logo.svg" alt="Citey logo" className="h-7 w-7" />
               <span className="font-bold text-white" style={{ fontFamily: "var(--font-syne)" }}>Citey</span>
               <span className="text-sm text-gray-600">
                 Citation Alerts for Researchers

@@ -24,6 +24,9 @@ class TrackedWork(BaseModel):
     title: str
     authors: list[str] = Field(default_factory=list)
     year: Optional[int] = None
+    venue: Optional[str] = None          # journal / conference / repository name
+    work_type: Optional[str] = None      # "journal-article", "conference-paper", "preprint", …
+    topics: list[str] = Field(default_factory=list)  # subject tags from OpenAlex
     added_at: Optional[datetime] = None
     last_checked_at: Optional[datetime] = None
     citation_count: int = 0

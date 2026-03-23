@@ -286,8 +286,7 @@ export default function FaqPage() {
           <SplitText text="Frequently Asked Questions" charDelay={0.025} />
         </h1>
         <p className="text-gray-400">
-          Everything you need to know about Citey, citation tracking, and how
-          it all works under the hood.
+          Everything you need to know about Citey and how citation tracking works.
         </p>
       </ScrollReveal>
 
