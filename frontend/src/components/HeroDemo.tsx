@@ -213,7 +213,7 @@ export default function HeroDemo() {
         </div>
 
         {/* Content */}
-        <div className="relative min-h-[300px] px-8 py-7">
+        <div className="relative min-h-[300px] px-8 py-7 [@media(max-height:820px)]:min-h-[220px] [@media(max-height:820px)]:px-5 [@media(max-height:820px)]:py-4">
           <AnimatePresence mode="wait">
             <motion.div
               key={phase}
