@@ -74,7 +74,7 @@ export default function HomePage() {
   return (
     <div className="flex flex-col">
       {/* ─── Hero ─────────────────────────────────────────────────────── */}
-      <section className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center overflow-hidden px-4 pt-20 pb-8 text-center">
+      <section className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center overflow-hidden px-4 pt-20 pb-8 text-center [@media(max-height:820px)]:pt-10 [@media(max-height:820px)]:pb-4">
         <Particles
           particleCount={180}
           particleSpread={10}
@@ -90,12 +90,12 @@ export default function HomePage() {
         />
 
         {/* Subheading */}
-        <p className="relative z-10 mb-8 max-w-xl text-lg leading-relaxed text-gray-400 sm:text-xl">
+        <p className="relative z-10 mb-8 max-w-xl text-lg leading-relaxed text-gray-400 sm:text-xl [@media(max-height:820px)]:mb-4 [@media(max-height:820px)]:text-base">
           Citey monitors your research and emails you the moment a new paper cites your work.
         </p>
 
         {/* CTA buttons */}
-        <div className="relative z-10 mb-10 flex flex-col items-center gap-3 sm:flex-row">
+        <div className="relative z-10 mb-10 flex flex-col items-center gap-3 sm:flex-row [@media(max-height:820px)]:mb-5">
           <Link
             href={user ? "/dashboard" : "/signup"}
             className="rounded-xl bg-white px-8 py-3.5 text-base font-semibold text-gray-950 shadow-xl shadow-white/10 transition-all hover:scale-105 hover:bg-gray-100"

@@ -12,6 +12,9 @@ export const metadata: Metadata = {
   title: "Citey",
   description:
     "Citey monitors citations to your published works and sends you instant email alerts when a new paper cites your research. Track any DOI, powered by OpenAlex and Crossref.",
+  icons: {
+    icon: "/logo.svg",
+  },
 };
 
 export default function RootLayout({
