@@ -141,15 +141,18 @@ async def process_tracked_work(
 
     all_normalized = list(merged.values())
 
-    # Strict 30-day backstop.
-    # Papers whose publication_date is missing are intentionally excluded —
-    # they cannot be date-verified so we skip them rather than risk surfacing
-    # stale results (Google Scholar will pick them up when a date is available).
-    # Papers with a date older than the cutoff are also dropped.
+    # 30-day backstop.
+    # Prefer publication_date for precise filtering.  When it's absent (common
+    # for papers that have been indexed but not yet dated by OA/S2), fall back
+    # to year: accept anything from the cutoff year or later so that recently
+    # published papers don't get silently dropped on the first job run and only
+    # appear once the API retroactively assigns a date.
     before_date_filter = len(all_normalized)
+    cutoff_year = int(thirty_days_ago[:4])
     all_normalized = [
         n for n in all_normalized
         if (n.get("publication_date") or "") >= thirty_days_ago
+        or (not n.get("publication_date") and (n.get("year") or 0) >= cutoff_year)
     ]
     date_filtered_count = before_date_filter - len(all_normalized)
 

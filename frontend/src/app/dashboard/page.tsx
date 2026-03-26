@@ -11,7 +11,7 @@ import {
   runJob,
   getNotifications,
 } from "@/lib/api";
-import type { TrackedWork, Notification } from "@/lib/types";
+import type { TrackedWork, Notification, LinkedAuthorEntry } from "@/lib/types";
 
 const CITATIONS_PER_PAGE = 10;
 const WORKS_PER_PAGE = 10;
@@ -317,6 +317,7 @@ export default function DashboardPage() {
   const [scholarUrl, setScholarUrl] = useState<string | null>(null);
   const [linkedAuthorId, setLinkedAuthorId] = useState<string | null>(null);
   const [linkedAuthorName, setLinkedAuthorName] = useState<string | null>(null);
+  const [additionalLinkedAuthors, setAdditionalLinkedAuthors] = useState<LinkedAuthorEntry[]>([]);
   const [nameAliases, setNameAliases] = useState<string[]>([]);
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
 
@@ -327,6 +328,7 @@ export default function DashboardPage() {
           setScholarUrl(p.scholar_url ?? null);
           setLinkedAuthorId(p.linked_author_id ?? null);
           setLinkedAuthorName(p.linked_author_name ?? null);
+          setAdditionalLinkedAuthors(p.additional_linked_authors ?? []);
           setNameAliases(p.name_aliases ?? []);
           setProfileDisplayName(p.display_name ?? null);
         })
@@ -487,6 +489,7 @@ export default function DashboardPage() {
         onClose={() => setAddModalOpen(false)}
         linkedAuthorId={linkedAuthorId}
         linkedAuthorName={linkedAuthorName}
+        additionalLinkedAuthors={additionalLinkedAuthors}
         nameAliases={nameAliases}
         worksCount={works.length}
         onAdded={(work) => {
@@ -504,6 +507,7 @@ export default function DashboardPage() {
         onUnlinked={() => {
           setLinkedAuthorId(null);
           setLinkedAuthorName(null);
+          setAdditionalLinkedAuthors([]);
           setNameAliases([]);
           setWorks([]);
           loadNotifications();
@@ -512,7 +516,6 @@ export default function DashboardPage() {
         onAliasesUpdated={(aliases) => setNameAliases(aliases)}
       />
 
-      <div className="relative min-h-screen">
       <Galaxy speedMultiplier={3} />
       <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
         {/* Header */}
@@ -814,7 +817,6 @@ export default function DashboardPage() {
             )}
           </section>
         </div>
-      </div>
       </div>
 
     </>

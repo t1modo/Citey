@@ -73,8 +73,8 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col">
-      {/* ─── Hero ─────────────────────────────────────────────────────── */}
-      <section className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center overflow-hidden px-4 pt-20 pb-8 text-center [@media(max-height:820px)]:pt-10 [@media(max-height:820px)]:pb-4">
+      {/* ─── Full-page fixed particle background ──────────────────────── */}
+      <div className="pointer-events-none fixed inset-0 -z-10">
         <Particles
           particleCount={180}
           particleSpread={10}
@@ -88,6 +88,10 @@ export default function HomePage() {
           disableRotation={false}
           pixelRatio={1}
         />
+      </div>
+
+      {/* ─── Hero ─────────────────────────────────────────────────────── */}
+      <section className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 pt-20 pb-8 text-center [@media(max-height:820px)]:pt-10 [@media(max-height:820px)]:pb-4">
 
         {/* Subheading */}
         <p className="relative z-10 mb-8 max-w-xl text-lg leading-relaxed text-gray-400 sm:text-xl [@media(max-height:820px)]:mb-4 [@media(max-height:820px)]:text-base">

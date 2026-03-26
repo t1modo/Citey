@@ -4,6 +4,11 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class LinkedAuthorEntry(BaseModel):
+    id: str
+    name: Optional[str] = None
+
+
 class UserProfile(BaseModel):
     uid: str
     email: str
@@ -13,6 +18,7 @@ class UserProfile(BaseModel):
     scholar_url: Optional[str] = None
     linked_author_id: Optional[str] = None
     linked_author_name: Optional[str] = None
+    additional_linked_authors: list[LinkedAuthorEntry] = Field(default_factory=list)
     name_aliases: list[str] = Field(default_factory=list)
     created_at: Optional[datetime] = None
 
@@ -59,6 +65,8 @@ class AddWorkRequest(BaseModel):
 class ImportByAuthorRequest(BaseModel):
     author_id: str
     author_name: Optional[str] = None
+    source: str = "openalex"  # "openalex" | "semantic_scholar"
+    confirm_merge: bool = False  # user confirmed two profiles belong to the same person
 
 
 class UpdateProfileRequest(BaseModel):

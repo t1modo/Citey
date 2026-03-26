@@ -8,7 +8,7 @@ from firebase_admin import firestore
 
 from app.deps import get_current_user
 from app.firebase_client import get_db
-from app.models import UpdateProfileRequest, UserProfile
+from app.models import LinkedAuthorEntry, UpdateProfileRequest, UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,10 @@ def _doc_to_profile(uid: str, data: dict) -> UserProfile:
         scholar_url=data.get("scholar_url"),
         linked_author_id=data.get("linked_author_id"),
         linked_author_name=data.get("linked_author_name"),
+        additional_linked_authors=[
+            LinkedAuthorEntry(**e) if isinstance(e, dict) else e
+            for e in (data.get("additional_linked_authors") or [])
+        ],
         name_aliases=data.get("name_aliases") or [],
         created_at=created_at,
     )
@@ -172,6 +176,7 @@ async def unlink_author(
     user_ref.update({
         "linked_author_id": firestore.DELETE_FIELD,
         "linked_author_name": firestore.DELETE_FIELD,
+        "additional_linked_authors": firestore.DELETE_FIELD,
         "name_aliases": firestore.DELETE_FIELD,
     })
 

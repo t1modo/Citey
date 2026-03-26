@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from collections import defaultdict
@@ -201,28 +202,139 @@ async def delete_work(
     logger.info("Deleted tracked work %s and its notifications for uid=%s", work_id, uid)
 
 
+_ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
+
+
+def _format_author_candidate(r: dict) -> dict:
+    """Extract the fields we expose to the frontend from a raw OpenAlex author dict."""
+    # Affiliations: deduplicate institutions, keep most-recent years
+    seen: set[str] = set()
+    affiliations: list[dict] = []
+    for a in r.get("affiliations", []):
+        name = a.get("institution", {}).get("display_name", "")
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        years: list[int] = sorted(a.get("years", []))
+        affiliations.append(
+            {
+                "name": name,
+                "year_range": f"{years[0]}–{years[-1]}" if len(years) > 1 else str(years[0]) if years else None,
+            }
+        )
+        if len(affiliations) == 3:
+            break
+
+    # Topics: top 3 by score
+    topics = [
+        t.get("display_name", "")
+        for t in r.get("topics", [])[:3]
+        if t.get("display_name")
+    ]
+
+    return {
+        "id": r.get("id", ""),
+        "display_name": r.get("display_name", ""),
+        "orcid": r.get("orcid"),
+        "works_count": r.get("works_count", 0),
+        "h_index": r.get("summary_stats", {}).get("h_index", 0),
+        "affiliations": affiliations,
+        "topics": topics,
+        "source": "openalex",
+    }
+
+
+def _format_s2_author_candidate(r: dict) -> dict:
+    """Shape a raw Semantic Scholar author dict for the frontend."""
+    external = r.get("externalIds") or {}
+    affiliations = [
+        {"name": aff, "year_range": None}
+        for aff in (r.get("affiliations") or [])[:3]
+        if aff
+    ]
+    return {
+        "id": f"S2:{r.get('authorId', '')}",
+        "display_name": r.get("name", ""),
+        "orcid": external.get("ORCID"),
+        "works_count": r.get("paperCount", 0),
+        "h_index": r.get("hIndex", 0),
+        "affiliations": affiliations,
+        "topics": [],  # S2 author search doesn't return topic data
+        "source": "semantic_scholar",
+    }
+
+
 @router.get("/author-search")
 async def search_authors_endpoint(
     query: str = Query(..., min_length=2),
     uid: str = Depends(get_current_user),
 ) -> list[dict]:
-    """Search OpenAlex for author candidates matching the given name query."""
-    from app.services import openalex as openalex_svc
+    """Search OpenAlex and Semantic Scholar in parallel for author candidates.
 
-    results = await openalex_svc.search_authors(query)
-    return [
-        {
-            "id": r.get("id", ""),
-            "display_name": r.get("display_name", ""),
-            "works_count": r.get("works_count", 0),
-            "affiliations": [
-                a.get("institution", {}).get("display_name", "")
-                for a in r.get("affiliations", [])[:2]
-                if a.get("institution", {}).get("display_name")
-            ],
-        }
-        for r in results
+    Accepts a name query or a bare ORCID.
+    ORCID lookups are OpenAlex-only since ORCID is an OpenAlex feature.
+    """
+    from app.services import openalex as openalex_svc
+    from app.services import semantic_scholar as s2_svc
+
+    q = query.strip()
+    if q.startswith("https://orcid.org/"):
+        q = q[len("https://orcid.org/"):]
+
+    if _ORCID_RE.match(q):
+        author = await openalex_svc.get_author_by_orcid(q)
+        if author is None:
+            return []
+        return [_format_author_candidate(author)]
+
+    oa_raw, s2_raw = await asyncio.gather(
+        openalex_svc.search_authors(q),
+        s2_svc.search_authors(q),
+        return_exceptions=True,
+    )
+
+    candidates: list[dict] = []
+
+    if isinstance(oa_raw, list):
+        candidates.extend(_format_author_candidate(r) for r in oa_raw)
+    else:
+        logger.warning("OpenAlex author search failed: %s", oa_raw)
+
+    if isinstance(s2_raw, list):
+        candidates.extend(_format_s2_author_candidate(r) for r in s2_raw)
+    else:
+        logger.warning("S2 author search failed: %s", s2_raw)
+
+    return candidates
+
+
+@router.get("/paper-authors")
+async def get_paper_authors_endpoint(
+    doi: str = Query(..., min_length=5),
+    uid: str = Depends(get_current_user),
+) -> dict:
+    """Look up a paper by DOI on Semantic Scholar and return its authors as
+    AuthorCandidate records.  Used for the 'find by paper DOI' import mode."""
+    from app.services import semantic_scholar as s2_svc
+
+    paper = await s2_svc.get_paper_with_authors(doi)
+    if paper is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Paper not found on Semantic Scholar. Check the DOI and try again.",
+        )
+
+    authors = [
+        _format_s2_author_candidate(a)
+        for a in (paper.get("authors") or [])
+        if a.get("authorId")
     ]
+
+    return {
+        "paper_title": paper.get("title") or "Unknown title",
+        "paper_year": paper.get("year"),
+        "authors": authors,
+    }
 
 
 @router.post("/import")
@@ -248,14 +360,31 @@ async def import_works_by_author(
     stored_id: str | None = user_data.get("linked_author_id")
     stored_name: str | None = user_data.get("linked_author_name")
 
-    if stored_id and _short_id(stored_id) != incoming_short:
-        detail = (
-            f"This account is already linked to \"{stored_name or stored_id}\". "
-            "Each account may only import works for one author."
-        )
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+    # Build the full set of already-linked author IDs (primary + additional).
+    additional: list[dict] = user_data.get("additional_linked_authors") or []
+    all_linked_short: set[str] = set()
+    if stored_id:
+        all_linked_short.add(_short_id(stored_id))
+    for entry in additional:
+        if entry.get("id"):
+            all_linked_short.add(_short_id(entry["id"]))
 
-    raw_works = await openalex_svc.get_works_by_author(body.author_id)
+    is_new_author = bool(stored_id) and incoming_short not in all_linked_short
+
+    if is_new_author and not body.confirm_merge:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "merge_required",
+                "existing_author_name": stored_name or stored_id,
+            },
+        )
+
+    if body.source == "semantic_scholar":
+        from app.services import semantic_scholar as s2_svc
+        raw_works = await s2_svc.get_works_by_author(body.author_id)
+    else:
+        raw_works = await openalex_svc.get_works_by_author(body.author_id)
 
     # If the frontend didn't supply the author's display name, recover it from
     # the authorships data on the fetched works.  Without a stored name the
@@ -275,6 +404,19 @@ async def import_works_by_author(
                 "Resolved display name for author %s from works: %s",
                 incoming_short, author_display_name,
             )
+        elif body.source == "semantic_scholar":
+            from app.services import semantic_scholar as s2_svc
+            author_display_name = await s2_svc.get_author_name(incoming_short)
+            if author_display_name:
+                logger.info(
+                    "Resolved display name for S2 author %s via profile lookup: %s",
+                    incoming_short, author_display_name,
+                )
+            else:
+                logger.warning(
+                    "Could not resolve display name for author %s — author-presence check will be inactive.",
+                    incoming_short,
+                )
         else:
             logger.warning(
                 "Could not resolve display name for author %s — author-presence check will be inactive.",
@@ -375,13 +517,23 @@ async def import_works_by_author(
         existing_ids.add(work_id)
         imported += 1
 
-    # Lock the account to this author on first successful import.
+    # Persist author linkage after a successful import.
     if not stored_id:
+        # First-ever import: set the primary linked author.
         link_data: dict = {"linked_author_id": incoming_short}
         if author_display_name:
             link_data["linked_author_name"] = author_display_name
         user_ref.set(link_data, merge=True)
         logger.info("Linked uid=%s to author %s (%s)", uid, incoming_short, author_display_name)
+    elif is_new_author and body.confirm_merge:
+        # Merge-confirmed: append to additional_linked_authors.
+        new_entry = {"id": incoming_short, "name": author_display_name}
+        updated_additional = additional + [new_entry]
+        user_ref.set({"additional_linked_authors": updated_additional}, merge=True)
+        logger.info(
+            "Merged author %s (%s) into uid=%s additional linked authors",
+            incoming_short, author_display_name, uid,
+        )
 
     logger.info("Bulk import: %d imported, %d skipped for uid=%s", imported, skipped, uid)
     return {"imported": imported, "skipped": skipped}
