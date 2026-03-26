@@ -1,5 +1,9 @@
 <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
   <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&amp;display=swap');
+    </style>
+
     <!-- Radial gradient: brightest at the spine, dims toward the tips -->
     <radialGradient id="fill" cx="25%" cy="50%" r="75%" gradientUnits="objectBoundingBox">
       <stop offset="0%"   stop-color="#ffffff"/>
@@ -20,7 +24,7 @@
   <text
     x="100" y="158"
     text-anchor="middle"
-    font-family="'Segoe Script', 'Monotype Corsiva', 'Brush Script MT', cursive"
+    font-family="'Dancing Script', 'Segoe Script', 'Monotype Corsiva', cursive"
     font-size="168"
     font-weight="bold"
     fill="white"
@@ -32,7 +36,7 @@
   <text
     x="100" y="158"
     text-anchor="middle"
-    font-family="'Segoe Script', 'Monotype Corsiva', 'Brush Script MT', cursive"
+    font-family="'Dancing Script', 'Segoe Script', 'Monotype Corsiva', cursive"
     font-size="168"
     font-weight="bold"
     fill="url(#fill)"

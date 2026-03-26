@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Logo from "@/components/Logo";
 import Particles from "@/components/Particles";
 import BlurText from "@/components/BlurText";
 import SplitText from "@/components/SplitText";
@@ -227,7 +228,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
             <div className="flex items-center gap-2">
-              <img src="/logo.svg" alt="Citey logo" className="h-7 w-7" />
+              <Logo className="h-7 w-7" />
               <span className="font-bold text-white" style={{ fontFamily: "var(--font-syne)" }}>Citey</span>
               <span className="text-sm text-gray-600">
                 Citation Alerts for Researchers

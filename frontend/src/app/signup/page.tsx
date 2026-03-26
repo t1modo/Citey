@@ -4,6 +4,7 @@ import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
+import Logo from "@/components/Logo";
 import { sendVerificationEmail } from "@/lib/api";
 import { FirebaseError } from "firebase/app";
 import { auth } from "@/lib/firebase";
@@ -124,7 +125,7 @@ export default function SignUpPage() {
           {/* Logo */}
           <div className="mb-8 flex justify-center">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/logo.svg" alt="Citey logo" className="h-9 w-9" />
+              <Logo className="h-9 w-9" />
               <span className="text-xl font-bold text-white" style={{ fontFamily: "var(--font-syne)" }}>
                 Citey
               </span>
