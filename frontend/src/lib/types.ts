@@ -1,3 +1,8 @@
+export interface LinkedAuthorEntry {
+  id: string;
+  name: string | null;
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
@@ -7,6 +12,7 @@ export interface UserProfile {
   scholar_url: string | null;
   linked_author_id: string | null;
   linked_author_name: string | null;
+  additional_linked_authors: LinkedAuthorEntry[];
   name_aliases: string[];
   created_at: string;
   updated_at: string;
@@ -26,11 +32,20 @@ export interface TrackedWork {
   openalex_citation_count: number | null;
 }
 
+export interface AuthorAffiliation {
+  name: string;
+  year_range: string | null;
+}
+
 export interface AuthorCandidate {
   id: string;
   display_name: string;
+  orcid: string | null;
   works_count: number;
-  affiliations: string[];
+  h_index: number;
+  affiliations: AuthorAffiliation[];
+  topics: string[];
+  source: "openalex" | "semantic_scholar";
 }
 
 export interface Notification {
@@ -64,6 +79,12 @@ export interface PaginatedNotifications {
   page: number;
   limit: number;
   pages: number;
+}
+
+export interface PaperAuthorsResult {
+  paper_title: string;
+  paper_year: number | null;
+  authors: AuthorCandidate[];
 }
 
 export type AddWorkResult =

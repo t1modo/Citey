@@ -224,9 +224,9 @@ async def get_citation_counts(openalex_ids: list[str]) -> dict[str, int]:
 
 
 async def search_authors(query: str) -> list[dict]:
-    """Search OpenAlex for authors by name. Returns up to 5 candidates."""
+    """Search OpenAlex for authors by name. Returns up to 10 candidates."""
     url = f"{_BASE_URL}/authors"
-    params = {"search": query, "per_page": 5, "mailto": _MAILTO}
+    params: dict[str, Any] = {"search": query, "per_page": 10, "mailto": _MAILTO}
     logger.debug("OpenAlex author search: %s", query)
 
     async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
@@ -241,6 +241,33 @@ async def search_authors(query: str) -> list[dict]:
         return []
 
     return response.json().get("results", [])
+
+
+async def get_author_by_orcid(orcid: str) -> dict | None:
+    """Look up a single author by ORCID. Returns the raw OpenAlex author dict or None."""
+    # Normalise: strip URL prefix if present
+    orcid = orcid.strip()
+    if orcid.startswith("https://orcid.org/"):
+        orcid = orcid[len("https://orcid.org/"):]
+
+    url = f"{_BASE_URL}/authors/https://orcid.org/{orcid}"
+    params = {"mailto": _MAILTO}
+    logger.debug("OpenAlex ORCID lookup: %s", orcid)
+
+    async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
+        try:
+            response = await client.get(url, params=params)
+        except httpx.RequestError as exc:
+            logger.error("OpenAlex ORCID lookup error for %s: %s", orcid, exc)
+            return None
+
+    if response.status_code == 404:
+        return None
+    if response.status_code != 200:
+        logger.warning("OpenAlex ORCID lookup status %s for %s", response.status_code, orcid)
+        return None
+
+    return response.json()
 
 
 async def get_works_by_author(author_id: str) -> list[dict]:

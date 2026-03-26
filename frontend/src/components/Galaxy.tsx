@@ -105,7 +105,7 @@ export default function Galaxy({ className = "", speedMultiplier = 1 }: GalaxyPr
   return (
     <canvas
       ref={canvasRef}
-      className={`pointer-events-none absolute inset-0 h-full w-full ${className}`}
+      className={`pointer-events-none fixed inset-0 -z-10 w-screen h-screen ${className}`}
       aria-hidden="true"
     />
   );

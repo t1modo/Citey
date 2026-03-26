@@ -6,7 +6,9 @@ import type {
   PaginatedNotifications,
   UpdateProfileData,
   AuthorCandidate,
+  PaperAuthorsResult,
   AddWorkResult,
+  LinkedAuthorEntry,
 } from "@/lib/types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -194,18 +196,67 @@ export async function sendChatMessage(messages: ChatMessage[]): Promise<string> 
   return data.message as string;
 }
 
+export async function getAuthorsByPaperDoi(doi: string): Promise<PaperAuthorsResult> {
+  const res = await authFetch(`/works/paper-authors?doi=${encodeURIComponent(doi)}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? "Paper not found.");
+  }
+  return res.json();
+}
+
 export async function searchAuthors(query: string): Promise<AuthorCandidate[]> {
   const res = await authFetch(`/works/author-search?query=${encodeURIComponent(query)}`);
   return res.json();
 }
 
+export type ImportByAuthorResult =
+  | { status: "imported"; imported: number; skipped: number }
+  | { status: "merge_required"; existing_author_name: string };
+
 export async function importByAuthor(
   authorId: string,
-  authorName?: string
-): Promise<{ imported: number; skipped: number }> {
-  const res = await authFetch("/works/import", {
+  authorName?: string,
+  source: "openalex" | "semantic_scholar" = "openalex",
+  confirmMerge = false
+): Promise<ImportByAuthorResult> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error("Not authenticated");
+  const idToken = await currentUser.getIdToken();
+
+  const res = await fetch(`${BASE_URL}/works/import`, {
     method: "POST",
-    body: JSON.stringify({ author_id: authorId, author_name: authorName }),
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      author_id: authorId,
+      author_name: authorName,
+      source,
+      confirm_merge: confirmMerge,
+    }),
   });
-  return res.json();
+
+  let data: Record<string, unknown> = {};
+  try {
+    data = await res.json();
+  } catch {
+    // ignore
+  }
+
+  if (res.status === 409) {
+    const detail = data?.detail as Record<string, unknown> | undefined;
+    if (detail?.code === "merge_required") {
+      return { status: "merge_required", existing_author_name: String(detail.existing_author_name ?? "") };
+    }
+    throw new Error(typeof detail === "string" ? detail : (detail?.code ? String(detail.code) : "Conflict error."));
+  }
+
+  if (!res.ok) {
+    const detail = (data as Record<string, unknown>)?.detail;
+    throw new Error(typeof detail === "string" ? detail : "Import failed.");
+  }
+
+  return { status: "imported", ...data } as ImportByAuthorResult;
 }
