@@ -554,7 +554,7 @@ export default function DashboardPage() {
         </ScrollReveal>
 
         {/* Stats row */}
-        <ScrollReveal className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <ScrollReveal className="mb-10 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
           <TiltedCard>
             <div className="glass-card p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Tracked works</p>
