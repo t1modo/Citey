@@ -8,7 +8,9 @@ Get email notifications whenever one of your papers is cited by a new work.
 
 ## What it does
 
-Citey lets researchers track citations to their published papers. Add a paper by DOI, and Citey will notify you by email whenever a new citation is detected. Citation data is sourced from [OpenAlex](https://openalex.org) and [Crossref](https://www.crossref.org), giving broad coverage across disciplines and publishers.
+Citey lets researchers track citations to their published papers. Add a paper by DOI, and Citey will notify you by email whenever a new citation is detected. Citation data is sourced from [OpenAlex](https://openalex.org), [Semantic Scholar](https://www.semanticscholar.org), and [Crossref](https://www.crossref.org), giving broad coverage across disciplines and publishers.
+
+You can also bulk-import your entire publication list by searching for your author profile — by name (queried in parallel across OpenAlex and Semantic Scholar) or by entering a paper DOI to find co-authors. Citey handles duplicate detection and merge prompts if the same author appears under multiple profiles.
 
 ---
 
@@ -50,4 +52,4 @@ Citey lets researchers track citations to their published papers. Add a paper by
 
 **[Crossref](https://www.crossref.org)** — Used for DOI resolution and metadata enrichment. Crossref maintains the canonical DOI registry for academic publishing, making it reliable for identifying and validating papers.
 
-**[Semantic Scholar](https://www.semanticscholar.org)** — Secondary citation source used alongside OpenAlex to improve coverage and enrich citation counts for tracked works.
+**[Semantic Scholar](https://www.semanticscholar.org)** — Secondary citation source used alongside OpenAlex to broaden coverage across disciplines. Also powers the paper-DOI author lookup (finding a paper's co-authors by DOI) and is queried in parallel with OpenAlex during author name searches for the bulk-import feature.
