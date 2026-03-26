@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { sendChatMessage } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
+import Logo from "@/components/Logo";
 
 const WELCOME: ChatMessage = {
   role: "assistant",
@@ -128,7 +129,7 @@ export default function ChatWidget() {
             {/* Header */}
             <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10">
-                <img src="/logo.svg" alt="" className="h-5 w-5" />
+                <Logo className="h-5 w-5" />
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white">Citey Assistant</p>

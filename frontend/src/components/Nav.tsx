@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import Logo from "@/components/Logo";
 
 const navLinks = [
   { label: "Home",      href: "/" },
@@ -37,7 +38,7 @@ export default function Nav() {
             href="/"
             className="flex items-center gap-2"
           >
-            <img src="/logo.svg" alt="Citey logo" className="h-8 w-8" />
+            <Logo className="h-8 w-8" />
             <span
               className="text-xl font-bold tracking-tight text-white"
               style={{ fontFamily: "var(--font-syne)" }}
