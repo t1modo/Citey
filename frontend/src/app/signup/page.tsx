@@ -297,10 +297,14 @@ export default function SignUpPage() {
           Citation data sourced from{" "}
           <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">
             OpenAlex
-          </a>{" "}
-          and{" "}
+          </a>
+          ,{" "}
           <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">
             Crossref
+          </a>
+          , and{" "}
+          <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">
+            Semantic Scholar
           </a>
           .
         </p>
