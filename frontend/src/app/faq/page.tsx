@@ -16,7 +16,7 @@ const faqItems: FaqItem[] = [
     answer: (
       <>
         <p>
-          Citey queries two major open scholarly databases to find citations to your
+          Citey queries three major open scholarly databases to find citations to your
           tracked works:
         </p>
         <ul className="mt-3 list-disc space-y-2 pl-5">
@@ -49,11 +49,27 @@ const faqItems: FaqItem[] = [
             </a>
             .
           </li>
+          <li>
+            <strong className="text-white">Semantic Scholar</strong>, a free, AI-powered
+            research tool from the Allen Institute for AI that indexes over 200 million
+            papers across all fields of science. Semantic Scholar provides additional
+            citation coverage, particularly for computer science and biomedical literature.
+            Learn more at{" "}
+            <a
+              href="https://www.semanticscholar.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-400 underline hover:text-gray-300"
+            >
+              semanticscholar.org
+            </a>
+            .
+          </li>
         </ul>
         <p className="mt-3">
-          Because both sources rely on publisher submissions, coverage is not 100%
-          universal. Conference papers, preprints, and grey literature may have limited
-          citation data.
+          Because these sources rely on publisher submissions and indexing pipelines,
+          coverage is not 100% universal. Conference papers, preprints, and grey literature
+          may have limited citation data.
         </p>
       </>
     ),
@@ -64,13 +80,14 @@ const faqItems: FaqItem[] = [
       <>
         <p>
           Citey runs a citation scan job <strong className="text-white">once per day</strong>.
-          The job iterates over every tracked work in the database, queries OpenAlex and
-          Crossref for new citing papers, and records any newly discovered citations.
+          The job iterates over every tracked work in the database, queries OpenAlex,
+          Crossref, and Semantic Scholar for new citing papers, and records any newly
+          discovered citations.
         </p>
         <p className="mt-3">
           Email notifications are dispatched immediately after new citations are found, so
-          you should receive an alert within 24 hours of a paper being indexed by OpenAlex
-          or Crossref. You can also trigger a manual check from the{" "}
+          you should receive an alert within 24 hours of a paper being indexed by OpenAlex,
+          Crossref, or Semantic Scholar. You can also trigger a manual check from the{" "}
           <Link href="/dashboard" className="text-gray-400 underline hover:text-gray-300">
             Dashboard
           </Link>{" "}
@@ -86,9 +103,9 @@ const faqItems: FaqItem[] = [
         <p>There are several reasons a citation might not appear in Citey:</p>
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>
-            <strong className="text-white">Indexing lag.</strong> OpenAlex and Crossref
-            rely on publishers depositing metadata. Newly published papers may take days to
-            weeks to be fully indexed.
+            <strong className="text-white">Indexing lag.</strong> OpenAlex, Crossref, and
+            Semantic Scholar rely on publishers depositing metadata and their own crawling
+            pipelines. Newly published papers may take days to weeks to be fully indexed.
           </li>
           <li>
             <strong className="text-white">Missing reference lists.</strong> Not all
@@ -116,6 +133,15 @@ const faqItems: FaqItem[] = [
             className="text-gray-400 underline hover:text-gray-300"
           >
             OpenAlex
+          </a>
+          {" "}or{" "}
+          <a
+            href="https://www.semanticscholar.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-400 underline hover:text-gray-300"
+          >
+            Semantic Scholar
           </a>
           .
         </p>
@@ -173,8 +199,8 @@ const faqItems: FaqItem[] = [
         </ul>
         <p className="mt-3">
           We do not sell your data. We do not use it for advertising. Citation metadata is
-          fetched from publicly available APIs (OpenAlex, Crossref) and is not
-          considered private.
+          fetched from publicly available APIs (OpenAlex, Crossref, Semantic Scholar) and
+          is not considered private.
         </p>
       </>
     ),
@@ -336,8 +362,8 @@ export default function FaqPage() {
           className="text-gray-500 hover:text-gray-400"
         >
           OpenAlex
-        </a>{" "}
-        and{" "}
+        </a>
+        ,{" "}
         <a
           href="https://www.crossref.org"
           target="_blank"
@@ -345,6 +371,15 @@ export default function FaqPage() {
           className="text-gray-500 hover:text-gray-400"
         >
           Crossref
+        </a>
+        , and{" "}
+        <a
+          href="https://www.semanticscholar.org"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-gray-500 hover:text-gray-400"
+        >
+          Semantic Scholar
         </a>
         .
       </p>

@@ -545,7 +545,8 @@ async def list_works(
     db: Any = Depends(get_db),
 ) -> list[TrackedWork]:
     """Return all tracked works with citation counts, sorted by publication year descending."""
-    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=30)
+    thirty_days_ago = (datetime.now(tz=timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
+    cutoff_year = int(thirty_days_ago[:4])
     total_counts: defaultdict[str, int] = defaultdict(int)
     recent_counts: defaultdict[str, int] = defaultdict(int)
 
@@ -555,12 +556,12 @@ async def list_works(
         if not work_id:
             continue
         total_counts[work_id] += 1
-        created_at = ndata.get("created_at")
-        if created_at is not None:
-            if hasattr(created_at, "tzinfo") and created_at.tzinfo is None:
-                created_at = created_at.replace(tzinfo=timezone.utc)
-            if created_at >= cutoff:
-                recent_counts[work_id] += 1
+        # Count as "recent" only when the citing paper was actually published
+        # within the last 30 days (mirrors the discovery and display filters).
+        pub_date: str = ndata.get("citing_publication_date") or ""
+        pub_year: int = ndata.get("citing_year") or 0
+        if pub_date >= thirty_days_ago or (not pub_date and pub_year >= cutoff_year):
+            recent_counts[work_id] += 1
 
     works: list[TrackedWork] = []
     for doc in db.collection("users").document(uid).collection("trackedWorks").stream():

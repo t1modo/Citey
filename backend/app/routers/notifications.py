@@ -1,6 +1,6 @@
 import logging
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -70,6 +70,9 @@ async def list_notifications(
     Sorting is done in Python after streaming the full collection so that
     documents with a null/missing created_at are not silently excluded.
     """
+    thirty_days_ago = (datetime.now(tz=timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
+    cutoff_year = int(thirty_days_ago[:4])
+
     docs = (
         db.collection("users")
         .document(uid)
@@ -77,6 +80,17 @@ async def list_notifications(
         .stream()
     )
     all_notifications = [_doc_to_notification(doc.id, doc.to_dict() or {}) for doc in docs]
+
+    # Only surface citations where the citing paper was published within the last
+    # 30 days.  When an exact publication date is absent we fall back to year,
+    # accepting anything from the cutoff year or later so that papers that haven't
+    # yet been fully dated by OpenAlex/S2 are not silently excluded.
+    all_notifications = [
+        n for n in all_notifications
+        if (n.citing_publication_date or "") >= thirty_days_ago
+        or (not n.citing_publication_date and (n.citing_year or 0) >= cutoff_year)
+    ]
+
     all_notifications.sort(key=lambda n: n.created_at or _EPOCH, reverse=True)
 
     total = len(all_notifications)

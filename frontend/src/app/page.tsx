@@ -20,7 +20,7 @@ const features = [
     icon: "🔍",
     title: "Daily citation scans",
     description:
-      "Our automated job runs every day, scanning OpenAlex's growing database of over 250 million scholarly works for new citations to your papers.",
+      "Our automated job runs every day, scanning OpenAlex, Crossref, and Semantic Scholar for new citations to your papers.",
   },
   {
     icon: "📧",
@@ -53,13 +53,13 @@ const steps = [
     step: 2,
     title: "Add your published works by DOI",
     description:
-      "Paste the DOI of any paper you have authored. Citey fetches the full metadata from Crossref and stores the work in your personal library.",
+      "Paste the DOI of any paper you have authored. Citey fetches the full metadata from Crossref and OpenAlex and stores the work in your personal library.",
   },
   {
     step: 3,
     title: "We scan citation databases daily",
     description:
-      "Every day, Citey queries OpenAlex and Crossref for papers that reference your tracked DOIs. New citations are recorded and you are notified immediately.",
+      "Every day, Citey queries OpenAlex, Crossref, and Semantic Scholar for papers that reference your tracked DOIs. New citations are recorded and you are notified immediately.",
   },
   {
     step: 4,
@@ -249,10 +249,14 @@ export default function HomePage() {
               Citation data sourced from{" "}
               <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">
                 OpenAlex
-              </a>{" "}
-              and{" "}
+              </a>
+              ,{" "}
               <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">
                 Crossref
+              </a>
+              , and{" "}
+              <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">
+                Semantic Scholar
               </a>
               .
             </p>
