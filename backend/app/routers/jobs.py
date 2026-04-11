@@ -8,7 +8,11 @@ Two approaches to trigger the citation-check job:
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
+
+# Minimum seconds between manual /jobs/run calls from the same user.
+_MANUAL_CHECK_COOLDOWN = 600  # 10 minutes
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -101,6 +105,26 @@ async def run_job(
         from app.services.citation_service import run_job_for_user
         user_doc = _db.collection("users").document(caller_id).get()
         user_data: dict = user_doc.to_dict() or {} if user_doc.exists else {}
+
+        # Rate-limit manual checks: reject if last check was within the cooldown window.
+        now = datetime.now(tz=timezone.utc)
+        last_check = user_data.get("last_manual_check_at")
+        if last_check is not None:
+            # Firestore timestamps arrive as datetime; plain strings are ignored.
+            if isinstance(last_check, datetime):
+                if last_check.tzinfo is None:
+                    last_check = last_check.replace(tzinfo=timezone.utc)
+                elapsed = (now - last_check).total_seconds()
+                retry_after = int(_MANUAL_CHECK_COOLDOWN - elapsed)
+                if retry_after > 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail={
+                            "message": "You've run a citation check recently. Please wait before trying again.",
+                            "retry_after_seconds": retry_after,
+                        },
+                    )
+
         works_processed, new_notifications = await run_job_for_user(
             uid=caller_id,
             user_data=user_data,
@@ -109,6 +133,10 @@ async def run_job(
             dry_run=body.dry_run,
             settings=settings,
         )
+        if not body.dry_run:
+            _db.collection("users").document(caller_id).set(
+                {"last_manual_check_at": now}, merge=True
+            )
         summary = {
             "users_processed": 1,
             "works_processed": works_processed,
