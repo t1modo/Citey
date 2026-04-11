@@ -181,31 +181,6 @@ async def add_work(
     return _doc_to_tracked_work(work_id, doc_data)
 
 
-@router.delete("/{work_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_work(
-    work_id: str,
-    uid: str = Depends(get_current_user),
-    db: Any = Depends(get_db),
-) -> None:
-    """Remove a tracked work and all its notifications from the user's subcollection."""
-    user_ref = db.collection("users").document(uid)
-    ref = user_ref.collection("trackedWorks").document(work_id)
-    snapshot = ref.get()
-    if not snapshot.exists:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tracked work not found.",
-        )
-    ref.delete()
-
-    # Cascade-delete every notification that was triggered by this work.
-    notifs_ref = user_ref.collection("notifications")
-    for ndoc in notifs_ref.where("cited_work_id", "==", work_id).stream():
-        ndoc.reference.delete()
-
-    logger.info("Deleted tracked work %s and its notifications for uid=%s", work_id, uid)
-
-
 def _format_author_candidate(r: dict) -> dict:
     """Extract the fields we expose to the frontend from a raw OpenAlex author dict."""
     # Affiliations: deduplicate institutions, keep most-recent years
@@ -524,6 +499,31 @@ async def import_works_by_author(
 
     logger.info("Bulk import: %d imported, %d skipped for uid=%s", imported, skipped, uid)
     return {"imported": imported, "skipped": skipped}
+
+
+@router.delete("/{work_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_work(
+    work_id: str,
+    uid: str = Depends(get_current_user),
+    db: Any = Depends(get_db),
+) -> None:
+    """Remove a tracked work and all its notifications from the user's subcollection."""
+    user_ref = db.collection("users").document(uid)
+    ref = user_ref.collection("trackedWorks").document(work_id)
+    snapshot = ref.get()
+    if not snapshot.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tracked work not found.",
+        )
+    ref.delete()
+
+    # Cascade-delete every notification that was triggered by this work.
+    notifs_ref = user_ref.collection("notifications")
+    for ndoc in notifs_ref.where("cited_work_id", "==", work_id).stream():
+        ndoc.reference.delete()
+
+    logger.info("Deleted tracked work %s and its notifications for uid=%s", work_id, uid)
 
 
 @router.get("", response_model=list[TrackedWork])

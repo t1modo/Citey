@@ -56,6 +56,16 @@ export default function ImportModal({
     Extract<AddWorkResult, { status: "author_not_found" }> | null
   >(null);
 
+  // ── DOI tab — phase 2: no linked author → author selection ───────────────
+  const [doiFoundPaper, setDoiFoundPaper] = useState<{
+    title: string;
+    year: number | null;
+  } | null>(null);
+  const [doiFoundAuthors, setDoiFoundAuthors] = useState<AuthorCandidate[]>([]);
+  const [doiImportingId, setDoiImportingId] = useState<string | null>(null);
+  const [doiImportError, setDoiImportError] = useState<string | null>(null);
+  const [doiFallbackLoading, setDoiFallbackLoading] = useState(false);
+
   // ── arXiv tab — phase 1: paper lookup ────────────────────────────────────
   const [arxivQuery, setArxivQuery] = useState("");
   const [arxivLookupLoading, setArxivLookupLoading] = useState(false);
@@ -88,6 +98,11 @@ export default function ImportModal({
       setDoi("");
       setDoiError(null);
       setDoiAuthorCheck(null);
+      setDoiFoundPaper(null);
+      setDoiFoundAuthors([]);
+      setDoiImportingId(null);
+      setDoiImportError(null);
+      setDoiFallbackLoading(false);
       resetArxiv();
       setTimeout(() => doiInputRef.current?.focus(), 50);
     }
@@ -127,6 +142,24 @@ export default function ImportModal({
     e?.preventDefault();
     const trimmed = doi.trim();
     if (!trimmed) { setDoiError("Please enter a DOI."); return; }
+
+    // No linked author + first attempt → fetch S2 authors so the user can pick
+    // themselves and import their full profile before we add the work.
+    if (!linkedAuthorId && !force && doiFoundAuthors.length === 0 && doiFoundPaper === null) {
+      setDoiLoading(true);
+      setDoiError(null);
+      try {
+        const result = await getAuthorsByPaperDoi(trimmed);
+        setDoiFoundPaper({ title: result.paper_title, year: result.paper_year });
+        setDoiFoundAuthors(result.authors);
+        return;
+      } catch {
+        // S2 doesn't have this paper yet — fall through to a direct add.
+      } finally {
+        setDoiLoading(false);
+      }
+    }
+
     setDoiLoading(true);
     setDoiError(null);
     setDoiAuthorCheck(null);
@@ -138,6 +171,41 @@ export default function ImportModal({
       setDoiError(err instanceof Error ? err.message : "Failed to add work.");
     } finally {
       setDoiLoading(false);
+    }
+  };
+
+  // DOI phase 2 — import all works by the chosen author
+  const handleDoiAuthorImport = async (author: AuthorCandidate) => {
+    setDoiImportingId(author.id);
+    setDoiImportError(null);
+    try {
+      const result = await importByAuthor(author.id, author.display_name, author.source);
+      if (result.status === "merge_required") {
+        setDoiImportError("Unexpected conflict. Please try again or add just this paper.");
+        setDoiImportingId(null);
+        return;
+      }
+      onImported(result.imported);
+      onClose();
+    } catch (err) {
+      setDoiImportError(err instanceof Error ? err.message : "Import failed.");
+      setDoiImportingId(null);
+    }
+  };
+
+  // DOI phase 2 fallback — add only this paper without linking an author
+  const handleDoiFallback = async () => {
+    const trimmed = doi.trim();
+    if (!trimmed) return;
+    setDoiFallbackLoading(true);
+    setDoiImportError(null);
+    try {
+      const result = await addWorkChecked(trimmed, true);
+      if (result.status === "added") { onAdded(result.work); onClose(); }
+    } catch (err) {
+      setDoiImportError(err instanceof Error ? err.message : "Failed to add work.");
+    } finally {
+      setDoiFallbackLoading(false);
     }
   };
 
@@ -293,7 +361,19 @@ export default function ImportModal({
 
   // ── Shared: author card row ───────────────────────────────────────────────
 
-  const AuthorCard = ({ author, highlight = false }: { author: AuthorCandidate; highlight?: boolean }) => (
+  const AuthorCard = ({
+    author,
+    highlight = false,
+    onImport,
+    isImporting,
+    anyBusy,
+  }: {
+    author: AuthorCandidate;
+    highlight?: boolean;
+    onImport: (author: AuthorCandidate) => void;
+    isImporting: boolean;
+    anyBusy: boolean;
+  }) => (
     <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
       highlight
         ? "border-teal-500/30 bg-teal-500/10"
@@ -330,15 +410,15 @@ export default function ImportModal({
         </p>
       </div>
       <button
-        onClick={() => handleArxivImport(author)}
-        disabled={busy}
+        onClick={() => onImport(author)}
+        disabled={anyBusy}
         className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
           highlight
             ? "bg-teal-500/80 text-white hover:bg-teal-500"
             : "bg-white/10 text-white hover:bg-white/15"
         }`}
       >
-        {arxivImportingId === author.id ? (
+        {isImporting ? (
           <span className="flex items-center gap-1.5"><Spinner className="h-3 w-3" /> Importing…</span>
         ) : (
           "Import"
@@ -413,6 +493,11 @@ export default function ImportModal({
               onClick={() => {
                 setTab(t);
                 setDoiAuthorCheck(null);
+                setDoiFoundPaper(null);
+                setDoiFoundAuthors([]);
+                setDoiImportingId(null);
+                setDoiImportError(null);
+                setDoiFallbackLoading(false);
                 resetArxiv();
               }}
               className={`flex-1 rounded-md py-1.5 text-sm font-medium transition-colors ${
@@ -438,6 +523,83 @@ export default function ImportModal({
                   onCancel={() => setDoiAuthorCheck(null)}
                   onConfirm={() => handleAddDoi(null, true)}
                 />
+              ) : (doiFoundPaper !== null || doiFoundAuthors.length > 0) ? (
+                <>
+                  {/* Found paper banner */}
+                  {doiFoundPaper && (
+                    <div className="flex items-start gap-2 rounded-lg border border-teal-500/25 bg-teal-500/10 px-3 py-2.5">
+                      <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <p className="text-xs text-teal-300 leading-relaxed">
+                        <span className="font-medium">Found:</span> {doiFoundPaper.title}
+                        {doiFoundPaper.year && (
+                          <span className="ml-1 text-teal-400/70">({doiFoundPaper.year})</span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Import error */}
+                  {doiImportError && (
+                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                      {doiImportError}
+                    </div>
+                  )}
+
+                  {/* Author list */}
+                  {doiFoundAuthors.length > 0 ? (
+                    <>
+                      <p className="text-xs font-medium text-gray-500">
+                        Select which author is you to link your profile and import all your papers:
+                      </p>
+                      {doiFoundAuthors.map((author) => (
+                        <AuthorCard
+                          key={author.id}
+                          author={author}
+                          onImport={handleDoiAuthorImport}
+                          isImporting={doiImportingId === author.id}
+                          anyBusy={doiImportingId !== null || doiFallbackLoading}
+                        />
+                      ))}
+                    </>
+                  ) : (
+                    <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
+                      <p className="text-xs text-amber-300">
+                        No author profiles were found for this paper on Semantic Scholar.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Fallback: just add this one paper */}
+                  <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                    <p className="text-xs text-gray-400">
+                      <span className="font-medium text-gray-300">Just this paper?</span>{" "}
+                      You can{" "}
+                      <button
+                        onClick={handleDoiFallback}
+                        disabled={doiImportingId !== null || doiFallbackLoading}
+                        className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
+                      >
+                        {doiFallbackLoading ? "Adding…" : "add just this paper"}
+                      </button>{" "}
+                      without linking your author profile.
+                    </p>
+                  </div>
+
+                  {/* Back link */}
+                  <button
+                    onClick={() => {
+                      setDoiFoundPaper(null);
+                      setDoiFoundAuthors([]);
+                      setDoiImportError(null);
+                    }}
+                    disabled={doiImportingId !== null || doiFallbackLoading}
+                    className="self-start text-xs text-gray-500 transition-colors hover:text-gray-300 disabled:opacity-50"
+                  >
+                    ← Back to DOI entry
+                  </button>
+                </>
               ) : (
                 <form onSubmit={handleAddDoi} className="flex flex-col gap-4">
                   <div>
@@ -616,7 +778,13 @@ export default function ImportModal({
                       <p className="text-xs font-medium text-gray-500">
                         Your linked author was found in this paper:
                       </p>
-                      <AuthorCard author={linkedMatch} highlight />
+                      <AuthorCard
+                        author={linkedMatch}
+                        highlight
+                        onImport={handleArxivImport}
+                        isImporting={arxivImportingId === linkedMatch.id}
+                        anyBusy={busy}
+                      />
                       <FallbackPanel />
                     </>
                   );
@@ -634,7 +802,13 @@ export default function ImportModal({
                       </div>
                       <p className="text-xs font-medium text-gray-500">All co-authors for this paper:</p>
                       {arxivAuthors.map((author) => (
-                        <AuthorCard key={author.id} author={author} />
+                        <AuthorCard
+                          key={author.id}
+                          author={author}
+                          onImport={handleArxivImport}
+                          isImporting={arxivImportingId === author.id}
+                          anyBusy={busy}
+                        />
                       ))}
                       <FallbackPanel />
                     </>
@@ -648,7 +822,13 @@ export default function ImportModal({
                       Select which author is you to link your profile and import all your papers:
                     </p>
                     {arxivAuthors.map((author) => (
-                      <AuthorCard key={author.id} author={author} />
+                      <AuthorCard
+                        key={author.id}
+                        author={author}
+                        onImport={handleArxivImport}
+                        isImporting={arxivImportingId === author.id}
+                        anyBusy={busy}
+                      />
                     ))}
                     <FallbackPanel />
                   </>
