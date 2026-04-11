@@ -14,7 +14,18 @@ from typing import Any
 import httpx
 import pypdf
 
+from app.services.cache import AsyncTTLCache
+
 logger = logging.getLogger(__name__)
+
+# Cache author search results for 5 minutes.
+_author_search_cache: AsyncTTLCache = AsyncTTLCache(maxsize=500, ttl=300)
+
+# Cache paper-with-authors lookups for 1 hour — DOIs are immutable.
+_paper_authors_cache: AsyncTTLCache = AsyncTTLCache(maxsize=500, ttl=3600)
+
+# Cache full works lists for 1 hour — offset-paginated and expensive.
+_works_by_author_cache: AsyncTTLCache = AsyncTTLCache(maxsize=100, ttl=3600)
 
 _BASE_URL = "https://api.semanticscholar.org/graph/v1"
 _HEADERS = {"User-Agent": "Citey/0.1 (mailto:support@citey.app)"}
@@ -1498,6 +1509,11 @@ def _normalize_author_work(paper: dict) -> dict:
 
 async def search_authors(query: str) -> list[dict]:
     """Search Semantic Scholar for author candidates. Returns up to 10 results."""
+    hit, cached = await _author_search_cache.get(query)
+    if hit:
+        logger.debug("S2 author search cache hit: %s", query)
+        return cached
+
     url = f"{_BASE_URL}/author/search"
     params: dict[str, Any] = {
         "query": query,
@@ -1516,7 +1532,9 @@ async def search_authors(query: str) -> list[dict]:
         logger.warning("S2 author search status %s for query %s", response.status_code, query)
         return []
 
-    return response.json().get("data", [])
+    results = response.json().get("data", [])
+    await _author_search_cache.set(query, results)
+    return results
 
 
 async def get_author_name(author_id: str) -> str | None:
@@ -1545,6 +1563,11 @@ async def get_paper_with_authors(doi: str) -> dict | None:
     so the caller can present them as disambiguated AuthorCandidate records.
     Returns None if the paper is not found in S2.
     """
+    hit, cached = await _paper_authors_cache.get(doi)
+    if hit:
+        logger.debug("S2 paper-with-authors cache hit: %s", doi)
+        return cached
+
     _FIELDS = (
         "title,year,authors,authors.name,authors.affiliations,"
         "authors.paperCount,authors.hIndex,authors.externalIds"
@@ -1564,7 +1587,9 @@ async def get_paper_with_authors(doi: str) -> dict | None:
 
             if response.status_code == 200:
                 logger.info("S2: resolved paper %s via %s", doi, candidate_id)
-                return response.json()
+                result = response.json()
+                await _paper_authors_cache.set(doi, result)
+                return result
             if response.status_code != 404:
                 logger.warning(
                     "S2 paper lookup status %s for %s", response.status_code, candidate_id
@@ -1583,6 +1608,11 @@ async def get_works_by_author(author_id: str) -> list[dict]:
     # Strip "S2:" prefix stored by the app — the API uses bare numeric IDs.
     if author_id.startswith("S2:"):
         author_id = author_id[3:]
+
+    hit, cached = await _works_by_author_cache.get(author_id)
+    if hit:
+        logger.debug("S2 works-by-author cache hit: %s", author_id)
+        return cached
 
     url = f"{_BASE_URL}/author/{author_id}/papers"
     papers: list[dict] = []
@@ -1619,7 +1649,9 @@ async def get_works_by_author(author_id: str) -> list[dict]:
             offset += limit
 
     logger.info("S2: found %d papers for author %s", len(papers), author_id)
-    return [_normalize_author_work(p) for p in papers]
+    results = [_normalize_author_work(p) for p in papers]
+    await _works_by_author_cache.set(author_id, results)
+    return results
 
 
 async def get_citation_counts(dois: list[str]) -> dict[str, int]:
