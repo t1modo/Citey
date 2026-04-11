@@ -111,6 +111,25 @@ async def list_notifications(
     )
 
 
+@router.post("/prune", status_code=200)
+async def prune_notifications(
+    uid: str = Depends(get_current_user),
+    db: Any = Depends(get_db),
+) -> dict:
+    """
+    Delete the authenticated user's stale notifications — those whose citing
+    paper was published more than 30 days ago, or whose notification record is
+    itself more than 30 days old.
+
+    Returns {deleted: <count>}.
+    """
+    from app.services.citation_service import prune_user_notifications
+
+    deleted = await prune_user_notifications(uid=uid, db=db, dry_run=False)
+    logger.info("Manual prune for uid=%s: %d notification(s) deleted.", uid, deleted)
+    return {"deleted": deleted}
+
+
 @router.post("/seen/all", status_code=204)
 async def mark_all_seen(
     uid: str = Depends(get_current_user),
