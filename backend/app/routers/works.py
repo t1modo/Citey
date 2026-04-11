@@ -307,6 +307,7 @@ async def import_works_by_author(
 ) -> dict:
     """Bulk-import all works by an OpenAlex author into the user's tracked works."""
     from app.services import openalex as openalex_svc
+    from app.services import semantic_scholar as s2_svc
 
     # Enforce single linked-author policy.
     user_ref = db.collection("users").document(uid)
@@ -343,7 +344,6 @@ async def import_works_by_author(
         )
 
     if body.source == "semantic_scholar":
-        from app.services import semantic_scholar as s2_svc
         raw_works = await s2_svc.get_works_by_author(body.author_id)
     else:
         raw_works = await openalex_svc.get_works_by_author(body.author_id)
@@ -367,7 +367,6 @@ async def import_works_by_author(
                 incoming_short, author_display_name,
             )
         elif body.source == "semantic_scholar":
-            from app.services import semantic_scholar as s2_svc
             author_display_name = await s2_svc.get_author_name(incoming_short)
             if author_display_name:
                 logger.info(
@@ -410,6 +409,71 @@ async def import_works_by_author(
 
     def _is_near_duplicate(a: str, b: str) -> bool:
         return SequenceMatcher(None, a, b).ratio() >= 0.85
+
+    # ── Cross-source coverage boost ──────────────────────────────────────────
+    # After fetching from the primary source, search the complementary source
+    # by author name and merge their works in.  This catches papers indexed in
+    # one source but not the other (e.g. S2 misses some conference proceedings
+    # that OpenAlex has, and vice versa).
+    #
+    # Safety: we require at least one DOI to overlap between the primary works
+    # and the candidate's works before merging, so a same-name researcher in
+    # the other source doesn't pollute the import.
+    if author_display_name:
+        primary_dois: set[str] = set()
+        for r in raw_works:
+            d = _strip_doi(r.get("doi"))
+            if d:
+                primary_dois.add(d.lower())
+
+        try:
+            if body.source == "semantic_scholar":
+                # Primary was S2 — also pull from OpenAlex
+                oa_candidates = await openalex_svc.search_authors(author_display_name)
+                for c in oa_candidates[:3]:
+                    if _names_match(c.get("display_name", ""), author_display_name):
+                        oa_extra = await openalex_svc.get_works_by_author(c["id"])
+                        if oa_extra:
+                            extra_dois: set[str] = set()
+                            for r in oa_extra:
+                                d = _strip_doi(r.get("doi"))
+                                if d:
+                                    extra_dois.add(d.lower())
+                            overlap = primary_dois & extra_dois
+                            if not primary_dois or overlap:
+                                raw_works = raw_works + oa_extra
+                                logger.info(
+                                    "Cross-source: merged %d OpenAlex works for '%s' "
+                                    "(%d DOI(s) overlap)",
+                                    len(oa_extra), author_display_name, len(overlap),
+                                )
+                        break
+            else:
+                # Primary was OpenAlex — also pull from S2
+                s2_candidates = await s2_svc.search_authors(author_display_name)
+                for c in s2_candidates[:3]:
+                    if _names_match(c.get("name", ""), author_display_name):
+                        s2_extra = await s2_svc.get_works_by_author(c["authorId"])
+                        if s2_extra:
+                            extra_dois = set()
+                            for r in s2_extra:
+                                d = _strip_doi(r.get("doi"))
+                                if d:
+                                    extra_dois.add(d.lower())
+                            overlap = primary_dois & extra_dois
+                            if not primary_dois or overlap:
+                                raw_works = raw_works + s2_extra
+                                logger.info(
+                                    "Cross-source: merged %d S2 works for '%s' "
+                                    "(%d DOI(s) overlap)",
+                                    len(s2_extra), author_display_name, len(overlap),
+                                )
+                        break
+        except Exception as exc:
+            logger.warning(
+                "Cross-source fetch failed for '%s': %s — continuing with primary source only",
+                author_display_name, exc,
+            )
 
     seen_titles: dict[str, dict] = {}  # norm_title -> raw work dict
     for raw in raw_works:
