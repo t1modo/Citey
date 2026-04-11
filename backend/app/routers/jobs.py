@@ -11,8 +11,10 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-# Minimum seconds between manual /jobs/run calls from the same user.
-_MANUAL_CHECK_COOLDOWN = 600  # 10 minutes
+# Minimum seconds between manual job triggers from the same user.
+_MANUAL_CHECK_COOLDOWN = 600      # /jobs/run       — 10 minutes
+_MANUAL_SYNC_COOLDOWN  = 600      # /jobs/sync-publications — 10 minutes
+_EMAIL_TEST_COOLDOWN   = 300      # /jobs/email-test — 5 minutes
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -191,6 +193,23 @@ async def sync_publications(
     else:
         user_doc = _db.collection("users").document(caller_id).get()
         user_data: dict = user_doc.to_dict() or {} if user_doc.exists else {}
+
+        now = datetime.now(tz=timezone.utc)
+        last_sync = user_data.get("last_manual_sync_at")
+        if isinstance(last_sync, datetime):
+            if last_sync.tzinfo is None:
+                last_sync = last_sync.replace(tzinfo=timezone.utc)
+            elapsed = (now - last_sync).total_seconds()
+            retry_after = int(_MANUAL_SYNC_COOLDOWN - elapsed)
+            if retry_after > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={
+                        "message": "You've run a publication sync recently. Please wait before trying again.",
+                        "retry_after_seconds": retry_after,
+                    },
+                )
+
         added = await sync_new_publications_for_user(
             uid=caller_id,
             user_data=user_data,
@@ -199,6 +218,10 @@ async def sync_publications(
             dry_run=body.dry_run,
             settings=settings,
         )
+        if not body.dry_run:
+            _db.collection("users").document(caller_id).set(
+                {"last_manual_sync_at": now}, merge=True
+            )
         summary = {"users_processed": 1, "works_added": added}
 
     logger.info("Publication sync complete: %s", summary)
@@ -253,6 +276,23 @@ async def email_test(
         )
 
     data = snapshot.to_dict() or {}
+
+    now = datetime.now(tz=timezone.utc)
+    last_test = data.get("last_email_test_at")
+    if isinstance(last_test, datetime):
+        if last_test.tzinfo is None:
+            last_test = last_test.replace(tzinfo=timezone.utc)
+        elapsed = (now - last_test).total_seconds()
+        retry_after = int(_EMAIL_TEST_COOLDOWN - elapsed)
+        if retry_after > 0:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "message": "You've sent a test email recently. Please wait before trying again.",
+                    "retry_after_seconds": retry_after,
+                },
+            )
+
     to_email: str | None = data.get("notification_email") or data.get("email")
     if not to_email:
         raise HTTPException(
@@ -274,5 +314,6 @@ async def email_test(
             detail=f"Email delivery failed: {exc}",
         ) from exc
 
+    user_ref.set({"last_email_test_at": now}, merge=True)
     logger.info("Test email sent to %s for uid=%s", to_email, uid)
     return {"message": f"Test email sent to {to_email}."}
