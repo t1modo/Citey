@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { sendVerificationEmail } from "@/lib/api";
@@ -344,6 +344,9 @@ export default function DashboardPage() {
   const [worksPage, setWorksPage] = useState(1);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [jobRunning, setJobRunning] = useState(false);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [cooldownSecsLeft, setCooldownSecsLeft] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const addToast = useCallback((message: string, type: ToastType = "info") => {
@@ -357,6 +360,43 @@ export default function DashboardPage() {
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  // Restore cooldown from localStorage and tick down every second.
+  const COOLDOWN_KEY = "citey_job_cooldown_until";
+  const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+
+  const startCooldown = useCallback((until: number) => {
+    setCooldownUntil(until);
+    localStorage.setItem(COOLDOWN_KEY, String(until));
+    const remaining = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+    setCooldownSecsLeft(remaining);
+  }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(COOLDOWN_KEY);
+    if (saved) {
+      const until = Number(saved);
+      if (until > Date.now()) startCooldown(until);
+      else localStorage.removeItem(COOLDOWN_KEY);
+    }
+  }, [startCooldown]);
+
+  useEffect(() => {
+    if (cooldownUntil === null) return;
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      const secs = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+      setCooldownSecsLeft(secs);
+      if (secs === 0) {
+        setCooldownUntil(null);
+        localStorage.removeItem(COOLDOWN_KEY);
+        if (cooldownRef.current) clearInterval(cooldownRef.current);
+      }
+    }, 1000);
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    };
+  }, [cooldownUntil]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -414,17 +454,30 @@ export default function DashboardPage() {
   };
 
   const handleRunJob = async () => {
+    if (cooldownUntil !== null && cooldownUntil > Date.now()) return;
     setJobRunning(true);
     try {
       const result = await runJob(false);
+      startCooldown(Date.now() + COOLDOWN_MS);
       addToast(result.message ?? "Citation check complete.", "success");
       await Promise.all([loadNotifications(1), loadWorks()]);
       setCitationPage(1);
     } catch (err) {
-      addToast(
-        err instanceof Error ? err.message : "Failed to run citation check.",
-        "error"
-      );
+      if (err instanceof Error && err.message.includes("retry_after_seconds")) {
+        try {
+          const detail = JSON.parse(err.message);
+          const retryAfter: number = detail.retry_after_seconds ?? 600;
+          startCooldown(Date.now() + retryAfter * 1000);
+          addToast(detail.message ?? "Please wait before running another check.", "info");
+        } catch {
+          addToast(err.message, "error");
+        }
+      } else {
+        addToast(
+          err instanceof Error ? err.message : "Failed to run citation check.",
+          "error"
+        );
+      }
     } finally {
       setJobRunning(false);
     }
@@ -514,13 +567,20 @@ export default function DashboardPage() {
 
           <button
             onClick={handleRunJob}
-            disabled={jobRunning}
+            disabled={jobRunning || (cooldownUntil !== null && cooldownUntil > Date.now())}
             className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {jobRunning ? (
               <>
                 <Spinner />
                 Running check…
+              </>
+            ) : cooldownUntil !== null && cooldownUntil > Date.now() ? (
+              <>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {`${Math.floor(cooldownSecsLeft / 60)}:${String(cooldownSecsLeft % 60).padStart(2, "0")}`}
               </>
             ) : (
               <>
