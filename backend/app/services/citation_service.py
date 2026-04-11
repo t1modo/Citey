@@ -486,42 +486,72 @@ async def run_job_for_all_users(
 _NOTIFICATION_TTL_DAYS = 30
 
 
+async def prune_user_notifications(
+    uid: str, db: Any, dry_run: bool = False
+) -> int:
+    """
+    Delete stale notification documents for a single user.
+
+    A notification is stale if EITHER:
+    - its ``created_at`` is older than ``_NOTIFICATION_TTL_DAYS`` days, OR
+    - its ``citing_publication_date`` is set and older than ``_NOTIFICATION_TTL_DAYS`` days.
+
+    The two criteria are merged so each document is only deleted once.
+    Returns the number of notifications deleted (or that would be deleted in
+    dry-run mode).
+    """
+    cutoff_dt = datetime.now(tz=timezone.utc) - timedelta(days=_NOTIFICATION_TTL_DAYS)
+    cutoff_date_str = cutoff_dt.strftime("%Y-%m-%d")
+
+    notifs_ref = db.collection("users").document(uid).collection("notifications")
+
+    # Gather unique doc references to delete (merge both criteria).
+    to_delete: dict[str, Any] = {}
+
+    # 1. Stale by creation time (catches notifications without a publication date).
+    for doc in notifs_ref.where("created_at", "<", cutoff_dt).stream():
+        to_delete[doc.id] = doc.reference
+
+    # 2. Stale by citing paper's publication date.  Firestore range queries on a
+    #    string field only match documents where the field *exists*, so this won't
+    #    accidentally catch notifications that have no publication date stored.
+    for doc in notifs_ref.where("citing_publication_date", "<", cutoff_date_str).stream():
+        to_delete[doc.id] = doc.reference
+
+    count = len(to_delete)
+
+    if count:
+        action = "[DRY RUN] would delete" if dry_run else "deleted"
+        logger.info(
+            "Prune uid=%s: %s %d notification(s) older than %d days.",
+            uid, action, count, _NOTIFICATION_TTL_DAYS,
+        )
+
+    if count and not dry_run:
+        # Firestore batch is capped at 500 writes — chunk if needed.
+        refs = list(to_delete.values())
+        for i in range(0, len(refs), 500):
+            batch = db.batch()
+            for ref in refs[i : i + 500]:
+                batch.delete(ref)
+            batch.commit()
+
+    return count
+
+
 async def cleanup_old_notifications(db: Any, dry_run: bool = False) -> dict:
     """
-    Delete notification documents whose ``created_at`` is older than
-    ``_NOTIFICATION_TTL_DAYS`` days across all users.
+    Delete stale notification documents across all users.
 
     Returns a summary dict: {users_processed, notifications_deleted}.
     """
-    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=_NOTIFICATION_TTL_DAYS)
     users_processed = 0
     total_deleted = 0
 
     for user_doc in db.collection("users").stream():
         uid: str = user_doc.id
         users_processed += 1
-
-        notifs_ref = db.collection("users").document(uid).collection("notifications")
-        old_docs = notifs_ref.where("created_at", "<", cutoff).stream()
-
-        batch = db.batch()
-        count = 0
-        for doc in old_docs:
-            if not dry_run:
-                batch.delete(doc.reference)
-            count += 1
-
-        if count and not dry_run:
-            batch.commit()
-
-        if count:
-            logger.info(
-                "Cleanup uid=%s: %s%d notification(s) older than %d days.",
-                uid,
-                "[DRY RUN] would delete " if dry_run else "deleted ",
-                count,
-                _NOTIFICATION_TTL_DAYS,
-            )
+        count = await prune_user_notifications(uid, db, dry_run)
         total_deleted += count
 
     summary = {"users_processed": users_processed, "notifications_deleted": total_deleted}

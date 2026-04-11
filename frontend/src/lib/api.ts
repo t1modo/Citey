@@ -164,6 +164,11 @@ export async function markAllSeen(): Promise<void> {
   await authFetch("/notifications/seen/all", { method: "POST" });
 }
 
+export async function pruneNotifications(): Promise<{ deleted: number }> {
+  const res = await authFetch("/notifications/prune", { method: "POST" });
+  return res.json();
+}
+
 export async function runJob(dryRun: boolean = false): Promise<{ message: string }> {
   const res = await authFetch("/jobs/run", {
     method: "POST",

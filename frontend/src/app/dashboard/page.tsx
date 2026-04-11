@@ -10,6 +10,7 @@ import {
   deleteWork,
   runJob,
   getNotifications,
+  pruneNotifications,
 } from "@/lib/api";
 import type { TrackedWork, Notification } from "@/lib/types";
 
@@ -483,6 +484,16 @@ export default function DashboardPage() {
     }
   };
 
+  const handleRefreshCitations = useCallback(async () => {
+    try {
+      await pruneNotifications();
+    } catch {
+      // Ignore — the API's display filter still hides stale items even if
+      // the prune request fails.
+    }
+    await loadNotifications(citationPage);
+  }, [citationPage, loadNotifications]);
+
   const handlePageChange = async (newPage: number) => {
     setCitationPage(newPage);
     await loadNotifications(newPage);
@@ -779,7 +790,7 @@ export default function DashboardPage() {
                   </button>
                 )}
                 <button
-                  onClick={() => loadNotifications(citationPage)}
+                  onClick={handleRefreshCitations}
                   disabled={notifsLoading}
                   className="text-xs text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-40"
                   aria-label="Refresh citations"
