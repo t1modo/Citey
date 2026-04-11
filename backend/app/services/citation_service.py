@@ -480,6 +480,56 @@ async def run_job_for_all_users(
 
 
 # ---------------------------------------------------------------------------
+# Notification cleanup
+# ---------------------------------------------------------------------------
+
+_NOTIFICATION_TTL_DAYS = 30
+
+
+async def cleanup_old_notifications(db: Any, dry_run: bool = False) -> dict:
+    """
+    Delete notification documents whose ``created_at`` is older than
+    ``_NOTIFICATION_TTL_DAYS`` days across all users.
+
+    Returns a summary dict: {users_processed, notifications_deleted}.
+    """
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=_NOTIFICATION_TTL_DAYS)
+    users_processed = 0
+    total_deleted = 0
+
+    for user_doc in db.collection("users").stream():
+        uid: str = user_doc.id
+        users_processed += 1
+
+        notifs_ref = db.collection("users").document(uid).collection("notifications")
+        old_docs = notifs_ref.where("created_at", "<", cutoff).stream()
+
+        batch = db.batch()
+        count = 0
+        for doc in old_docs:
+            if not dry_run:
+                batch.delete(doc.reference)
+            count += 1
+
+        if count and not dry_run:
+            batch.commit()
+
+        if count:
+            logger.info(
+                "Cleanup uid=%s: %s%d notification(s) older than %d days.",
+                uid,
+                "[DRY RUN] would delete " if dry_run else "deleted ",
+                count,
+                _NOTIFICATION_TTL_DAYS,
+            )
+        total_deleted += count
+
+    summary = {"users_processed": users_processed, "notifications_deleted": total_deleted}
+    logger.info("Notification cleanup complete: %s", summary)
+    return summary
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

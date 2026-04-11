@@ -14,7 +14,7 @@ from typing import Any
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.config import Settings
-from app.services.citation_service import run_job_for_all_users
+from app.services.citation_service import cleanup_old_notifications, run_job_for_all_users
 from app.services.publication_sync import sync_new_publications_for_all_users
 
 logger = logging.getLogger(__name__)
@@ -79,6 +79,29 @@ def _make_pub_sync_func(db: Any, email_service: ModuleType, settings: Settings):
     return _run_pub_sync
 
 
+def _make_cleanup_func(db: Any):
+    """Return a plain callable for the daily notification-cleanup job."""
+
+    def _run_cleanup() -> None:
+        logger.info("APScheduler: starting scheduled notification-cleanup job.")
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                summary = loop.run_until_complete(
+                    cleanup_old_notifications(db=db, dry_run=False)
+                )
+                logger.info("APScheduler: notification-cleanup finished — %s", summary)
+            finally:
+                loop.close()
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "APScheduler: notification-cleanup raised an exception: %s", exc, exc_info=True
+            )
+
+    return _run_cleanup
+
+
 def create_scheduler(
     db: Any,
     email_service: ModuleType,
@@ -123,8 +146,20 @@ def create_scheduler(
         misfire_grace_time=3600,
     )
 
+    scheduler.add_job(
+        func=_make_cleanup_func(db=db),
+        trigger="interval",
+        days=1,
+        id="notification_cleanup",
+        name="Notification Cleanup",
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+
     logger.info(
-        "Scheduler configured: citation_check every %d hour(s), publication_sync weekly.",
+        "Scheduler configured: citation_check every %d hour(s), "
+        "publication_sync weekly, notification_cleanup daily.",
         interval_hours,
     )
     return scheduler
