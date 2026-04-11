@@ -15,6 +15,7 @@ class UserProfile(BaseModel):
     display_name: Optional[str] = None
     notification_email: Optional[str] = None
     notify_enabled: bool = True
+    notify_new_publications: bool = True
     scholar_url: Optional[str] = None
     linked_author_id: Optional[str] = None
     linked_author_name: Optional[str] = None
@@ -73,6 +74,7 @@ class UpdateProfileRequest(BaseModel):
     display_name: Optional[str] = None
     notification_email: Optional[str] = None
     notify_enabled: Optional[bool] = None
+    notify_new_publications: Optional[bool] = None
     scholar_url: Optional[str] = None
     name_aliases: Optional[list[str]] = None
 

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}{{ count }} new publication{% if count != 1 %}s{% endif %} added — {{ app_name }}{% endblock %}
+
+{% block preheader %}
+{{ count }} new publication{% if count != 1 %}s{% endif %} from your author profile {% if count == 1 %}has{% else %}have{% endif %} been added to your tracking list.
+{% endblock %}
+
+{% block body_content %}
+<p class="greeting">Hi {{ recipient_name }},</p>
+
+<p class="intro">
+  {% if count == 1 %}
+    We found <strong>1 new paper</strong> on your author profile and automatically added it to your tracking list.
+  {% else %}
+    We found <strong>{{ count }} new papers</strong> on your author profile and automatically added them to your tracking list.
+  {% endif %}
+</p>
+
+{% for title in new_titles %}
+<div class="citation-card">
+  <div class="citation-card-label">New publication</div>
+  <div class="citation-title">{{ title }}</div>
+</div>
+{% endfor %}
+
+<div class="btn-wrap">
+  <a href="{{ app_url }}/dashboard" class="btn-primary">View tracked papers</a>
+</div>
+
+<p style="font-size: 13px; color: #6b7280; margin-top: 28px; line-height: 1.7;">
+  You will receive a separate notification as soon as {% if count == 1 %}this paper is{% else %}any of these papers are{% endif %} cited.
+</p>
+{% endblock %}
+
+{% block footer_extra %}
+<p style="margin: 0 0 8px;">You're receiving this because you have auto-sync enabled on {{ app_name }}.<br />To stop, turn off <strong>New publication alerts</strong> in <a href="{{ app_url }}/settings">Settings</a>.</p>
+{% endblock %}

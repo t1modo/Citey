@@ -125,6 +125,62 @@ async def run_job(
     return summary
 
 
+@router.post("/sync-publications")
+async def sync_publications(
+    body: JobRunRequest,
+    caller_id: str = Depends(_authorize_job_request),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    Trigger the publication-sync job.
+
+    Checks each linked OpenAlex author for new publications not yet in their
+    trackedWorks collection, and auto-adds them.
+
+    Authorization: X-Cron-Secret header **or** Firebase Bearer token.
+    """
+    from app.firebase_client import get_db as _get_db
+    from app.services import email_service as email_svc
+    from app.services.publication_sync import (
+        sync_new_publications_for_all_users,
+        sync_new_publications_for_user,
+    )
+
+    _db = _get_db()
+    logger.info(
+        "Job /sync-publications triggered by caller_id=%s dry_run=%s",
+        caller_id,
+        body.dry_run,
+    )
+
+    if caller_id == "cron":
+        summary = await sync_new_publications_for_all_users(
+            db=_db,
+            email_service=email_svc,
+            dry_run=body.dry_run,
+            settings=settings,
+        )
+    else:
+        user_doc = _db.collection("users").document(caller_id).get()
+        user_data: dict = user_doc.to_dict() or {} if user_doc.exists else {}
+        added = await sync_new_publications_for_user(
+            uid=caller_id,
+            user_data=user_data,
+            db=_db,
+            email_service=email_svc,
+            dry_run=body.dry_run,
+            settings=settings,
+        )
+        summary = {"users_processed": 1, "works_added": added}
+
+    logger.info("Publication sync complete: %s", summary)
+    n = summary["works_added"]
+    summary["message"] = (
+        f"Added {n} new publication(s)." if n > 0 else "No new publications found."
+    )
+    return summary
+
+
 @router.post("/email-test")
 async def email_test(
     credentials: HTTPAuthorizationCredentials | None = Depends(

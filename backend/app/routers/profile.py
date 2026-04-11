@@ -28,6 +28,7 @@ def _doc_to_profile(uid: str, data: dict) -> UserProfile:
         display_name=data.get("display_name"),
         notification_email=data.get("notification_email"),
         notify_enabled=data.get("notify_enabled", True),
+        notify_new_publications=data.get("notify_new_publications", True),
         scholar_url=data.get("scholar_url"),
         linked_author_id=data.get("linked_author_id"),
         linked_author_name=data.get("linked_author_name"),
@@ -92,6 +93,8 @@ async def update_profile(
         updates["notification_email"] = body.notification_email
     if body.notify_enabled is not None:
         updates["notify_enabled"] = body.notify_enabled
+    if body.notify_new_publications is not None:
+        updates["notify_new_publications"] = body.notify_new_publications
     if body.scholar_url is not None:
         # Empty string means the user deliberately cleared the field.
         updates["scholar_url"] = body.scholar_url if body.scholar_url else firestore.DELETE_FIELD

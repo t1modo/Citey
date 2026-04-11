@@ -5,10 +5,9 @@ import type {
   Notification,
   PaginatedNotifications,
   UpdateProfileData,
+  AddWorkResult,
   AuthorCandidate,
   PaperAuthorsResult,
-  AddWorkResult,
-  LinkedAuthorEntry,
 } from "@/lib/types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -198,15 +197,6 @@ export async function sendChatMessage(messages: ChatMessage[]): Promise<string> 
 
 export async function getAuthorsByPaperDoi(doi: string): Promise<PaperAuthorsResult> {
   const res = await authFetch(`/works/paper-authors?doi=${encodeURIComponent(doi)}`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail ?? "Paper not found.");
-  }
-  return res.json();
-}
-
-export async function searchAuthors(query: string): Promise<AuthorCandidate[]> {
-  const res = await authFetch(`/works/author-search?query=${encodeURIComponent(query)}`);
   return res.json();
 }
 
@@ -239,11 +229,7 @@ export async function importByAuthor(
   });
 
   let data: Record<string, unknown> = {};
-  try {
-    data = await res.json();
-  } catch {
-    // ignore
-  }
+  try { data = await res.json(); } catch { /* ignore */ }
 
   if (res.status === 409) {
     const detail = data?.detail as Record<string, unknown> | undefined;
@@ -260,3 +246,7 @@ export async function importByAuthor(
 
   return { status: "imported", ...data } as ImportByAuthorResult;
 }
+
+// Re-export type for consumers
+export type { AuthorCandidate };
+
