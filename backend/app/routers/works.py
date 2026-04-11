@@ -114,8 +114,12 @@ async def add_work(
     if not body.force:
         user_snap = db.collection("users").document(uid).get()
         user_data = user_snap.to_dict() or {} if user_snap.exists else {}
+        # Both fields must be present — if either was cleared by an unlink the
+        # check is inactive.  This prevents a stale linked_author_name from
+        # blocking additions after the author profile has been reset.
+        linked_id: str | None = user_data.get("linked_author_id")
         linked_name: str | None = user_data.get("linked_author_name")
-        if linked_name:
+        if linked_id and linked_name:
             aliases: list[str] = user_data.get("name_aliases") or []
             names_to_check = [linked_name] + aliases
             paper_authors: list[str] = work_info.get("authors", [])
