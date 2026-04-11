@@ -172,7 +172,6 @@ export default function ImportModal({
     setArxivResolvedDoi(null);
     setArxivImportError(null);
     setArxivMergeConfirm(null);
-    setArxivFallbackCheck(null);
     try {
       const result = await getAuthorsByPaperDoi(resolvedDoi);
       setArxivFoundPaper({ title: result.paper_title, year: result.paper_year });
