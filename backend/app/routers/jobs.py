@@ -155,6 +155,53 @@ async def run_job(
     return summary
 
 
+@router.post("/cleanup-notifications")
+async def cleanup_notifications(
+    body: JobRunRequest,
+    caller_id: str = Depends(_authorize_job_request),
+) -> dict:
+    """
+    Delete notification documents older than 30 days (by created_at).
+
+    Authorization: X-Cron-Secret header **or** Firebase Bearer token.
+    When called by an authenticated user, only cleans up their own notifications.
+    """
+    from app.firebase_client import get_db as _get_db
+    from app.services.citation_service import cleanup_old_notifications, _NOTIFICATION_TTL_DAYS
+
+    _db = _get_db()
+    logger.info(
+        "Job /cleanup-notifications triggered by caller_id=%s dry_run=%s",
+        caller_id,
+        body.dry_run,
+    )
+
+    if caller_id == "cron":
+        summary = await cleanup_old_notifications(db=_db, dry_run=body.dry_run)
+    else:
+        # Scoped to the requesting user only.
+        from datetime import datetime, timedelta, timezone
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=_NOTIFICATION_TTL_DAYS)
+        notifs_ref = _db.collection("users").document(caller_id).collection("notifications")
+        old_docs = list(notifs_ref.where("created_at", "<", cutoff).stream())
+        if old_docs and not body.dry_run:
+            batch = _db.batch()
+            for doc in old_docs:
+                batch.delete(doc.reference)
+            batch.commit()
+        count = len(old_docs)
+        summary = {"users_processed": 1, "notifications_deleted": count}
+
+    n = summary["notifications_deleted"]
+    summary["message"] = (
+        f"Deleted {n} notification(s) older than {_NOTIFICATION_TTL_DAYS} days."
+        if n > 0
+        else f"No notifications older than {_NOTIFICATION_TTL_DAYS} days found."
+    )
+    logger.info("Notification cleanup complete: %s", summary)
+    return summary
+
+
 @router.post("/sync-publications")
 async def sync_publications(
     body: JobRunRequest,
