@@ -9,6 +9,7 @@ import {
   getWorks,
   deleteWork,
   deleteAccount,
+  unlinkAuthor,
 } from "@/lib/api";
 import type { UserProfile, TrackedWork } from "@/lib/types";
 
@@ -58,6 +59,7 @@ export default function SettingsPage() {
 
   // Form fields
   const [notifyEnabled, setNotifyEnabled] = useState(true);
+  const [notifyNewPublications, setNotifyNewPublications] = useState(true);
   const [notificationEmail, setNotificationEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [scholarUrl, setScholarUrl] = useState("");
@@ -75,6 +77,11 @@ export default function SettingsPage() {
   const [worksLoading, setWorksLoading] = useState(true);
   const [worksError, setWorksError] = useState<string | null>(null);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
+
+  // Change linked author state
+  const [unlinkPending, setUnlinkPending] = useState(false);
+  const [unlinkLoading, setUnlinkLoading] = useState(false);
+  const [unlinkError, setUnlinkError] = useState<string | null>(null);
 
   // Account deletion state
   const [deleteAccountPending, setDeleteAccountPending] = useState(false);
@@ -95,6 +102,7 @@ export default function SettingsPage() {
       const p = await getProfile();
       setProfile(p);
       setNotifyEnabled(p.notify_enabled);
+      setNotifyNewPublications(p.notify_new_publications ?? true);
       setNotificationEmail(p.notification_email ?? "");
       setDisplayName(p.display_name ?? "");
       setScholarUrl(p.scholar_url ?? "");
@@ -137,6 +145,7 @@ export default function SettingsPage() {
     try {
       const updated = await updateProfile({
         notify_enabled: notifyEnabled,
+        notify_new_publications: notifyNewPublications,
         notification_email: notificationEmail.trim() || null,
         display_name: displayName.trim() || null,
         scholar_url: scholarUrl.trim(),
@@ -262,6 +271,31 @@ export default function SettingsPage() {
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
                       notifyEnabled ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* New publication alerts toggle */}
+              <div className="flex items-center justify-between rounded-lg border border-white/10 bg-gray-800/50 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-white">New publication alerts</p>
+                  <p className="text-xs text-gray-400">
+                    Get notified when new papers from your author profile are auto-added.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={notifyNewPublications}
+                  onClick={() => setNotifyNewPublications((v) => !v)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                    notifyNewPublications ? "bg-gray-300" : "bg-gray-700"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      notifyNewPublications ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
                 </button>
@@ -476,6 +510,83 @@ export default function SettingsPage() {
           description="Irreversible actions for your account."
         >
           <div className="flex flex-col gap-4">
+            {/* Change linked author */}
+            {profile?.linked_author_id && (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Change linked author</p>
+                    <p className="text-xs text-gray-400">
+                      Currently linked as{" "}
+                      <span className="font-medium text-gray-300">{profile.linked_author_name}</span>
+                      . Changing this will permanently delete all tracked papers.
+                    </p>
+                  </div>
+                  {!unlinkPending && (
+                    <button
+                      onClick={() => { setUnlinkPending(true); setUnlinkError(null); }}
+                      className="shrink-0 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:border-red-500/50"
+                    >
+                      Change
+                    </button>
+                  )}
+                </div>
+                {unlinkPending && (
+                  <div className="mt-4 flex flex-col gap-3">
+                    <div className="rounded-lg border border-red-500/30 bg-red-950/40 px-4 py-3 text-xs text-red-300">
+                      <p className="font-semibold text-red-200">This will permanently delete:</p>
+                      <ul className="mt-1.5 list-disc pl-4 space-y-0.5 text-red-300/80">
+                        <li>All {works.length} tracked paper{works.length !== 1 ? "s" : ""} and their citation history</li>
+                        <li>Your linked author profile ({profile.linked_author_name})</li>
+                      </ul>
+                      <p className="mt-2 font-medium text-red-200">This cannot be undone.</p>
+                      <p className="mt-1.5 text-red-300/70">
+                        After resetting, use <span className="font-medium text-red-300">Add by arXiv</span> on the dashboard to link a new author profile.
+                      </p>
+                    </div>
+                    {unlinkError && (
+                      <p className="text-xs text-red-400">{unlinkError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setUnlinkPending(false); setUnlinkError(null); }}
+                        disabled={unlinkLoading}
+                        className="flex-1 rounded-lg border border-white/10 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setUnlinkLoading(true);
+                          setUnlinkError(null);
+                          try {
+                            await unlinkAuthor();
+                            setUnlinkPending(false);
+                            setWorks([]);
+                            setProfile((p) => p ? { ...p, linked_author_id: null, linked_author_name: null } : p);
+                          } catch (err) {
+                            setUnlinkError(err instanceof Error ? err.message : "Failed to unlink author.");
+                          } finally {
+                            setUnlinkLoading(false);
+                          }
+                        }}
+                        disabled={unlinkLoading}
+                        className="flex-1 rounded-lg bg-red-500/80 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                      >
+                        {unlinkLoading ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <Spinner className="h-3.5 w-3.5" /> Resetting…
+                          </span>
+                        ) : (
+                          "Yes, reset author"
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Sign out */}
             <div className="flex items-center justify-between rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3">
               <div>

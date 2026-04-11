@@ -1,0 +1,34 @@
+{{ app_name }} — {{ count }} new publication{% if count != 1 %}s{% endif %} added to your tracking list
+================================================================================
+
+Hi {{ recipient_name }},
+
+{% if count == 1 %}
+We found 1 new paper on your author profile and automatically added it to your
+tracking list on {{ app_name }}:
+{% else %}
+We found {{ count }} new papers on your author profile and automatically added
+them to your tracking list on {{ app_name }}:
+{% endif %}
+
+{% for title in new_titles %}
+  • {{ title }}
+{% endfor %}
+
+================================================================================
+
+You'll receive a separate notification as soon as {% if count == 1 %}this paper is{% else %}any of these papers are{% endif %} cited.
+
+View your full tracked paper list:
+{{ app_url }}/dashboard
+
+================================================================================
+
+© {{ current_year }} {{ app_name }}
+{{ support_email }}
+
+Manage your notification preferences:
+{{ app_url }}/settings
+
+You're receiving this email because you have auto-sync enabled on {{ app_name }}.
+To stop receiving these emails, turn off "New publication alerts" in Settings.

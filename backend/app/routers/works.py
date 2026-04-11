@@ -202,9 +202,6 @@ async def delete_work(
     logger.info("Deleted tracked work %s and its notifications for uid=%s", work_id, uid)
 
 
-_ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
-
-
 def _format_author_candidate(r: dict) -> dict:
     """Extract the fields we expose to the frontend from a raw OpenAlex author dict."""
     # Affiliations: deduplicate institutions, keep most-recent years
@@ -235,7 +232,6 @@ def _format_author_candidate(r: dict) -> dict:
     return {
         "id": r.get("id", ""),
         "display_name": r.get("display_name", ""),
-        "orcid": r.get("orcid"),
         "works_count": r.get("works_count", 0),
         "h_index": r.get("summary_stats", {}).get("h_index", 0),
         "affiliations": affiliations,
@@ -255,7 +251,6 @@ def _format_s2_author_candidate(r: dict) -> dict:
     return {
         "id": f"S2:{r.get('authorId', '')}",
         "display_name": r.get("name", ""),
-        "orcid": external.get("ORCID"),
         "works_count": r.get("paperCount", 0),
         "h_index": r.get("hIndex", 0),
         "affiliations": affiliations,
@@ -269,23 +264,11 @@ async def search_authors_endpoint(
     query: str = Query(..., min_length=2),
     uid: str = Depends(get_current_user),
 ) -> list[dict]:
-    """Search OpenAlex and Semantic Scholar in parallel for author candidates.
-
-    Accepts a name query or a bare ORCID.
-    ORCID lookups are OpenAlex-only since ORCID is an OpenAlex feature.
-    """
+    """Search OpenAlex and Semantic Scholar in parallel for author candidates."""
     from app.services import openalex as openalex_svc
     from app.services import semantic_scholar as s2_svc
 
     q = query.strip()
-    if q.startswith("https://orcid.org/"):
-        q = q[len("https://orcid.org/"):]
-
-    if _ORCID_RE.match(q):
-        author = await openalex_svc.get_author_by_orcid(q)
-        if author is None:
-            return []
-        return [_format_author_candidate(author)]
 
     oa_raw, s2_raw = await asyncio.gather(
         openalex_svc.search_authors(q),

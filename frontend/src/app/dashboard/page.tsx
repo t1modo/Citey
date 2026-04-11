@@ -11,7 +11,7 @@ import {
   runJob,
   getNotifications,
 } from "@/lib/api";
-import type { TrackedWork, Notification, LinkedAuthorEntry } from "@/lib/types";
+import type { TrackedWork, Notification } from "@/lib/types";
 
 const CITATIONS_PER_PAGE = 10;
 const WORKS_PER_PAGE = 10;
@@ -317,8 +317,6 @@ export default function DashboardPage() {
   const [scholarUrl, setScholarUrl] = useState<string | null>(null);
   const [linkedAuthorId, setLinkedAuthorId] = useState<string | null>(null);
   const [linkedAuthorName, setLinkedAuthorName] = useState<string | null>(null);
-  const [additionalLinkedAuthors, setAdditionalLinkedAuthors] = useState<LinkedAuthorEntry[]>([]);
-  const [nameAliases, setNameAliases] = useState<string[]>([]);
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
 
   const refreshProfile = useCallback(() => {
@@ -328,8 +326,6 @@ export default function DashboardPage() {
           setScholarUrl(p.scholar_url ?? null);
           setLinkedAuthorId(p.linked_author_id ?? null);
           setLinkedAuthorName(p.linked_author_name ?? null);
-          setAdditionalLinkedAuthors(p.additional_linked_authors ?? []);
-          setNameAliases(p.name_aliases ?? []);
           setProfileDisplayName(p.display_name ?? null);
         })
         .catch(() => {})
@@ -489,9 +485,6 @@ export default function DashboardPage() {
         onClose={() => setAddModalOpen(false)}
         linkedAuthorId={linkedAuthorId}
         linkedAuthorName={linkedAuthorName}
-        additionalLinkedAuthors={additionalLinkedAuthors}
-        nameAliases={nameAliases}
-        worksCount={works.length}
         onAdded={(work) => {
           setWorks((prev) => [work, ...prev]);
           addToast(`"${work.title ?? work.doi}" added to tracking.`, "success");
@@ -499,21 +492,8 @@ export default function DashboardPage() {
         onImported={(count) => {
           loadWorks();
           refreshProfile();
-          addToast(
-            `Imported ${count} paper${count !== 1 ? "s" : ""} successfully.`,
-            "success"
-          );
+          addToast(`Imported ${count} paper${count !== 1 ? "s" : ""} successfully.`, "success");
         }}
-        onUnlinked={() => {
-          setLinkedAuthorId(null);
-          setLinkedAuthorName(null);
-          setAdditionalLinkedAuthors([]);
-          setNameAliases([]);
-          setWorks([]);
-          loadNotifications();
-          addToast("Author unlinked. All tracked works have been removed.", "info");
-        }}
-        onAliasesUpdated={(aliases) => setNameAliases(aliases)}
       />
 
       <Galaxy speedMultiplier={3} />

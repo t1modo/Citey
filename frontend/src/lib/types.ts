@@ -1,4 +1,4 @@
-export interface LinkedAuthorEntry {
+interface LinkedAuthorEntry {
   id: string;
   name: string | null;
 }
@@ -9,6 +9,7 @@ export interface UserProfile {
   display_name: string | null;
   notification_email: string | null;
   notify_enabled: boolean;
+  notify_new_publications: boolean;
   scholar_url: string | null;
   linked_author_id: string | null;
   linked_author_name: string | null;
@@ -32,22 +33,6 @@ export interface TrackedWork {
   openalex_citation_count: number | null;
 }
 
-export interface AuthorAffiliation {
-  name: string;
-  year_range: string | null;
-}
-
-export interface AuthorCandidate {
-  id: string;
-  display_name: string;
-  orcid: string | null;
-  works_count: number;
-  h_index: number;
-  affiliations: AuthorAffiliation[];
-  topics: string[];
-  source: "openalex" | "semantic_scholar";
-}
-
 export interface Notification {
   id: string;
   cited_work_id: string;
@@ -68,6 +53,7 @@ export interface UpdateProfileData {
   display_name?: string | null;
   notification_email?: string | null;
   notify_enabled?: boolean;
+  notify_new_publications?: boolean;
   scholar_url?: string | null;
   name_aliases?: string[];
 }
@@ -79,6 +65,21 @@ export interface PaginatedNotifications {
   page: number;
   limit: number;
   pages: number;
+}
+
+export interface AuthorAffiliation {
+  name: string;
+  year_range: string | null;
+}
+
+export interface AuthorCandidate {
+  id: string;
+  display_name: string;
+  works_count: number;
+  h_index: number;
+  affiliations: AuthorAffiliation[];
+  topics: string[];
+  source: "openalex" | "semantic_scholar";
 }
 
 export interface PaperAuthorsResult {

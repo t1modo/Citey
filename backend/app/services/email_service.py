@@ -241,6 +241,69 @@ async def send_verification_email(
     )
 
 
+async def send_new_publications_email(
+    to_email: str,
+    recipient_name: str,
+    new_titles: list[str],
+    settings: Settings,
+) -> None:
+    """
+    Render and send the new-publications notification email.
+
+    Parameters
+    ----------
+    to_email:
+        Recipient email address.
+    recipient_name:
+        Human-readable name used in the email greeting.
+    new_titles:
+        Titles of the newly auto-added publications.
+    settings:
+        Application settings.
+    """
+    resend.api_key = settings.resend_api_key
+
+    env = _get_jinja_env()
+    count = len(new_titles)
+    context = {
+        "app_name": settings.app_name,
+        "app_url": settings.app_url,
+        "support_email": settings.support_email,
+        "recipient_name": recipient_name,
+        "new_titles": new_titles,
+        "count": count,
+        "current_year": datetime.now(tz=timezone.utc).year,
+    }
+
+    html_template = env.get_template("new_publications.html")
+    text_template = env.get_template("new_publications.txt")
+
+    html_body = html_template.render(**context)
+    text_body = text_template.render(**context)
+
+    subject = (
+        f"[{settings.app_name}] {count} new publication{'s' if count != 1 else ''} "
+        f"added to your tracking list"
+    )
+
+    from_address = f"{settings.email_from_name} <{settings.email_from_address}>"
+
+    params: resend.Emails.SendParams = {
+        "from": from_address,
+        "to": [to_email],
+        "subject": subject,
+        "html": html_body,
+        "text": text_body,
+    }
+
+    result = await _send(params)
+    logger.info(
+        "New-publications email sent to %s — Resend ID: %s",
+        to_email,
+        result.get("id", "<unknown>"),
+    )
+
+
 async def send_test_email(
     to_email: str,
     recipient_name: str,

@@ -41,14 +41,16 @@ export default function TrackedWorkCard({
       </div>
 
       {/* DOI */}
-      <a
-        href={`https://doi.org/${work.doi}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="w-fit rounded text-xs font-mono text-gray-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-gray-300 hover:decoration-solid"
-      >
-        {work.doi}
-      </a>
+      {work.doi && (
+        <a
+          href={`https://doi.org/${work.doi}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-fit rounded text-xs font-mono text-gray-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-gray-300 hover:decoration-solid"
+        >
+          {work.doi}
+        </a>
+      )}
 
       {/* Authors */}
       {displayedAuthors.length > 0 && (
