@@ -77,9 +77,6 @@ export default function ImportModal({
 
   // ── arXiv tab — fallback: add just this paper ────────────────────────────
   const [arxivFallbackLoading, setArxivFallbackLoading] = useState(false);
-  const [arxivFallbackCheck, setArxivFallbackCheck] = useState<
-    Extract<AddWorkResult, { status: "author_not_found" }> | null
-  >(null);
 
   const doiInputRef = useRef<HTMLInputElement>(null);
   const arxivInputRef = useRef<HTMLInputElement>(null);
@@ -108,7 +105,6 @@ export default function ImportModal({
     setArxivImportError(null);
     setArxivMergeConfirm(null);
     setArxivFallbackLoading(false);
-    setArxivFallbackCheck(null);
   };
 
   useEffect(() => {
@@ -209,15 +205,16 @@ export default function ImportModal({
     }
   };
 
-  // Fallback — add just this one arXiv paper
-  const handleArxivFallback = async (force = false) => {
+  // Fallback — add just this one arXiv paper.
+  // Always uses force=true: the user has already made their explicit intent
+  // clear by clicking "add just this paper", so a second author-check
+  // confirmation would be unnecessary friction.
+  const handleArxivFallback = async () => {
     if (!arxivResolvedDoi) return;
     setArxivFallbackLoading(true);
-    setArxivFallbackCheck(null);
     try {
-      const result = await addWorkChecked(arxivResolvedDoi, force);
+      const result = await addWorkChecked(arxivResolvedDoi, true);
       if (result.status === "added") { onAdded(result.work); onClose(); }
-      else { setArxivFallbackCheck(result); }
     } catch (err) {
       setArxivImportError(err instanceof Error ? err.message : "Failed to add work.");
     } finally {
@@ -351,34 +348,31 @@ export default function ImportModal({
     </div>
   );
 
-  // ── Shared: "don't see your name" fallback ───────────────────────────────
+  // ── "add just this paper" fallback ──────────────────────────────────────
+  // Only shown when a linked author already exists.  Without a linked author
+  // the arXiv flow should always go through full author-linking — the fallback
+  // would let users build a collection of papers with no author attached, which
+  // isn't the intended use of this app.
 
-  const FallbackPanel = () => (
-    arxivFallbackCheck ? (
-      <AuthorNotFoundPanel
-        check={arxivFallbackCheck}
-        label={arxivQuery}
-        loading={arxivFallbackLoading}
-        onCancel={() => setArxivFallbackCheck(null)}
-        onConfirm={() => handleArxivFallback(true)}
-      />
-    ) : (
+  const FallbackPanel = () => {
+    if (!linkedAuthorId) return null;
+    return (
       <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
         <p className="text-xs text-gray-400">
-          <span className="font-medium text-gray-300">Don&apos;t see your name?</span>{" "}
-          You may publish under a different name. You can still{" "}
+          <span className="font-medium text-gray-300">Just this paper?</span>{" "}
+          You can{" "}
           <button
-            onClick={() => handleArxivFallback()}
+            onClick={handleArxivFallback}
             disabled={busy}
             className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
           >
             {arxivFallbackLoading ? "Adding…" : "add just this paper"}
           </button>{" "}
-          to your tracked list.
+          without importing your full profile.
         </p>
       </div>
-    )
-  );
+    );
+  };
 
   return (
     <div
@@ -664,19 +658,28 @@ export default function ImportModal({
 
               {/* Edge case: paper found but no author profiles available */}
               {arxivFoundPaper && arxivAuthors.length === 0 && !arxivLookupLoading && (
-                <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
-                  <p className="text-xs text-gray-400">
-                    No author profiles were found for this paper. You can still{" "}
-                    <button
-                      onClick={() => handleArxivFallback()}
-                      disabled={arxivFallbackLoading}
-                      className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
-                    >
-                      {arxivFallbackLoading ? "Adding…" : "add just this paper"}
-                    </button>{" "}
-                    to your tracked list.
-                  </p>
-                </div>
+                linkedAuthorId ? (
+                  <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                    <p className="text-xs text-gray-400">
+                      No author profiles were found for this paper. You can still{" "}
+                      <button
+                        onClick={handleArxivFallback}
+                        disabled={arxivFallbackLoading}
+                        className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
+                      >
+                        {arxivFallbackLoading ? "Adding…" : "add just this paper"}
+                      </button>{" "}
+                      to your tracked list.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
+                    <p className="text-xs text-amber-300">
+                      No author profiles were found for this paper. Try searching by DOI instead,
+                      or link your author profile first via a paper you&apos;re listed on.
+                    </p>
+                  </div>
+                )
               )}
 
             </div>
