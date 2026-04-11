@@ -10,7 +10,17 @@ from typing import Any
 
 import httpx
 
+from app.services.cache import AsyncTTLCache
+
 logger = logging.getLogger(__name__)
+
+# Cache author search results for 5 minutes — same query is often repeated
+# during the import flow as users refine their input.
+_author_search_cache: AsyncTTLCache = AsyncTTLCache(maxsize=500, ttl=300)
+
+# Cache full works lists for 1 hour — cursor-paginated and expensive; called
+# by both the import flow and the weekly publication-sync job.
+_works_by_author_cache: AsyncTTLCache = AsyncTTLCache(maxsize=100, ttl=3600)
 
 _BASE_URL = "https://api.openalex.org"
 _HEADERS = {
@@ -225,6 +235,11 @@ async def get_citation_counts(openalex_ids: list[str]) -> dict[str, int]:
 
 async def search_authors(query: str) -> list[dict]:
     """Search OpenAlex for authors by name. Returns up to 10 candidates."""
+    hit, cached = await _author_search_cache.get(query)
+    if hit:
+        logger.debug("OpenAlex author search cache hit: %s", query)
+        return cached
+
     url = f"{_BASE_URL}/authors"
     params: dict[str, Any] = {"search": query, "per_page": 10, "mailto": _MAILTO}
     logger.debug("OpenAlex author search: %s", query)
@@ -240,7 +255,9 @@ async def search_authors(query: str) -> list[dict]:
         logger.warning("OpenAlex author search status %s for query %s", response.status_code, query)
         return []
 
-    return response.json().get("results", [])
+    results = response.json().get("results", [])
+    await _author_search_cache.set(query, results)
+    return results
 
 
 async def get_works_by_author(author_id: str) -> list[dict]:
@@ -250,6 +267,11 @@ async def get_works_by_author(author_id: str) -> list[dict]:
     """
     if author_id.startswith("https://openalex.org/"):
         author_id = author_id[len("https://openalex.org/"):]
+
+    hit, cached = await _works_by_author_cache.get(author_id)
+    if hit:
+        logger.debug("OpenAlex works-by-author cache hit: %s", author_id)
+        return cached
 
     results: list[dict] = []
     cursor = "*"
@@ -286,6 +308,7 @@ async def get_works_by_author(author_id: str) -> list[dict]:
             cursor = next_cursor
 
     logger.info("OpenAlex: found %d works for author %s", len(results), author_id)
+    await _works_by_author_cache.set(author_id, results)
     return results
 
 
