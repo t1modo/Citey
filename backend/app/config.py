@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # Anthropic
     anthropic_api_key: str = ""
 
+    # NASA ADS (Astrophysics Data System)
+    # Free token: https://ui.adsabs.harvard.edu/user/settings/token
+    ads_api_key: str = ""
+
     # CORS
     allowed_origins: str = "*"
 

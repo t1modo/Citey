@@ -306,7 +306,11 @@ async def import_works_by_author(
     db: Any = Depends(get_db),
 ) -> dict:
     """Bulk-import all works by an OpenAlex author into the user's tracked works."""
+    from app.services import dblp as dblp_svc
+    from app.services import inspire_hep as inspire_svc
+    from app.services import nasa_ads as ads_svc
     from app.services import openalex as openalex_svc
+    from app.services import pubmed as pubmed_svc
     from app.services import semantic_scholar as s2_svc
 
     # Enforce single linked-author policy.
@@ -472,6 +476,149 @@ async def import_works_by_author(
         except Exception as exc:
             logger.warning(
                 "Cross-source fetch failed for '%s': %s — continuing with primary source only",
+                author_display_name, exc,
+            )
+
+    # ── PubMed cross-source boost ────────────────────────────────────────────
+    # Always attempted as a third source (biomedical coverage that neither OA
+    # nor S2 captures reliably).  Re-computes the DOI set to include any works
+    # already merged in the OA↔S2 pass above.
+    if author_display_name:
+        current_dois: set[str] = set()
+        for r in raw_works:
+            d = _strip_doi(r.get("doi"))
+            if d:
+                current_dois.add(d.lower())
+        try:
+            pm_candidates = await pubmed_svc.search_authors(author_display_name)
+            for c in pm_candidates[:1]:
+                if _names_match(c.get("name", ""), author_display_name):
+                    pm_extra = await pubmed_svc.get_works_by_author(c["authorId"])
+                    if pm_extra:
+                        pm_dois: set[str] = set()
+                        for r in pm_extra:
+                            d = _strip_doi(r.get("doi"))
+                            if d:
+                                pm_dois.add(d.lower())
+                        overlap = current_dois & pm_dois
+                        if not current_dois or overlap:
+                            raw_works = raw_works + pm_extra
+                            logger.info(
+                                "Cross-source: merged %d PubMed works for '%s' "
+                                "(%d DOI(s) overlap)",
+                                len(pm_extra), author_display_name, len(overlap),
+                            )
+        except Exception as exc:
+            logger.warning(
+                "PubMed cross-source fetch failed for '%s': %s — skipping",
+                author_display_name, exc,
+            )
+
+    # ── NASA ADS cross-source boost ──────────────────────────────────────────
+    # Astrophysics / space-science literature that OA, S2, and PubMed all miss.
+    # Recomputes the DOI set to include any works already merged above.
+    if author_display_name:
+        current_dois_ads: set[str] = set()
+        for r in raw_works:
+            d = _strip_doi(r.get("doi"))
+            if d:
+                current_dois_ads.add(d.lower())
+        try:
+            ads_candidates = await ads_svc.search_authors(author_display_name)
+            for c in ads_candidates[:1]:
+                if _names_match(c.get("name", ""), author_display_name):
+                    ads_extra = await ads_svc.get_works_by_author(c["authorId"])
+                    if ads_extra:
+                        ads_dois: set[str] = set()
+                        for r in ads_extra:
+                            d = _strip_doi(r.get("doi"))
+                            if d:
+                                ads_dois.add(d.lower())
+                        overlap = current_dois_ads & ads_dois
+                        if not current_dois_ads or overlap:
+                            raw_works = raw_works + ads_extra
+                            logger.info(
+                                "Cross-source: merged %d NASA ADS works for '%s' "
+                                "(%d DOI(s) overlap)",
+                                len(ads_extra), author_display_name, len(overlap),
+                            )
+        except Exception as exc:
+            logger.warning(
+                "NASA ADS cross-source fetch failed for '%s': %s — skipping",
+                author_display_name, exc,
+            )
+
+    # ── INSPIRE-HEP cross-source boost ──────────────────────────────────────
+    # HEP, accelerator physics, and JACoW/CERN conference proceedings —
+    # the only automated path for papers from those venues.
+    # Uses a two-step author-search → works-by-id pattern (more precise than
+    # a bare name search against the literature index).
+    if author_display_name:
+        current_dois_inspire: set[str] = set()
+        for r in raw_works:
+            d = _strip_doi(r.get("doi"))
+            if d:
+                current_dois_inspire.add(d.lower())
+        try:
+            inspire_candidates = await inspire_svc.search_authors(author_display_name)
+            for c in inspire_candidates[:3]:
+                if _names_match(c.get("name", ""), author_display_name):
+                    inspire_extra = await inspire_svc.get_works_by_author(c["authorId"])
+                    if inspire_extra:
+                        inspire_dois: set[str] = set()
+                        for r in inspire_extra:
+                            d = _strip_doi(r.get("doi"))
+                            if d:
+                                inspire_dois.add(d.lower())
+                        overlap = current_dois_inspire & inspire_dois
+                        if not current_dois_inspire or overlap:
+                            raw_works = raw_works + inspire_extra
+                            logger.info(
+                                "Cross-source: merged %d INSPIRE-HEP works for '%s' "
+                                "(%d DOI(s) overlap)",
+                                len(inspire_extra), author_display_name, len(overlap),
+                            )
+                    break
+        except Exception as exc:
+            logger.warning(
+                "INSPIRE-HEP cross-source fetch failed for '%s': %s — skipping",
+                author_display_name, exc,
+            )
+
+    # ── DBLP cross-source boost ──────────────────────────────────────────────
+    # CS conference and journal papers — virtually complete ACM / IEEE coverage.
+    # Uses a two-step author-search (returns PID) → publication-search pattern
+    # so results are scoped to exactly one person, not a name-based full-text
+    # match that would flood the results with same-name researchers.
+    if author_display_name:
+        current_dois_dblp: set[str] = set()
+        for r in raw_works:
+            d = _strip_doi(r.get("doi"))
+            if d:
+                current_dois_dblp.add(d.lower())
+        try:
+            dblp_candidates = await dblp_svc.search_authors(author_display_name)
+            for c in dblp_candidates[:3]:
+                if _names_match(c.get("name", ""), author_display_name):
+                    dblp_extra = await dblp_svc.get_works_by_author(c["authorId"])
+                    if dblp_extra:
+                        dblp_dois: set[str] = set()
+                        for r in dblp_extra:
+                            d = _strip_doi(r.get("doi"))
+                            if d:
+                                dblp_dois.add(d.lower())
+                        overlap = current_dois_dblp & dblp_dois
+                        if not current_dois_dblp or overlap:
+                            raw_works = raw_works + dblp_extra
+                            logger.info(
+                                "Cross-source: merged %d DBLP works for '%s' "
+                                "(%d DOI(s) overlap)",
+                                len(dblp_extra), author_display_name, len(overlap),
+                            )
+                    break
+        except Exception as exc:
+            logger.warning(
+                "DBLP cross-source fetch failed for '%s': %s — skipping",
                 author_display_name, exc,
             )
 
