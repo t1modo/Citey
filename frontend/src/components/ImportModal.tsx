@@ -5,6 +5,7 @@ import {
   addWorkChecked,
   getAuthorsByPaperDoi,
   importByAuthor,
+  searchAuthors,
 } from "@/lib/api";
 import type {
   TrackedWork,
@@ -13,7 +14,78 @@ import type {
   AuthorAffiliation,
 } from "@/lib/types";
 
-type Tab = "doi" | "arxiv";
+// ── Input type detection ─────────────────────────────────────────────────────
+
+type InputType = "doi" | "arxiv" | "inspire-author" | "dblp-author" | "name";
+type AuthorSource = "openalex" | "semantic_scholar" | "inspire" | "dblp";
+
+function detectInputType(raw: string): InputType {
+  const s = raw.trim();
+  if (!s) return "name";
+  // arXiv URL, arxiv: prefix, bare ID formats
+  if (
+    /arxiv\.org\/(abs|pdf)\//i.test(s) ||
+    /^arxiv:/i.test(s) ||
+    /^\d{4}\.\d{4,5}(v\d+)?$/.test(s) ||
+    /^[a-z-]+\/\d{7}$/i.test(s)
+  ) return "arxiv";
+  // INSPIRE-HEP author profile URL
+  if (/inspirehep\.net\/authors\//i.test(s)) return "inspire-author";
+  // DBLP author profile URL
+  if (/dblp\.org\/pid\//i.test(s)) return "dblp-author";
+  // DOI or doi.org URL
+  if (/^10\.\d{4,}\//.test(s) || /doi\.org\//i.test(s)) return "doi";
+  // Anything else is treated as an author name
+  return "name";
+}
+
+function parseArxivId(input: string): string | null {
+  const s = input.trim();
+  const urlMatch = s.match(/arxiv\.org\/(?:abs|pdf)\/([^\s?#/]+)/i);
+  if (urlMatch) return urlMatch[1].replace(/v\d+$/i, "");
+  const prefixMatch = s.match(/^arxiv:([^\s]+)/i);
+  if (prefixMatch) return prefixMatch[1].replace(/v\d+$/i, "");
+  if (/^\d{4}\.\d{4,5}(v\d+)?$/.test(s)) return s.replace(/v\d+$/i, "");
+  if (/^[a-z-]+\/\d{7}$/i.test(s)) return s;
+  return null;
+}
+
+function extractInspireAuthorId(url: string): string | null {
+  const m = url.match(/inspirehep\.net\/authors\/(\d+)/i);
+  return m ? m[1] : null;
+}
+
+function extractDblpPid(url: string): string | null {
+  const m = url.match(/dblp\.org\/pid\/([^\s?#]+)/i);
+  return m ? m[1] : null;
+}
+
+// ── Phase model ──────────────────────────────────────────────────────────────
+
+type Phase =
+  | { type: "input" }
+  | {
+      type: "author-select";
+      paper?: { title: string; year: number | null };
+      candidates: AuthorCandidate[];
+      resolvedDoi?: string;
+    }
+  | {
+      type: "direct-confirm";
+      source: "inspire" | "dblp";
+      authorId: string;
+    }
+  | {
+      type: "author-not-found";
+      check: Extract<AddWorkResult, { status: "author_not_found" }>;
+    }
+  | {
+      type: "merge-confirm";
+      author: AuthorCandidate;
+      existingAuthorName: string;
+    };
+
+// ── Props ────────────────────────────────────────────────────────────────────
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -24,6 +96,8 @@ interface ImportModalProps {
   linkedAuthorName?: string | null;
 }
 
+// ── Small shared components ──────────────────────────────────────────────────
+
 function Spinner({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none">
@@ -33,10 +107,29 @@ function Spinner({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
-/** Normalise an OpenAlex or S2 author ID for comparison. */
 function normalizeAuthorId(id: string): string {
   return id.startsWith("https://openalex.org/") ? id.slice(21) : id;
 }
+
+function sourceLabel(source: AuthorSource): string {
+  switch (source) {
+    case "semantic_scholar": return "S2";
+    case "inspire": return "INSPIRE";
+    case "dblp": return "DBLP";
+    default: return "OA";
+  }
+}
+
+function sourceBadgeClass(source: AuthorSource): string {
+  switch (source) {
+    case "semantic_scholar": return "bg-teal-500/15 text-teal-400";
+    case "inspire": return "bg-purple-500/15 text-purple-400";
+    case "dblp": return "bg-orange-500/15 text-orange-400";
+    default: return "bg-blue-500/15 text-blue-400";
+  }
+}
+
+// ── Main component ───────────────────────────────────────────────────────────
 
 export default function ImportModal({
   isOpen,
@@ -46,81 +139,33 @@ export default function ImportModal({
   linkedAuthorId,
   linkedAuthorName,
 }: ImportModalProps) {
-  const [tab, setTab] = useState<Tab>("doi");
+  const [query, setQuery] = useState("");
+  const [phase, setPhase] = useState<Phase>({ type: "input" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [importingId, setImportingId] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [fallbackLoading, setFallbackLoading] = useState(false);
 
-  // ── DOI tab ──────────────────────────────────────────────────────────────
-  const [doi, setDoi] = useState("");
-  const [doiLoading, setDoiLoading] = useState(false);
-  const [doiError, setDoiError] = useState<string | null>(null);
-  const [doiAuthorCheck, setDoiAuthorCheck] = useState<
-    Extract<AddWorkResult, { status: "author_not_found" }> | null
-  >(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // ── DOI tab — phase 2: no linked author → author selection ───────────────
-  const [doiFoundPaper, setDoiFoundPaper] = useState<{
-    title: string;
-    year: number | null;
-  } | null>(null);
-  const [doiFoundAuthors, setDoiFoundAuthors] = useState<AuthorCandidate[]>([]);
-  const [doiImportingId, setDoiImportingId] = useState<string | null>(null);
-  const [doiImportError, setDoiImportError] = useState<string | null>(null);
-  const [doiFallbackLoading, setDoiFallbackLoading] = useState(false);
+  const reset = () => {
+    setQuery("");
+    setPhase({ type: "input" });
+    setLoading(false);
+    setError(null);
+    setImportingId(null);
+    setImportError(null);
+    setFallbackLoading(false);
+  };
 
-  // ── arXiv tab — phase 1: paper lookup ────────────────────────────────────
-  const [arxivQuery, setArxivQuery] = useState("");
-  const [arxivLookupLoading, setArxivLookupLoading] = useState(false);
-  const [arxivLookupError, setArxivLookupError] = useState<string | null>(null);
-  const [arxivFoundPaper, setArxivFoundPaper] = useState<{
-    title: string;
-    year: number | null;
-  } | null>(null);
-  const [arxivAuthors, setArxivAuthors] = useState<AuthorCandidate[]>([]);
-  const [arxivResolvedDoi, setArxivResolvedDoi] = useState<string | null>(null);
-
-  // ── arXiv tab — phase 2: author import ───────────────────────────────────
-  const [arxivImportingId, setArxivImportingId] = useState<string | null>(null);
-  const [arxivImportError, setArxivImportError] = useState<string | null>(null);
-  const [arxivMergeConfirm, setArxivMergeConfirm] = useState<{
-    author: AuthorCandidate;
-    existingAuthorName: string;
-  } | null>(null);
-
-  // ── arXiv tab — fallback: add just this paper ────────────────────────────
-  const [arxivFallbackLoading, setArxivFallbackLoading] = useState(false);
-
-  const doiInputRef = useRef<HTMLInputElement>(null);
-  const arxivInputRef = useRef<HTMLInputElement>(null);
-
-  // ── Reset on open ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (isOpen) {
-      setTab("doi");
-      setDoi("");
-      setDoiError(null);
-      setDoiAuthorCheck(null);
-      setDoiFoundPaper(null);
-      setDoiFoundAuthors([]);
-      setDoiImportingId(null);
-      setDoiImportError(null);
-      setDoiFallbackLoading(false);
-      resetArxiv();
-      setTimeout(() => doiInputRef.current?.focus(), 50);
+      reset();
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
-
-  const resetArxiv = () => {
-    setArxivQuery("");
-    setArxivLookupLoading(false);
-    setArxivLookupError(null);
-    setArxivFoundPaper(null);
-    setArxivAuthors([]);
-    setArxivResolvedDoi(null);
-    setArxivImportingId(null);
-    setArxivImportError(null);
-    setArxivMergeConfirm(null);
-    setArxivFallbackLoading(false);
-  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -131,253 +176,179 @@ export default function ImportModal({
     return () => window.removeEventListener("keydown", handler);
   }, [isOpen, onClose]);
 
-  useEffect(() => {
-    if (tab === "doi") setTimeout(() => doiInputRef.current?.focus(), 50);
-    if (tab === "arxiv") setTimeout(() => arxivInputRef.current?.focus(), 50);
-  }, [tab]);
-
-  // ── DOI handler ───────────────────────────────────────────────────────────
-
-  const handleAddDoi = async (e: FormEvent | null, force = false) => {
-    e?.preventDefault();
-    const trimmed = doi.trim();
-    if (!trimmed) { setDoiError("Please enter a DOI."); return; }
-
-    // No linked author + first attempt → fetch S2 authors so the user can pick
-    // themselves and import their full profile before we add the work.
-    if (!linkedAuthorId && !force && doiFoundAuthors.length === 0 && doiFoundPaper === null) {
-      setDoiLoading(true);
-      setDoiError(null);
-      try {
-        const result = await getAuthorsByPaperDoi(trimmed);
-        setDoiFoundPaper({ title: result.paper_title, year: result.paper_year });
-        setDoiFoundAuthors(result.authors);
-        return;
-      } catch {
-        // S2 doesn't have this paper yet — fall through to a direct add.
-      } finally {
-        setDoiLoading(false);
-      }
-    }
-
-    setDoiLoading(true);
-    setDoiError(null);
-    setDoiAuthorCheck(null);
-    try {
-      const result = await addWorkChecked(trimmed, force);
-      if (result.status === "added") { onAdded(result.work); onClose(); }
-      else { setDoiAuthorCheck(result); }
-    } catch (err) {
-      setDoiError(err instanceof Error ? err.message : "Failed to add work.");
-    } finally {
-      setDoiLoading(false);
-    }
-  };
-
-  // DOI phase 2 — import all works by the chosen author
-  const handleDoiAuthorImport = async (author: AuthorCandidate) => {
-    setDoiImportingId(author.id);
-    setDoiImportError(null);
-    try {
-      const result = await importByAuthor(author.id, author.display_name, author.source);
-      if (result.status === "merge_required") {
-        setDoiImportError("Unexpected conflict. Please try again or add just this paper.");
-        setDoiImportingId(null);
-        return;
-      }
-      onImported(result.imported);
-      onClose();
-    } catch (err) {
-      setDoiImportError(err instanceof Error ? err.message : "Import failed.");
-      setDoiImportingId(null);
-    }
-  };
-
-  // DOI phase 2 fallback — add only this paper without linking an author
-  const handleDoiFallback = async () => {
-    const trimmed = doi.trim();
-    if (!trimmed) return;
-    setDoiFallbackLoading(true);
-    setDoiImportError(null);
-    try {
-      const result = await addWorkChecked(trimmed, true);
-      if (result.status === "added") { onAdded(result.work); onClose(); }
-    } catch (err) {
-      setDoiImportError(err instanceof Error ? err.message : "Failed to add work.");
-    } finally {
-      setDoiFallbackLoading(false);
-    }
-  };
-
-  // ── arXiv helpers ─────────────────────────────────────────────────────────
-
-  const parseArxivId = (input: string): string | null => {
-    const trimmed = input.trim();
-    const urlMatch = trimmed.match(/arxiv\.org\/(?:abs|pdf)\/([^\s?#/]+)/i);
-    if (urlMatch) return urlMatch[1].replace(/v\d+$/i, "");
-    const prefixMatch = trimmed.match(/^arxiv:([^\s]+)/i);
-    if (prefixMatch) return prefixMatch[1].replace(/v\d+$/i, "");
-    if (/^\d{4}\.\d{4,5}(v\d+)?$/.test(trimmed)) return trimmed.replace(/v\d+$/i, "");
-    if (/^[a-z-]+\/\d{7}$/i.test(trimmed)) return trimmed;
-    return null;
-  };
-
-  // Phase 1 — look up paper + co-authors
-  const handleArxivLookup = async (e: FormEvent) => {
-    e.preventDefault();
-    const arxivId = parseArxivId(arxivQuery);
-    if (!arxivId) {
-      setArxivLookupError(
-        "Could not parse arXiv ID. Paste the full URL (e.g. https://arxiv.org/abs/2301.12345) or a bare ID like 2301.12345."
-      );
-      return;
-    }
-    const resolvedDoi = `10.48550/arXiv.${arxivId}`;
-    setArxivLookupLoading(true);
-    setArxivLookupError(null);
-    setArxivFoundPaper(null);
-    setArxivAuthors([]);
-    setArxivResolvedDoi(null);
-    setArxivImportError(null);
-    setArxivMergeConfirm(null);
-    try {
-      const result = await getAuthorsByPaperDoi(resolvedDoi);
-      setArxivFoundPaper({ title: result.paper_title, year: result.paper_year });
-      setArxivAuthors(result.authors);
-      setArxivResolvedDoi(resolvedDoi);
-    } catch (err) {
-      setArxivLookupError(err instanceof Error ? err.message : "Lookup failed.");
-    } finally {
-      setArxivLookupLoading(false);
-    }
-  };
-
-  // Phase 2 — import all papers by a chosen author
-  const handleArxivImport = async (author: AuthorCandidate, confirmMerge = false) => {
-    setArxivImportingId(author.id);
-    setArxivImportError(null);
-    setArxivMergeConfirm(null);
-    try {
-      const result = await importByAuthor(author.id, author.display_name, author.source, confirmMerge);
-      if (result.status === "merge_required") {
-        setArxivMergeConfirm({ author, existingAuthorName: result.existing_author_name });
-        setArxivImportingId(null);
-        return;
-      }
-      onImported(result.imported);
-      onClose();
-    } catch (err) {
-      setArxivImportError(err instanceof Error ? err.message : "Import failed.");
-      setArxivImportingId(null);
-    }
-  };
-
-  // Fallback — add just this one arXiv paper.
-  // Always uses force=true: the user has already made their explicit intent
-  // clear by clicking "add just this paper", so a second author-check
-  // confirmation would be unnecessary friction.
-  const handleArxivFallback = async () => {
-    if (!arxivResolvedDoi) return;
-    setArxivFallbackLoading(true);
-    try {
-      const result = await addWorkChecked(arxivResolvedDoi, true);
-      if (result.status === "added") { onAdded(result.work); onClose(); }
-    } catch (err) {
-      setArxivImportError(err instanceof Error ? err.message : "Failed to add work.");
-    } finally {
-      setArxivFallbackLoading(false);
-    }
-  };
-
-  // Find the linked author in the co-author list (if any)
-  const linkedMatch = linkedAuthorId
-    ? arxivAuthors.find(
-        (a) => normalizeAuthorId(a.id) === normalizeAuthorId(linkedAuthorId)
-      )
-    : null;
-
-  const busy = arxivImportingId !== null || arxivFallbackLoading;
-
   if (!isOpen) return null;
 
-  // ── Shared: author-not-found confirmation ────────────────────────────────
+  // ── Lookup handler ────────────────────────────────────────────────────────
 
-  const AuthorNotFoundPanel = ({
-    check,
-    label,
-    loading,
-    onCancel,
-    onConfirm,
-  }: {
-    check: Extract<AddWorkResult, { status: "author_not_found" }>;
-    label: string;
-    loading: boolean;
-    onCancel: () => void;
-    onConfirm: () => void;
-  }) => (
-    <div className="flex flex-col gap-4">
-      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-        <p className="text-sm font-semibold text-amber-300">Author not detected</p>
-        <p className="mt-1.5 text-xs text-amber-200/80 leading-relaxed">
-          Your linked profile{" "}
-          <span className="font-semibold text-white">&ldquo;{check.linkedAuthor}&rdquo;</span>{" "}
-          doesn&apos;t appear in the author list for:
-        </p>
-        <p className="mt-2 text-xs font-semibold text-white/90 leading-snug">
-          {check.paperTitle || label}
-        </p>
-        {check.paperAuthors.length > 0 && (
-          <p className="mt-1.5 text-[11px] text-gray-500 leading-relaxed">
-            Listed authors:{" "}
-            {check.paperAuthors.slice(0, 6).join(", ")}
-            {check.paperAuthors.length > 6 && <> +{check.paperAuthors.length - 6} more</>}
-          </p>
-        )}
-        <p className="mt-2.5 text-xs text-amber-200/70 leading-relaxed">
-          Some authors publish under different names. If this paper is yours, click &ldquo;Add anyway&rdquo;.
-        </p>
-      </div>
-      <div className="flex gap-2">
-        <button
-          onClick={onCancel}
-          className="flex-1 rounded-lg border border-white/10 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={onConfirm}
-          disabled={loading}
-          className="flex-1 rounded-lg bg-white py-2 text-sm font-semibold text-gray-950 shadow transition-opacity hover:bg-gray-100 disabled:opacity-50"
-        >
-          {loading ? (
-            <span className="flex items-center justify-center gap-2"><Spinner /> Adding…</span>
-          ) : (
-            "Add anyway"
-          )}
-        </button>
-      </div>
-    </div>
-  );
+  const handleLookup = async (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = query.trim();
+    if (!trimmed) { setError("Please enter a value."); return; }
 
-  // ── Shared: author card row ───────────────────────────────────────────────
+    const inputType = detectInputType(trimmed);
+    setError(null);
+    setImportError(null);
+
+    // ── arXiv ──────────────────────────────────────────────────────────────
+    if (inputType === "arxiv") {
+      const arxivId = parseArxivId(trimmed);
+      if (!arxivId) {
+        setError("Could not parse arXiv ID. Paste the full URL or a bare ID like 2301.12345.");
+        return;
+      }
+      const resolvedDoi = `10.48550/arXiv.${arxivId}`;
+      setLoading(true);
+      try {
+        const result = await getAuthorsByPaperDoi(resolvedDoi);
+        setPhase({
+          type: "author-select",
+          paper: { title: result.paper_title, year: result.paper_year },
+          candidates: result.authors,
+          resolvedDoi,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Lookup failed.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ── DOI ────────────────────────────────────────────────────────────────
+    if (inputType === "doi") {
+      // With a linked author: attempt direct add first
+      if (linkedAuthorId) {
+        setLoading(true);
+        try {
+          const result = await addWorkChecked(trimmed, false);
+          if (result.status === "added") { onAdded(result.work); onClose(); return; }
+          setPhase({ type: "author-not-found", check: result });
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to add work.");
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+      // No linked author: look up co-authors first
+      setLoading(true);
+      try {
+        const result = await getAuthorsByPaperDoi(trimmed);
+        setPhase({
+          type: "author-select",
+          paper: { title: result.paper_title, year: result.paper_year },
+          candidates: result.authors,
+          resolvedDoi: trimmed,
+        });
+      } catch {
+        // S2 doesn't have this paper — fall through to direct add
+        try {
+          const result = await addWorkChecked(trimmed, true);
+          if (result.status === "added") { onAdded(result.work); onClose(); return; }
+          setPhase({ type: "author-not-found", check: result });
+        } catch (err2) {
+          setError(err2 instanceof Error ? err2.message : "Failed to add work.");
+        }
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ── INSPIRE author URL ─────────────────────────────────────────────────
+    if (inputType === "inspire-author") {
+      const authorId = extractInspireAuthorId(trimmed);
+      if (!authorId) { setError("Could not extract author ID from INSPIRE URL."); return; }
+      setPhase({ type: "direct-confirm", source: "inspire", authorId });
+      return;
+    }
+
+    // ── DBLP author URL ───────────────────────────────────────────────────
+    if (inputType === "dblp-author") {
+      const pid = extractDblpPid(trimmed);
+      if (!pid) { setError("Could not extract PID from DBLP URL."); return; }
+      setPhase({ type: "direct-confirm", source: "dblp", authorId: pid });
+      return;
+    }
+
+    // ── Author name search ────────────────────────────────────────────────
+    setLoading(true);
+    try {
+      const candidates = await searchAuthors(trimmed);
+      setPhase({ type: "author-select", candidates });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Import an author ──────────────────────────────────────────────────────
+
+  const handleImport = async (
+    authorId: string,
+    authorName: string | undefined,
+    source: AuthorSource,
+    confirmMerge = false,
+  ) => {
+    setImportingId(authorId);
+    setImportError(null);
+    try {
+      const result = await importByAuthor(authorId, authorName, source, confirmMerge);
+      if (result.status === "merge_required") {
+        const currentPhase = phase;
+        const author: AuthorCandidate = phase.type === "author-select"
+          ? phase.candidates.find((c) => c.id === authorId) ?? {
+              id: authorId, display_name: authorName ?? authorId,
+              works_count: 0, h_index: 0, affiliations: [], topics: [], source,
+            }
+          : { id: authorId, display_name: authorName ?? authorId,
+              works_count: 0, h_index: 0, affiliations: [], topics: [], source };
+        void currentPhase;
+        setPhase({
+          type: "merge-confirm",
+          author,
+          existingAuthorName: result.existing_author_name,
+        });
+        setImportingId(null);
+        return;
+      }
+      onImported(result.imported);
+      onClose();
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Import failed.");
+      setImportingId(null);
+    }
+  };
+
+  // ── Fallback: add just this one paper ─────────────────────────────────────
+
+  const handleFallback = async (doi: string) => {
+    setFallbackLoading(true);
+    setImportError(null);
+    try {
+      const result = await addWorkChecked(doi, true);
+      if (result.status === "added") { onAdded(result.work); onClose(); }
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Failed to add work.");
+    } finally {
+      setFallbackLoading(false);
+    }
+  };
+
+  // ── Shared: AuthorCard ────────────────────────────────────────────────────
 
   const AuthorCard = ({
     author,
     highlight = false,
-    onImport,
-    isImporting,
     anyBusy,
   }: {
     author: AuthorCandidate;
     highlight?: boolean;
-    onImport: (author: AuthorCandidate) => void;
-    isImporting: boolean;
     anyBusy: boolean;
   }) => (
     <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
-      highlight
-        ? "border-teal-500/30 bg-teal-500/10"
-        : "border-white/10 bg-gray-800"
+      highlight ? "border-teal-500/30 bg-teal-500/10" : "border-white/10 bg-gray-800"
     }`}>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -387,20 +358,14 @@ export default function ImportModal({
               You
             </span>
           )}
-          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-            author.source === "semantic_scholar"
-              ? "bg-teal-500/15 text-teal-400"
-              : "bg-blue-500/15 text-blue-400"
-          }`}>
-            {author.source === "semantic_scholar" ? "S2" : "OA"}
+          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${sourceBadgeClass(author.source)}`}>
+            {sourceLabel(author.source)}
           </span>
         </div>
         {author.affiliations.length > 0 && (
           <p className="truncate text-xs text-gray-400">
             {author.affiliations
-              .map((a: AuthorAffiliation) =>
-                a.year_range ? `${a.name} (${a.year_range})` : a.name
-              )
+              .map((a: AuthorAffiliation) => a.year_range ? `${a.name} (${a.year_range})` : a.name)
               .join(" · ")}
           </p>
         )}
@@ -410,7 +375,7 @@ export default function ImportModal({
         </p>
       </div>
       <button
-        onClick={() => onImport(author)}
+        onClick={() => handleImport(author.id, author.display_name, author.source)}
         disabled={anyBusy}
         className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
           highlight
@@ -418,7 +383,7 @@ export default function ImportModal({
             : "bg-white/10 text-white hover:bg-white/15"
         }`}
       >
-        {isImporting ? (
+        {importingId === author.id ? (
           <span className="flex items-center gap-1.5"><Spinner className="h-3 w-3" /> Importing…</span>
         ) : (
           "Import"
@@ -427,31 +392,20 @@ export default function ImportModal({
     </div>
   );
 
-  // ── "add just this paper" fallback ──────────────────────────────────────
-  // Only shown when a linked author already exists.  Without a linked author
-  // the arXiv flow should always go through full author-linking — the fallback
-  // would let users build a collection of papers with no author attached, which
-  // isn't the intended use of this app.
+  // ── Hint text for the input ───────────────────────────────────────────────
 
-  const FallbackPanel = () => {
-    if (!linkedAuthorId) return null;
-    return (
-      <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
-        <p className="text-xs text-gray-400">
-          <span className="font-medium text-gray-300">Just this paper?</span>{" "}
-          You can{" "}
-          <button
-            onClick={handleArxivFallback}
-            disabled={busy}
-            className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
-          >
-            {arxivFallbackLoading ? "Adding…" : "add just this paper"}
-          </button>{" "}
-          without importing your full profile.
-        </p>
-      </div>
-    );
+  const detectedType = query.trim() ? detectInputType(query.trim()) : null;
+  const hintMap: Record<InputType, string> = {
+    arxiv: "Detected: arXiv paper",
+    doi: "Detected: DOI",
+    "inspire-author": "Detected: INSPIRE-HEP author profile",
+    "dblp-author": "Detected: DBLP author profile",
+    name: "Will search by author name",
   };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const anyBusy = importingId !== null || fallbackLoading;
 
   return (
     <div
@@ -469,10 +423,11 @@ export default function ImportModal({
 
       {/* Dialog */}
       <div className="relative z-10 flex w-full max-w-md flex-col rounded-2xl border border-white/10 bg-gray-900 shadow-2xl max-h-[90vh] sm:max-h-[85vh]">
+
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between px-6 pt-6 pb-5">
           <h2 id="import-modal-title" className="text-lg font-semibold text-white">
-            Add a Paper
+            Add Papers
           </h2>
           <button
             onClick={onClose}
@@ -485,148 +440,58 @@ export default function ImportModal({
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="shrink-0 mb-5 mx-6 flex rounded-lg border border-white/10 bg-gray-800 p-1">
-          {(["doi", "arxiv"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => {
-                setTab(t);
-                setDoiAuthorCheck(null);
-                setDoiFoundPaper(null);
-                setDoiFoundAuthors([]);
-                setDoiImportingId(null);
-                setDoiImportError(null);
-                setDoiFallbackLoading(false);
-                resetArxiv();
-              }}
-              className={`flex-1 rounded-md py-1.5 text-sm font-medium transition-colors ${
-                tab === t ? "bg-white text-gray-950 shadow" : "text-gray-400 hover:text-white"
-              }`}
-            >
-              {t === "doi" ? "Add by DOI" : "Add by arXiv"}
-            </button>
-          ))}
-        </div>
-
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div className="flex flex-col gap-4">
 
-          {/* ── DOI tab ───────────────────────────────────────────────────── */}
-          {tab === "doi" && (
-            <div className="flex flex-col gap-4">
-              {doiAuthorCheck ? (
-                <AuthorNotFoundPanel
-                  check={doiAuthorCheck}
-                  label={doi}
-                  loading={doiLoading}
-                  onCancel={() => setDoiAuthorCheck(null)}
-                  onConfirm={() => handleAddDoi(null, true)}
-                />
-              ) : (doiFoundPaper !== null || doiFoundAuthors.length > 0) ? (
-                <>
-                  {/* Found paper banner */}
-                  {doiFoundPaper && (
-                    <div className="flex items-start gap-2 rounded-lg border border-teal-500/25 bg-teal-500/10 px-3 py-2.5">
-                      <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <p className="text-xs text-teal-300 leading-relaxed">
-                        <span className="font-medium">Found:</span> {doiFoundPaper.title}
-                        {doiFoundPaper.year && (
-                          <span className="ml-1 text-teal-400/70">({doiFoundPaper.year})</span>
-                        )}
+            {/* ── Input phase ─────────────────────────────────────────── */}
+            {phase.type === "input" && (
+              <>
+                {linkedAuthorName && (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-xs text-gray-400">
+                        <span className="font-medium text-gray-300">Linked as:</span>{" "}
+                        {linkedAuthorName}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-gray-600">
+                        To change your linked author, visit{" "}
+                        <a href="/settings" className="text-gray-500 underline underline-offset-2 hover:text-gray-300">
+                          Settings
+                        </a>.
                       </p>
                     </div>
-                  )}
-
-                  {/* Import error */}
-                  {doiImportError && (
-                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                      {doiImportError}
-                    </div>
-                  )}
-
-                  {/* Author list */}
-                  {doiFoundAuthors.length > 0 ? (
-                    <>
-                      <p className="text-xs font-medium text-gray-500">
-                        Select which author is you to link your profile and import all your papers:
-                      </p>
-                      {doiFoundAuthors.map((author) => (
-                        <AuthorCard
-                          key={author.id}
-                          author={author}
-                          onImport={handleDoiAuthorImport}
-                          isImporting={doiImportingId === author.id}
-                          anyBusy={doiImportingId !== null || doiFallbackLoading}
-                        />
-                      ))}
-                    </>
-                  ) : (
-                    <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
-                      <p className="text-xs text-amber-300">
-                        No author profiles were found for this paper on Semantic Scholar.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Fallback: just add this one paper */}
-                  <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
-                    <p className="text-xs text-gray-400">
-                      <span className="font-medium text-gray-300">Just this paper?</span>{" "}
-                      You can{" "}
-                      <button
-                        onClick={handleDoiFallback}
-                        disabled={doiImportingId !== null || doiFallbackLoading}
-                        className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
-                      >
-                        {doiFallbackLoading ? "Adding…" : "add just this paper"}
-                      </button>{" "}
-                      without linking your author profile.
-                    </p>
                   </div>
+                )}
 
-                  {/* Back link */}
-                  <button
-                    onClick={() => {
-                      setDoiFoundPaper(null);
-                      setDoiFoundAuthors([]);
-                      setDoiImportError(null);
-                    }}
-                    disabled={doiImportingId !== null || doiFallbackLoading}
-                    className="self-start text-xs text-gray-500 transition-colors hover:text-gray-300 disabled:opacity-50"
-                  >
-                    ← Back to DOI entry
-                  </button>
-                </>
-              ) : (
-                <form onSubmit={handleAddDoi} className="flex flex-col gap-4">
+                <form onSubmit={handleLookup} className="flex flex-col gap-3">
                   <div>
-                    <label htmlFor="doi-input" className="mb-1.5 block text-sm font-medium text-gray-300">
-                      DOI
-                    </label>
                     <input
-                      ref={doiInputRef}
-                      id="doi-input"
+                      ref={inputRef}
                       type="text"
-                      value={doi}
-                      onChange={(e) => setDoi(e.target.value)}
-                      placeholder="e.g. 10.1038/s41586-021-03819-2"
+                      value={query}
+                      onChange={(e) => { setQuery(e.target.value); setError(null); }}
+                      placeholder="DOI, arXiv URL, author URL, or name…"
                       className="w-full rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/40 focus:ring-1 focus:ring-white/20"
-                      disabled={doiLoading}
+                      disabled={loading}
                       autoComplete="off"
                       spellCheck={false}
                     />
-                    <p className="mt-1.5 text-xs text-gray-500">
-                      Bare DOIs and full{" "}
-                      <span className="font-mono">https://doi.org/…</span> URLs are both accepted.
-                    </p>
+                    {detectedType && !error && (
+                      <p className="mt-1.5 text-xs text-teal-400/80">
+                        {hintMap[detectedType]}
+                      </p>
+                    )}
+                    {!detectedType && (
+                      <p className="mt-1.5 text-xs text-gray-500">
+                        Accepts DOIs, arXiv URLs, INSPIRE / DBLP author profile URLs, or an author name.
+                      </p>
+                    )}
                   </div>
 
-                  {doiError && (
+                  {error && (
                     <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                      {doiError}
+                      {error}
                     </div>
                   )}
 
@@ -634,236 +499,315 @@ export default function ImportModal({
                     <button
                       type="button"
                       onClick={onClose}
-                      disabled={doiLoading}
+                      disabled={loading}
                       className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 disabled:opacity-50"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      disabled={doiLoading || !doi.trim()}
+                      disabled={loading || !query.trim()}
                       className="rounded-lg bg-white px-5 py-2 text-sm font-semibold text-gray-950 shadow-lg transition-opacity hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {doiLoading ? (
-                        <span className="flex items-center gap-2"><Spinner /> Adding…</span>
+                      {loading ? (
+                        <span className="flex items-center gap-2"><Spinner /> Looking up…</span>
                       ) : (
-                        "Add Work"
+                        "Look up"
                       )}
                     </button>
                   </div>
                 </form>
-              )}
-            </div>
-          )}
+              </>
+            )}
 
-          {/* ── arXiv tab ─────────────────────────────────────────────────── */}
-          {tab === "arxiv" && (
-            <div className="flex flex-col gap-4">
-
-              {/* Linked author banner */}
-              {linkedAuthorName && (
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-xs text-gray-400">
-                      <span className="font-medium text-gray-300">Linked as:</span>{" "}
-                      {linkedAuthorName}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-gray-600">
-                      To change your linked author, visit{" "}
-                      <a href="/settings" className="text-gray-500 underline underline-offset-2 hover:text-gray-300">
-                        Settings
-                      </a>
-                      .
-                    </p>
+            {/* ── Direct confirm (INSPIRE / DBLP author URL) ──────────── */}
+            {phase.type === "direct-confirm" && (
+              <>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                      phase.source === "inspire"
+                        ? "bg-purple-500/15 text-purple-400"
+                        : "bg-orange-500/15 text-orange-400"
+                    }`}>
+                      {phase.source === "inspire" ? "INSPIRE-HEP" : "DBLP"}
+                    </span>
+                    <p className="text-sm font-medium text-white">Author profile detected</p>
                   </div>
-                </div>
-              )}
-
-              {/* Lookup form */}
-              <form onSubmit={handleArxivLookup} className="flex gap-2">
-                <input
-                  ref={arxivInputRef}
-                  type="text"
-                  value={arxivQuery}
-                  onChange={(e) => setArxivQuery(e.target.value)}
-                  placeholder="e.g. https://arxiv.org/abs/2301.12345"
-                  className="flex-1 rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/40 focus:ring-1 focus:ring-white/20"
-                  disabled={arxivLookupLoading || busy}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <button
-                  type="submit"
-                  disabled={arxivLookupLoading || !arxivQuery.trim() || busy}
-                  className="rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-gray-950 shadow transition-opacity hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {arxivLookupLoading ? <Spinner /> : "Look up"}
-                </button>
-              </form>
-              <p className="text-xs text-gray-500">
-                Accepts full URLs or bare IDs like{" "}
-                <span className="font-mono text-gray-400">2301.12345</span>.{" "}
-                {!linkedAuthorName && "We\u2019ll find the paper\u2019s authors so you can link your profile and import all your work."}
-              </p>
-
-              {/* Lookup error */}
-              {arxivLookupError && (
-                <p className="text-sm text-red-400">{arxivLookupError}</p>
-              )}
-
-              {/* Found paper banner */}
-              {arxivFoundPaper && (
-                <div className="flex items-start gap-2 rounded-lg border border-teal-500/25 bg-teal-500/10 px-3 py-2.5">
-                  <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <p className="text-xs text-teal-300 leading-relaxed">
-                    <span className="font-medium">Found:</span> {arxivFoundPaper.title}
-                    {arxivFoundPaper.year && (
-                      <span className="ml-1 text-teal-400/70">({arxivFoundPaper.year})</span>
-                    )}
+                  <p className="text-xs text-gray-400 font-mono break-all">{query.trim()}</p>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Citey will import all papers from this profile and cross-check other sources for additional coverage.
                   </p>
                 </div>
-              )}
 
-              {/* Merge confirmation */}
-              {arxivMergeConfirm && (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex flex-col gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-amber-300">Confirm profile merge</p>
-                    <p className="mt-1.5 text-xs text-amber-200/80 leading-relaxed">
-                      Your account is linked to{" "}
-                      <span className="font-semibold text-amber-200">{arxivMergeConfirm.existingAuthorName}</span>.
-                      Are you sure{" "}
-                      <span className="font-semibold text-amber-200">{arxivMergeConfirm.author.display_name}</span>{" "}
-                      is the same person? Their papers will be combined into your tracked list.
+                {importError && (
+                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                    {importError}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setPhase({ type: "input" }); setImportError(null); }}
+                    disabled={anyBusy}
+                    className="flex-1 rounded-lg border border-white/10 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 disabled:opacity-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={() => handleImport(phase.authorId, undefined, phase.source)}
+                    disabled={anyBusy}
+                    className="flex-1 rounded-lg bg-white py-2 text-sm font-semibold text-gray-950 shadow transition-opacity hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    {importingId ? (
+                      <span className="flex items-center justify-center gap-2"><Spinner /> Importing…</span>
+                    ) : (
+                      "Import all papers"
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── Author select (arXiv, DOI no-author, name search) ───── */}
+            {phase.type === "author-select" && (
+              <>
+                {/* Paper banner */}
+                {phase.paper && (
+                  <div className="flex items-start gap-2 rounded-lg border border-teal-500/25 bg-teal-500/10 px-3 py-2.5">
+                    <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <p className="text-xs text-teal-300 leading-relaxed">
+                      <span className="font-medium">Found:</span> {phase.paper.title}
+                      {phase.paper.year && (
+                        <span className="ml-1 text-teal-400/70">({phase.paper.year})</span>
+                      )}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setArxivMergeConfirm(null)}
-                      disabled={arxivImportingId !== null}
-                      className="flex-1 rounded-lg border border-white/10 py-2 text-xs font-medium text-gray-300 transition-colors hover:bg-white/5 disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => handleArxivImport(arxivMergeConfirm.author, true)}
-                      disabled={arxivImportingId !== null}
-                      className="flex-1 rounded-lg bg-amber-500/80 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                    >
-                      {arxivImportingId ? (
-                        <span className="flex items-center justify-center gap-1.5"><Spinner className="h-3 w-3" /> Merging…</span>
-                      ) : (
-                        "Yes, same person"
-                      )}
-                    </button>
+                )}
+
+                {importError && (
+                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                    {importError}
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Import error */}
-              {arxivImportError && (
-                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                  {arxivImportError}
-                </div>
-              )}
+                {phase.candidates.length > 0 ? (() => {
+                  const linkedMatch = linkedAuthorId
+                    ? phase.candidates.find(
+                        (a) => normalizeAuthorId(a.id) === normalizeAuthorId(linkedAuthorId)
+                      )
+                    : null;
 
-              {/* ── Author results ── */}
-              {arxivAuthors.length > 0 && (() => {
-                // Case A: user has a linked author AND they appear in this paper
-                if (linkedAuthorId && linkedMatch) {
+                  if (linkedMatch) {
+                    // Linked author found in this paper
+                    return (
+                      <>
+                        <p className="text-xs font-medium text-gray-500">
+                          Your linked author was found in this paper:
+                        </p>
+                        <AuthorCard author={linkedMatch} highlight anyBusy={anyBusy} />
+                        {linkedAuthorId && phase.resolvedDoi && (
+                          <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                            <p className="text-xs text-gray-400">
+                              <span className="font-medium text-gray-300">Just this paper?</span>{" "}
+                              You can{" "}
+                              <button
+                                onClick={() => handleFallback(phase.resolvedDoi!)}
+                                disabled={anyBusy}
+                                className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
+                              >
+                                {fallbackLoading ? "Adding…" : "add just this paper"}
+                              </button>{" "}
+                              without importing your full profile.
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    );
+                  }
+
+                  // Linked author not found, or no linked author
+                  const label = linkedAuthorId
+                    ? "All co-authors for this paper:"
+                    : phase.paper
+                      ? "Select which author is you to link your profile and import all your papers:"
+                      : "Select your profile to import all your papers:";
+
                   return (
                     <>
-                      <p className="text-xs font-medium text-gray-500">
-                        Your linked author was found in this paper:
-                      </p>
-                      <AuthorCard
-                        author={linkedMatch}
-                        highlight
-                        onImport={handleArxivImport}
-                        isImporting={arxivImportingId === linkedMatch.id}
-                        anyBusy={busy}
-                      />
-                      <FallbackPanel />
+                      {linkedAuthorId && !linkedMatch && (
+                        <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
+                          <p className="text-xs text-amber-300">
+                            <span className="font-medium">{linkedAuthorName}</span> was not found in this paper. They may publish under a different name.
+                          </p>
+                        </div>
+                      )}
+                      <p className="text-xs font-medium text-gray-500">{label}</p>
+                      {phase.candidates.map((author) => (
+                        <AuthorCard key={author.id} author={author} anyBusy={anyBusy} />
+                      ))}
+                      {phase.resolvedDoi && linkedAuthorId && (
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                          <p className="text-xs text-gray-400">
+                            <span className="font-medium text-gray-300">Just this paper?</span>{" "}
+                            You can{" "}
+                            <button
+                              onClick={() => handleFallback(phase.resolvedDoi!)}
+                              disabled={anyBusy}
+                              className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
+                            >
+                              {fallbackLoading ? "Adding…" : "add just this paper"}
+                            </button>{" "}
+                            without importing your full profile.
+                          </p>
+                        </div>
+                      )}
                     </>
                   );
-                }
-
-                // Case B: user has a linked author but they're NOT in this paper
-                if (linkedAuthorId && !linkedMatch) {
-                  return (
-                    <>
-                      <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
-                        <p className="text-xs text-amber-300">
-                          <span className="font-medium">{linkedAuthorName}</span> wasn&apos;t found
-                          in this paper&apos;s author list. They may publish under a different name.
+                })() : (
+                  phase.paper ? (
+                    linkedAuthorId ? (
+                      <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                        <p className="text-xs text-gray-400">
+                          No author profiles found for this paper. You can still{" "}
+                          <button
+                            onClick={() => handleFallback(phase.resolvedDoi!)}
+                            disabled={fallbackLoading}
+                            className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
+                          >
+                            {fallbackLoading ? "Adding…" : "add just this paper"}
+                          </button>{" "}
+                          to your tracked list.
                         </p>
                       </div>
-                      <p className="text-xs font-medium text-gray-500">All co-authors for this paper:</p>
-                      {arxivAuthors.map((author) => (
-                        <AuthorCard
-                          key={author.id}
-                          author={author}
-                          onImport={handleArxivImport}
-                          isImporting={arxivImportingId === author.id}
-                          anyBusy={busy}
-                        />
-                      ))}
-                      <FallbackPanel />
-                    </>
-                  );
-                }
+                    ) : (
+                      <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
+                        <p className="text-xs text-amber-300">
+                          No author profiles were found for this paper. Try pasting a DOI, or link your profile first via a paper you are listed on.
+                        </p>
+                      </div>
+                    )
+                  ) : (
+                    <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
+                      <p className="text-xs text-amber-300">
+                        No matching author profiles found. Try a different spelling or use a DOI or arXiv URL instead.
+                      </p>
+                    </div>
+                  )
+                )}
 
-                // Case C: no linked author yet — full pick-your-author flow
-                return (
-                  <>
-                    <p className="text-xs font-medium text-gray-500">
-                      Select which author is you to link your profile and import all your papers:
-                    </p>
-                    {arxivAuthors.map((author) => (
-                      <AuthorCard
-                        key={author.id}
-                        author={author}
-                        onImport={handleArxivImport}
-                        isImporting={arxivImportingId === author.id}
-                        anyBusy={busy}
-                      />
-                    ))}
-                    <FallbackPanel />
-                  </>
-                );
-              })()}
+                <button
+                  onClick={() => { setPhase({ type: "input" }); setImportError(null); }}
+                  disabled={anyBusy}
+                  className="self-start text-xs text-gray-500 transition-colors hover:text-gray-300 disabled:opacity-50"
+                >
+                  Back
+                </button>
+              </>
+            )}
 
-              {/* Edge case: paper found but no author profiles available */}
-              {arxivFoundPaper && arxivAuthors.length === 0 && !arxivLookupLoading && (
-                linkedAuthorId ? (
-                  <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
-                    <p className="text-xs text-gray-400">
-                      No author profiles were found for this paper. You can still{" "}
-                      <button
-                        onClick={handleArxivFallback}
-                        disabled={arxivFallbackLoading}
-                        className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
-                      >
-                        {arxivFallbackLoading ? "Adding…" : "add just this paper"}
-                      </button>{" "}
-                      to your tracked list.
+            {/* ── Author not found (DOI with linked author) ────────────── */}
+            {phase.type === "author-not-found" && (
+              <>
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                  <p className="text-sm font-semibold text-amber-300">Author not detected</p>
+                  <p className="mt-1.5 text-xs text-amber-200/80 leading-relaxed">
+                    Your linked profile{" "}
+                    <span className="font-semibold text-white">&ldquo;{phase.check.linkedAuthor}&rdquo;</span>{" "}
+                    does not appear in the author list for:
+                  </p>
+                  <p className="mt-2 text-xs font-semibold text-white/90 leading-snug">
+                    {phase.check.paperTitle || query}
+                  </p>
+                  {phase.check.paperAuthors.length > 0 && (
+                    <p className="mt-1.5 text-[11px] text-gray-500 leading-relaxed">
+                      Listed authors:{" "}
+                      {phase.check.paperAuthors.slice(0, 6).join(", ")}
+                      {phase.check.paperAuthors.length > 6 && <> +{phase.check.paperAuthors.length - 6} more</>}
                     </p>
+                  )}
+                  <p className="mt-2.5 text-xs text-amber-200/70 leading-relaxed">
+                    Some authors publish under different names. If this paper is yours, click &ldquo;Add anyway&rdquo;.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPhase({ type: "input" })}
+                    className="flex-1 rounded-lg border border-white/10 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setLoading(true);
+                      setError(null);
+                      try {
+                        const result = await addWorkChecked(query.trim(), true);
+                        if (result.status === "added") { onAdded(result.work); onClose(); }
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Failed to add work.");
+                        setPhase({ type: "input" });
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    disabled={loading}
+                    className="flex-1 rounded-lg bg-white py-2 text-sm font-semibold text-gray-950 shadow transition-opacity hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2"><Spinner /> Adding…</span>
+                    ) : (
+                      "Add anyway"
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── Merge confirm ────────────────────────────────────────── */}
+            {phase.type === "merge-confirm" && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex flex-col gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-amber-300">Confirm profile merge</p>
+                  <p className="mt-1.5 text-xs text-amber-200/80 leading-relaxed">
+                    Your account is linked to{" "}
+                    <span className="font-semibold text-amber-200">{phase.existingAuthorName}</span>.
+                    Are you sure{" "}
+                    <span className="font-semibold text-amber-200">{phase.author.display_name}</span>{" "}
+                    is the same person? Their papers will be combined into your tracked list.
+                  </p>
+                </div>
+                {importError && (
+                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                    {importError}
                   </div>
-                ) : (
-                  <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
-                    <p className="text-xs text-amber-300">
-                      No author profiles were found for this paper. Try searching by DOI instead,
-                      or link your author profile first via a paper you&apos;re listed on.
-                    </p>
-                  </div>
-                )
-              )}
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setPhase({ type: "input" }); setImportError(null); }}
+                    disabled={importingId !== null}
+                    className="flex-1 rounded-lg border border-white/10 py-2 text-xs font-medium text-gray-300 transition-colors hover:bg-white/5 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleImport(phase.author.id, phase.author.display_name, phase.author.source, true)}
+                    disabled={importingId !== null}
+                    className="flex-1 rounded-lg bg-amber-500/80 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    {importingId ? (
+                      <span className="flex items-center justify-center gap-1.5"><Spinner className="h-3 w-3" /> Merging…</span>
+                    ) : (
+                      "Yes, same person"
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
 
-            </div>
-          )}
-
+          </div>
         </div>
       </div>
     </div>

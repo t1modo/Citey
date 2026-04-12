@@ -205,6 +205,11 @@ export async function getAuthorsByPaperDoi(doi: string): Promise<PaperAuthorsRes
   return res.json();
 }
 
+export async function searchAuthors(name: string): Promise<AuthorCandidate[]> {
+  const res = await authFetch(`/works/author-search?query=${encodeURIComponent(name)}`);
+  return res.json();
+}
+
 export type ImportByAuthorResult =
   | { status: "imported"; imported: number; skipped: number }
   | { status: "merge_required"; existing_author_name: string };
@@ -212,7 +217,7 @@ export type ImportByAuthorResult =
 export async function importByAuthor(
   authorId: string,
   authorName?: string,
-  source: "openalex" | "semantic_scholar" = "openalex",
+  source: "openalex" | "semantic_scholar" | "inspire" | "dblp" = "openalex",
   confirmMerge = false
 ): Promise<ImportByAuthorResult> {
   const currentUser = auth.currentUser;
