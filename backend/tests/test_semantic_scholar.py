@@ -114,11 +114,13 @@ class TestNormalizeCitingWork:
         assert result["doi"] == "10.1234/s2test"
 
     def test_duplicate_affiliations_deduplicated(self) -> None:
+        # Use the full canonical name — bare "MIT" is not in the canonical map;
+        # _normalize_affiliation("Massachusetts Institute of Technology") → "MIT"
         raw = {
             **_FULL_S2_PAPER,
             "authors": [
-                {"authorId": "1", "name": "Alice", "affiliations": ["MIT"]},
-                {"authorId": "2", "name": "Bob", "affiliations": ["MIT"]},
+                {"authorId": "1", "name": "Alice", "affiliations": ["Massachusetts Institute of Technology"]},
+                {"authorId": "2", "name": "Bob", "affiliations": ["Massachusetts Institute of Technology"]},
             ],
         }
         result = normalize_citing_work(raw)
@@ -178,10 +180,10 @@ class TestNormalizeAffiliation:
         # Only country/city — no org keyword → should return None
         assert _normalize_affiliation("Beijing, China") is None
 
-    def test_unknown_university_returned_as_is(self) -> None:
-        result = _normalize_affiliation("University of Somewhere Special")
-        assert result is not None
-        assert len(result) > 0
+    def test_unknown_university_returns_none(self) -> None:
+        # Unrecognised institutions return None so the UI shows "Independent"
+        # rather than surfacing an unverified raw string as an affiliation pill.
+        assert _normalize_affiliation("University of Somewhere Special") is None
 
     def test_carnegie_mellon_canonicalized(self) -> None:
         assert _normalize_affiliation("Carnegie Mellon University") == "CMU"

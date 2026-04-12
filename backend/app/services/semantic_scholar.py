@@ -1522,12 +1522,10 @@ async def search_authors(query: str) -> list[dict]:
     }
 
     async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
-        try:
-            response = await client.get(url, params=params)
-        except httpx.RequestError as exc:
-            logger.error("S2 author search error for query %s: %s", query, exc)
-            return []
+        response = await _get_with_retry(client, url, params, context=f"author-search:{query}")
 
+    if response is None:
+        return []
     if response.status_code != 200:
         logger.warning("S2 author search status %s for query %s", response.status_code, query)
         return []
@@ -1576,15 +1574,14 @@ async def get_paper_with_authors(doi: str) -> dict | None:
 
     async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
         for candidate_id in candidates:
-            try:
-                response = await client.get(
-                    f"{_BASE_URL}/paper/{candidate_id}",
-                    params={"fields": _FIELDS},
-                )
-            except httpx.RequestError as exc:
-                logger.error("S2 paper lookup error for %s: %s", candidate_id, exc)
+            response = await _get_with_retry(
+                client,
+                f"{_BASE_URL}/paper/{candidate_id}",
+                {"fields": _FIELDS},
+                context=f"paper-authors:{candidate_id}",
+            )
+            if response is None:
                 continue
-
             if response.status_code == 200:
                 logger.info("S2: resolved paper %s via %s", doi, candidate_id)
                 result = response.json()
