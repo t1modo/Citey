@@ -262,7 +262,7 @@ export default function SettingsPage() {
               {/* Enable toggle */}
               <div className="flex items-center justify-between rounded-lg border border-white/10 bg-gray-800/50 px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-white">Email notifications</p>
+                  <p className="text-sm font-medium text-white">New Citation Alerts</p>
                   <p className="text-xs text-gray-400">
                     Receive an email each time a new citation is detected.
                   </p>
@@ -287,7 +287,7 @@ export default function SettingsPage() {
               {/* New publication alerts toggle */}
               <div className="flex items-center justify-between rounded-lg border border-white/10 bg-gray-800/50 px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-white">New publication alerts</p>
+                  <p className="text-sm font-medium text-white">New Publication Alerts</p>
                   <p className="text-xs text-gray-400">
                     Get notified when new papers from your author profile are auto-added.
                   </p>
