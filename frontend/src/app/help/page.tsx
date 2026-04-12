@@ -219,8 +219,8 @@ export default function HelpPage() {
             <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
               <div className="mb-1 flex items-center gap-2">
                 <span className="font-semibold text-white">OpenAlex</span>
-                <SourceBadge label="primary" />
-                <SourceBadge label="all fields" />
+                <SourceBadge label="Primary" />
+                <SourceBadge label="All Fields" />
               </div>
               <p className="text-xs text-gray-400">
                 ~250 million works. The primary source for author profiles and
@@ -231,8 +231,8 @@ export default function HelpPage() {
             <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
               <div className="mb-1 flex items-center gap-2">
                 <span className="font-semibold text-white">Semantic Scholar</span>
-                <SourceBadge label="primary" />
-                <SourceBadge label="CS · AI · bio" />
+                <SourceBadge label="Primary" />
+                <SourceBadge label="CS · AI · Bio" />
               </div>
               <p className="text-xs text-gray-400">
                 ~200 million works. Strong on CS, AI/ML, and biomedical
@@ -243,8 +243,8 @@ export default function HelpPage() {
             <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
               <div className="mb-1 flex items-center gap-2">
                 <span className="font-semibold text-white">PubMed</span>
-                <SourceBadge label="cross-source boost" />
-                <SourceBadge label="biomedical" />
+                <SourceBadge label="Cross-Source Boost" />
+                <SourceBadge label="Biomedical" />
               </div>
               <p className="text-xs text-gray-400">
                 35 million records from NCBI. Fills in clinical and life-science
@@ -256,8 +256,8 @@ export default function HelpPage() {
             <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
               <div className="mb-1 flex items-center gap-2">
                 <span className="font-semibold text-white">NASA ADS</span>
-                <SourceBadge label="cross-source boost" />
-                <SourceBadge label="astrophysics · space" />
+                <SourceBadge label="Cross-Source Boost" />
+                <SourceBadge label="Astrophysics · Space" />
               </div>
               <p className="text-xs text-gray-400">
                 Astrophysics Data System. Covers astronomy, astrophysics, and
@@ -269,8 +269,8 @@ export default function HelpPage() {
             <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
               <div className="mb-1 flex items-center gap-2">
                 <span className="font-semibold text-white">INSPIRE-HEP</span>
-                <SourceBadge label="cross-source boost" />
-                <SourceBadge label="HEP · accelerator · nuclear" />
+                <SourceBadge label="Cross-Source Boost" />
+                <SourceBadge label="HEP · Accelerator · Nuclear" />
               </div>
               <p className="text-xs text-gray-400">
                 The canonical database for high-energy physics, accelerator
@@ -283,7 +283,7 @@ export default function HelpPage() {
             <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
               <div className="mb-1 flex items-center gap-2">
                 <span className="font-semibold text-white">DBLP</span>
-                <SourceBadge label="cross-source boost" />
+                <SourceBadge label="Cross-Source Boost" />
                 <SourceBadge label="CS · ACM · IEEE" />
               </div>
               <p className="text-xs text-gray-400">
