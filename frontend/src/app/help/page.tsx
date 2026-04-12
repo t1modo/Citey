@@ -51,25 +51,39 @@ export default function HelpPage() {
         </p>
       </div>
 
-      {/* Jump links — 2 rows, centered */}
-      <nav className="mb-8 flex flex-wrap justify-center gap-2">
-        {[
-          ["what-is-citey", "What is Citey?"],
-          ["getting-started", "Getting Started"],
-          ["importing", "Importing Papers"],
-          ["sources", "Data Sources"],
-          ["notifications", "Notifications"],
-          ["settings", "Settings"],
-          ["faq-link", "FAQ"],
-        ].map(([id, label]) => (
-          <a
-            key={id}
-            href={`#${id}`}
-            className="rounded-full border border-white/10 px-3 py-1 text-xs font-medium text-gray-400 transition-colors hover:border-white/30 hover:text-white"
-          >
-            {label}
-          </a>
-        ))}
+      {/* Jump links — row 1: 4 items, row 2: 3 items, both centered */}
+      <nav className="mb-8 flex flex-col items-center gap-2">
+        <div className="flex flex-wrap justify-center gap-2">
+          {[
+            ["what-is-citey", "What is Citey?"],
+            ["getting-started", "Getting Started"],
+            ["importing", "Importing Papers"],
+            ["sources", "Data Sources"],
+          ].map(([id, label]) => (
+            <a
+              key={id}
+              href={`#${id}`}
+              className="rounded-full border border-white/10 px-3 py-1 text-xs font-medium text-gray-400 transition-colors hover:border-white/30 hover:text-white"
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+        <div className="flex flex-wrap justify-center gap-2">
+          {[
+            ["notifications", "Notifications"],
+            ["settings", "Settings"],
+            ["faq-link", "FAQ"],
+          ].map(([id, label]) => (
+            <a
+              key={id}
+              href={`#${id}`}
+              className="rounded-full border border-white/10 px-3 py-1 text-xs font-medium text-gray-400 transition-colors hover:border-white/30 hover:text-white"
+            >
+              {label}
+            </a>
+          ))}
+        </div>
       </nav>
 
       <div className="flex flex-col gap-6">
@@ -151,7 +165,6 @@ export default function HelpPage() {
               <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
                 <p className="mb-1 font-semibold text-white">
                   Author name{" "}
-                  <span className="ml-1 font-normal text-gray-500">(recommended for first import)</span>
                 </p>
                 <p className="text-xs text-gray-400">
                   Type your name and Citey searches{" "}
