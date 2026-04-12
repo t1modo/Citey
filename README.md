@@ -8,9 +8,11 @@ Get email notifications whenever one of your papers is cited by a new work.
 
 ## What it does
 
-Citey lets researchers track citations to their published papers. Add a paper by DOI, and Citey will notify you by email whenever a new citation is detected. Citation data is sourced from [OpenAlex](https://openalex.org), [Semantic Scholar](https://www.semanticscholar.org), and [Crossref](https://www.crossref.org), giving broad coverage across disciplines and publishers.
+Citey lets researchers track citations to their published papers. Add a paper by DOI, and Citey will notify you by email whenever a new citation is detected. Citation data is drawn from multiple sources — OpenAlex, Semantic Scholar, PubMed, NASA ADS, INSPIRE-HEP, and DBLP — giving broad coverage across disciplines, publishers, and conference proceedings.
 
-You can also bulk-import your entire publication list by searching for your author profile — by name (queried in parallel across OpenAlex and Semantic Scholar) or by entering a paper DOI to find co-authors. Citey handles duplicate detection and merge prompts if the same author appears under multiple profiles.
+You can bulk-import your entire publication list by author profile. Search by name (queried in parallel across OpenAlex and Semantic Scholar), enter a paper DOI to find co-authors, or paste a profile URL directly from INSPIRE-HEP or DBLP. After import, Citey cross-references all six sources to maximize coverage. Duplicate detection and merge prompts handle cases where the same author appears under multiple profiles.
+
+Citey also automatically discovers new publications from your linked author profile and adds them to your tracking list, so you don't have to add new papers manually.
 
 ---
 
@@ -40,16 +42,22 @@ You can also bulk-import your entire publication list by searching for your auth
 
 **[Resend](https://resend.com)** — Transactional email provider used to deliver citation notification emails and digest summaries. Emails are rendered from Jinja2 HTML templates and sent via the Resend Python SDK.
 
-**[APScheduler](https://apscheduler.readthedocs.io)** — In-process job scheduler that runs the citation check job on a recurring schedule, querying OpenAlex and Semantic Scholar for new citing papers.
-
-**[Render](https://render.com)** — Hosts the FastAPI backend as a web service. A separate Render Cron job hits the `/jobs/run` endpoint on a schedule to trigger citation checks without keeping the scheduler process alive indefinitely.
+**[Render](https://render.com)** — Hosts the FastAPI backend as a web service. A separate Render Cron job hits the `/jobs/run` endpoint on a schedule to trigger citation checks.
 
 ---
 
 ### Data Sources
 
-**[OpenAlex](https://openalex.org)** — Primary citation data source. An open, comprehensive index of scholarly works used to resolve DOIs to paper metadata and fetch lists of citing papers.
+**[OpenAlex](https://openalex.org)** — Primary citation data source. An open, comprehensive index of scholarly works used to resolve DOIs to paper metadata and fetch lists of citing papers. Also the primary source for author profile lookup and publication auto-sync.
 
-**[Crossref](https://www.crossref.org)** — Used for DOI resolution and metadata enrichment. Crossref maintains the canonical DOI registry for academic publishing, making it reliable for identifying and validating papers.
+**[Semantic Scholar](https://www.semanticscholar.org)** — Secondary citation source queried in parallel with OpenAlex to broaden coverage. Also powers paper-DOI author lookup and is included in parallel author name searches during bulk import.
 
-**[Semantic Scholar](https://www.semanticscholar.org)** — Secondary citation source used alongside OpenAlex to broaden coverage across disciplines. Also powers the paper-DOI author lookup (finding a paper's co-authors by DOI) and is queried in parallel with OpenAlex during author name searches for the bulk-import feature.
+**[Crossref](https://www.crossref.org)** — Used for DOI resolution and metadata enrichment. Serves as the first step in the DOI resolution fallback chain (Crossref → OpenAlex → DataCite).
+
+**[PubMed](https://pubmed.ncbi.nlm.nih.gov)** — NCBI's biomedical literature database. Queried during bulk import to supplement coverage for life-science and clinical papers.
+
+**[NASA ADS](https://ui.adsabs.harvard.edu)** — Astrophysics Data System for space science and astronomy papers. Requires a free personal API token; gracefully skipped if not configured.
+
+**[INSPIRE-HEP](https://inspirehep.net)** — High-energy physics literature database. Supports direct profile URL import and is queried during bulk import for physics and accelerator-science papers. No API key required.
+
+**[DBLP](https://dblp.org)** — Computer science bibliography covering ACM, IEEE, and major CS conference proceedings. Supports direct profile URL import. No API key required.
