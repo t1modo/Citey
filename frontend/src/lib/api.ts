@@ -12,6 +12,41 @@ import type {
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// Render free-tier instances spin down after inactivity. The first request(s)
+// after a cold start return a 502/503 while the service is booting. Retrying
+// automatically means users never need to click "Look up" more than once.
+const COLD_START_STATUSES = new Set([502, 503, 504]);
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1500;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, init);
+      if (COLD_START_STATUSES.has(res.status) && attempt < MAX_RETRIES) {
+        await sleep(RETRY_DELAY_MS);
+        continue;
+      }
+      return res;
+    } catch (err) {
+      if (attempt < MAX_RETRIES) {
+        await sleep(RETRY_DELAY_MS);
+        continue;
+      }
+      throw err;
+    }
+  }
+  // unreachable, but TypeScript needs a return path
+  throw new Error("Request failed after retries.");
+}
+
 async function authFetch(
   path: string,
   init: RequestInit = {}
@@ -29,7 +64,7 @@ async function authFetch(
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetchWithRetry(`${BASE_URL}${path}`, {
     ...init,
     headers,
   });
@@ -94,7 +129,7 @@ export async function addWorkChecked(
   if (!currentUser) throw new Error("Not authenticated");
   const idToken = await currentUser.getIdToken();
 
-  const res = await fetch(`${BASE_URL}/works`, {
+  const res = await fetchWithRetry(`${BASE_URL}/works`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${idToken}`,
@@ -224,7 +259,7 @@ export async function importByAuthor(
   if (!currentUser) throw new Error("Not authenticated");
   const idToken = await currentUser.getIdToken();
 
-  const res = await fetch(`${BASE_URL}/works/import`, {
+  const res = await fetchWithRetry(`${BASE_URL}/works/import`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${idToken}`,
