@@ -65,4 +65,5 @@ Coverage may differ from Google Scholar.
 ────────────────────────────────────────────────────────────────────────
 © {{ current_year | default('2025') }} {{ app_name }}  ·  {{ support_email }}
 Notification preferences:  {{ app_url }}/settings
-You are receiving this because you track citations on {{ app_name }}.
+{% if unsubscribe_url %}Unsubscribe from all emails:  {{ unsubscribe_url }}
+{% endif %}You are receiving this because you track citations on {{ app_name }}.

@@ -419,6 +419,7 @@ async def run_job_for_user(
                     total_citations=len(user_new_notifications),
                     digest_date=datetime.now(tz=timezone.utc),
                     settings=settings,
+                    uid=uid,
                 )
                 logger.info(
                     "Citation email sent to %s (uid=%s): %d new citation(s) across %d paper(s).",
@@ -764,6 +765,7 @@ async def send_daily_digest_for_all_users(
                 total_citations=len(recent),
                 digest_date=datetime.now(tz=timezone.utc),
                 settings=settings,
+                uid=uid,
             )
             users_emailed += 1
             total_citations_sent += len(recent)

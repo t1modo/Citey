@@ -171,6 +171,7 @@ async def sync_new_publications_for_user(
                     recipient_name=recipient_name,
                     new_titles=added_titles,
                     settings=settings,
+                    uid=uid,
                 )
             except Exception as exc:
                 logger.error(
