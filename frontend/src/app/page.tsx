@@ -12,15 +12,15 @@ import { useAuth } from "@/contexts/AuthContext";
 const features = [
   {
     icon: "🔗",
-    title: "DOI-based tracking",
+    title: "Flexible paper import",
     description:
-      "Add any paper using its Digital Object Identifier. Citey resolves metadata automatically, including title, authors, and year, from Crossref and OpenAlex.",
+      "Add papers by DOI, arXiv URL, or INSPIRE / DBLP author profile URL. You can also search by author name. Citey resolves full metadata automatically from Crossref, OpenAlex, and more.",
   },
   {
     icon: "🔍",
-    title: "Daily citation scans",
+    title: "Multi-source citation scans",
     description:
-      "Our automated job runs every day, scanning OpenAlex, Crossref, and Semantic Scholar for new citations to your papers.",
+      "Our automated job runs every day, cross-referencing OpenAlex, Semantic Scholar, Crossref, PubMed, INSPIRE-HEP, DBLP, and NASA ADS to surface every new citation to your work.",
   },
   {
     icon: "📧",
@@ -29,10 +29,10 @@ const features = [
       "The moment a new citation is detected you receive a rich email with the citing paper's title, authors, affiliations, and a direct link to the paper.",
   },
   {
-    icon: "📊",
-    title: "Citation dashboard",
+    icon: "👤",
+    title: "Author profile linking",
     description:
-      "View all your notifications in one place. See which papers are generating buzz and which ones are still waiting for their first citation.",
+      "Link your OpenAlex, INSPIRE-HEP, or DBLP author profile to auto-import your entire publication list. New papers you publish are added automatically and you are alerted right away.",
   },
   {
     icon: "🔒",
@@ -51,15 +51,15 @@ const steps = [
   },
   {
     step: 2,
-    title: "Add your published works by DOI",
+    title: "Add papers or link your author profile",
     description:
-      "Paste the DOI of any paper you have authored. Citey fetches the full metadata from Crossref and OpenAlex and stores the work in your personal library.",
+      "Paste a DOI, arXiv URL, or an INSPIRE / DBLP author profile URL — or just search by name. Linking your author profile auto-imports your full publication list and keeps it in sync as you publish new work.",
   },
   {
     step: 3,
-    title: "We scan citation databases daily",
+    title: "We scan seven citation databases daily",
     description:
-      "Every day, Citey queries OpenAlex, Crossref, and Semantic Scholar for papers that reference your tracked DOIs. New citations are recorded and you are notified immediately.",
+      "Every day, Citey queries OpenAlex, Semantic Scholar, Crossref, PubMed, INSPIRE-HEP, DBLP, and NASA ADS for papers that reference your tracked works. New citations are recorded and you are notified immediately.",
   },
   {
     step: 4,
@@ -246,18 +246,22 @@ export default function HomePage() {
           <div className="mt-8 border-t border-white/5 pt-8 text-center text-xs text-gray-600">
             <p>
               &copy; {new Date().getFullYear()} Citey. Built for researchers, by researchers.
+            </p>
+            <p className="mt-1.5">
               Citation data sourced from{" "}
-              <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">
-                OpenAlex
-              </a>
+              <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">OpenAlex</a>
               ,{" "}
-              <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">
-                Crossref
-              </a>
+              <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">Semantic Scholar</a>
+              ,{" "}
+              <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">Crossref</a>
+              ,{" "}
+              <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">PubMed</a>
+              ,{" "}
+              <a href="https://inspirehep.net" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">INSPIRE-HEP</a>
+              ,{" "}
+              <a href="https://dblp.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">DBLP</a>
               , and{" "}
-              <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">
-                Semantic Scholar
-              </a>
+              <a href="https://ui.adsabs.harvard.edu" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-300">NASA ADS</a>
               .
             </p>
           </div>
