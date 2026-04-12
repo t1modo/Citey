@@ -243,7 +243,7 @@
               {% block footer_extra %}{% endblock %}
               &copy; {{ current_year | default('2025') }} {{ app_name }}&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="mailto:{{ support_email }}">{{ support_email }}</a><br />
               <a href="{{ app_url }}/settings">Notification preferences</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="{{ app_url }}/dashboard">Dashboard</a><br />
-              You are receiving this because you track citations on {{ app_name }}.
+              {% if unsubscribe_url %}<a href="{{ unsubscribe_url }}">Unsubscribe from all emails</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;{% endif %}You are receiving this because you track citations on {{ app_name }}.
             </div>
 
           </div>

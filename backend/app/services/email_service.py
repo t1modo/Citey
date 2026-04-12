@@ -6,10 +6,13 @@ Templates are Jinja2 HTML and plain-text files located in
 """
 
 import asyncio
+import hashlib
+import hmac
 import logging
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
+from urllib.parse import urlencode
 
 import resend
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -28,6 +31,21 @@ async def _send(params: resend.Emails.SendParams) -> dict:
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, partial(resend.Emails.send, params))
     return result
+
+
+def make_unsubscribe_url(uid: str, settings: Settings) -> str:
+    """Return a signed, stateless one-click unsubscribe URL for *uid*.
+
+    The token is HMAC-SHA256(CRON_SECRET, "unsubscribe:<uid>"), so it is
+    valid as long as CRON_SECRET doesn't rotate.  No DB lookup is needed.
+    """
+    token = hmac.new(
+        key=settings.cron_secret.encode(),
+        msg=f"unsubscribe:{uid}".encode(),
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+    qs = urlencode({"uid": uid, "token": token})
+    return f"{settings.app_url}/unsubscribe?{qs}"
 
 
 def _get_jinja_env() -> Environment:
@@ -109,6 +127,7 @@ async def send_digest_email(
     total_citations: int,
     digest_date: datetime,
     settings: Settings,
+    uid: str = "",
 ) -> None:
     """
     Render and send the daily citation digest email.
@@ -140,6 +159,7 @@ async def send_digest_email(
         "total_papers": len(citation_groups),
         "digest_date": date_str,
         "current_year": digest_date.year,
+        "unsubscribe_url": make_unsubscribe_url(uid, settings) if uid else "",
     }
 
     html_template = env.get_template("digest.html")
@@ -246,6 +266,7 @@ async def send_new_publications_email(
     recipient_name: str,
     new_titles: list[str],
     settings: Settings,
+    uid: str = "",
 ) -> None:
     """
     Render and send the new-publications notification email.
@@ -273,6 +294,7 @@ async def send_new_publications_email(
         "new_titles": new_titles,
         "count": count,
         "current_year": datetime.now(tz=timezone.utc).year,
+        "unsubscribe_url": make_unsubscribe_url(uid, settings) if uid else "",
     }
 
     html_template = env.get_template("new_publications.html")

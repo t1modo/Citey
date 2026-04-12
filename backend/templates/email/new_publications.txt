@@ -29,6 +29,9 @@ View your full tracked paper list:
 
 Manage your notification preferences:
 {{ app_url }}/settings
-
+{% if unsubscribe_url %}
+Unsubscribe from all emails:
+{{ unsubscribe_url }}
+{% endif %}
 You're receiving this email because you have auto-sync enabled on {{ app_name }}.
 To stop receiving these emails, turn off "New publication alerts" in Settings.

@@ -257,6 +257,23 @@ export async function importByAuthor(
   return { status: "imported", ...data } as ImportByAuthorResult;
 }
 
+export async function unsubscribe(uid: string, token: string): Promise<{ message: string }> {
+  const res = await fetch(`${BASE_URL}/profile/unsubscribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uid, token }),
+  });
+
+  let data: Record<string, unknown> = {};
+  try { data = await res.json(); } catch { /* ignore */ }
+
+  if (!res.ok) {
+    const detail = data?.detail;
+    throw new Error(typeof detail === "string" ? detail : "Unsubscribe failed.");
+  }
+  return data as { message: string };
+}
+
 // Re-export type for consumers
 export type { AuthorCandidate };
 
