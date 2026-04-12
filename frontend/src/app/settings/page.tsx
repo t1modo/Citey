@@ -229,11 +229,19 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold text-white">Settings</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          Manage your notification preferences and tracked works.
-        </p>
+      <div className="mb-10 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Settings</h1>
+          <p className="mt-1 text-sm text-gray-400">
+            Manage your notification preferences and tracked works.
+          </p>
+        </div>
+        <a
+          href="/help"
+          className="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:border-white/30 hover:text-white"
+        >
+          Help guide
+        </a>
       </div>
 
       <div className="flex flex-col gap-6">

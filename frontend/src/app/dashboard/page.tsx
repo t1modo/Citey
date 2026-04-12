@@ -713,6 +713,12 @@ export default function DashboardPage() {
                 >
                   Import your papers
                 </button>
+                <a
+                  href="/help"
+                  className="mt-1 text-xs text-gray-500 underline decoration-dotted underline-offset-2 hover:text-gray-300 transition-colors"
+                >
+                  Need help? Read the guide
+                </a>
               </div>
             ) : (
               <>
