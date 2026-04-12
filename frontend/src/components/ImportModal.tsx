@@ -483,9 +483,24 @@ export default function ImportModal({
                       </p>
                     )}
                     {!detectedType && (
-                      <p className="mt-1.5 text-xs text-gray-500">
-                        Accepts DOIs, arXiv URLs, INSPIRE / DBLP author profile URLs, or an author name.
-                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-gray-600">Accepts</span>
+                        <span className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-medium text-sky-400">
+                          DOI
+                        </span>
+                        <span className="inline-flex items-center rounded-full border border-teal-500/25 bg-teal-500/10 px-2.5 py-0.5 text-[11px] font-medium text-teal-400">
+                          arXiv URL
+                        </span>
+                        <span className="inline-flex items-center rounded-full border border-purple-500/25 bg-purple-500/10 px-2.5 py-0.5 text-[11px] font-medium text-purple-400">
+                          INSPIRE profile
+                        </span>
+                        <span className="inline-flex items-center rounded-full border border-orange-500/25 bg-orange-500/10 px-2.5 py-0.5 text-[11px] font-medium text-orange-400">
+                          DBLP profile
+                        </span>
+                        <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-gray-400">
+                          author name
+                        </span>
+                      </div>
                     )}
                   </div>
 
