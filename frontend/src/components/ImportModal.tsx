@@ -216,21 +216,9 @@ export default function ImportModal({
 
     // ── DOI ────────────────────────────────────────────────────────────────
     if (inputType === "doi") {
-      // With a linked author: attempt direct add first
-      if (linkedAuthorId) {
-        setLoading(true);
-        try {
-          const result = await addWorkChecked(trimmed, false);
-          if (result.status === "added") { onAdded(result.work); onClose(); return; }
-          setPhase({ type: "author-not-found", check: result });
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to add work.");
-        } finally {
-          setLoading(false);
-        }
-        return;
-      }
-      // No linked author: look up co-authors first
+      // Always look up co-authors first so the user can import their full
+      // profile (same flow as arXiv). Only fall back to a direct add when
+      // no author database has this paper.
       setLoading(true);
       try {
         const result = await getAuthorsByPaperDoi(trimmed);
@@ -241,9 +229,10 @@ export default function ImportModal({
           resolvedDoi: trimmed,
         });
       } catch {
-        // S2 doesn't have this paper — fall through to direct add
+        // Paper not found in author databases — fall back to direct add.
+        // Skip the author-presence check only when there is no linked author.
         try {
-          const result = await addWorkChecked(trimmed, true);
+          const result = await addWorkChecked(trimmed, !linkedAuthorId);
           if (result.status === "added") { onAdded(result.work); onClose(); return; }
           setPhase({ type: "author-not-found", check: result });
         } catch (err2) {
