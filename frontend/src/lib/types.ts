@@ -79,7 +79,7 @@ export interface AuthorCandidate {
   h_index: number;
   affiliations: AuthorAffiliation[];
   topics: string[];
-  source: "openalex" | "semantic_scholar";
+  source: "openalex" | "semantic_scholar" | "inspire" | "dblp";
 }
 
 export interface PaperAuthorsResult {

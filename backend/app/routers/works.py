@@ -305,7 +305,7 @@ async def import_works_by_author(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> dict:
-    """Bulk-import all works by an OpenAlex author into the user's tracked works."""
+    """Bulk-import all works by an author (OpenAlex, S2, INSPIRE-HEP, or DBLP)."""
     from app.services import dblp as dblp_svc
     from app.services import inspire_hep as inspire_svc
     from app.services import nasa_ads as ads_svc
@@ -349,6 +349,10 @@ async def import_works_by_author(
 
     if body.source == "semantic_scholar":
         raw_works = await s2_svc.get_works_by_author(body.author_id)
+    elif body.source == "inspire":
+        raw_works = await inspire_svc.get_works_by_author(body.author_id)
+    elif body.source == "dblp":
+        raw_works = await dblp_svc.get_works_by_author(body.author_id)
     else:
         raw_works = await openalex_svc.get_works_by_author(body.author_id)
 
@@ -553,7 +557,7 @@ async def import_works_by_author(
     # the only automated path for papers from those venues.
     # Uses a two-step author-search → works-by-id pattern (more precise than
     # a bare name search against the literature index).
-    if author_display_name:
+    if author_display_name and body.source != "inspire":
         current_dois_inspire: set[str] = set()
         for r in raw_works:
             d = _strip_doi(r.get("doi"))
@@ -590,7 +594,7 @@ async def import_works_by_author(
     # Uses a two-step author-search (returns PID) → publication-search pattern
     # so results are scoped to exactly one person, not a name-based full-text
     # match that would flood the results with same-name researchers.
-    if author_display_name:
+    if author_display_name and body.source != "dblp":
         current_dois_dblp: set[str] = set()
         for r in raw_works:
             d = _strip_doi(r.get("doi"))

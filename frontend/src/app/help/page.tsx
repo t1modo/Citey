@@ -51,8 +51,8 @@ export default function HelpPage() {
         </p>
       </div>
 
-      {/* Jump links */}
-      <nav className="mb-8 flex flex-wrap gap-2">
+      {/* Jump links — 2 rows, centered */}
+      <nav className="mb-8 flex flex-wrap justify-center gap-2">
         {[
           ["what-is-citey", "What is Citey?"],
           ["getting-started", "Getting Started"],
@@ -90,22 +90,21 @@ export default function HelpPage() {
         <Section id="getting-started" title="Getting Started">
           <div className="flex flex-col gap-3">
             <Step n={1}>
-              <strong className="text-white">Create an account</strong> — sign
-              up with your email on the{" "}
+              <strong className="text-white">Create an account</strong>{" "}
+              by signing up with your email on the{" "}
               <Link href="/signup" className="text-gray-300 underline hover:text-white">
                 Sign In
               </Link>{" "}
               page.
             </Step>
             <Step n={2}>
-              <strong className="text-white">Link your author profile</strong>{" "}
-              — from the{" "}
+              <strong className="text-white">Import your papers</strong>{" "}
+              from the{" "}
               <Link href="/dashboard" className="text-gray-300 underline hover:text-white">
                 Dashboard
               </Link>
-              , click <Pill>Add Papers</Pill> then use the{" "}
-              <Pill>By Author</Pill> or <Pill>arXiv Link</Pill> tab to find and
-              import all your papers at once.
+              . Click <Pill>Add Papers</Pill> and paste a DOI, arXiv URL,
+              author profile URL, or your name. Citey handles the rest.
             </Step>
             <Step n={3}>
               Citey will check for new citations automatically and email you
@@ -116,66 +115,82 @@ export default function HelpPage() {
 
         {/* Importing Papers */}
         <Section id="importing" title="Importing Papers">
-          <div className="flex flex-col gap-5">
-            {/* By Author */}
-            <div>
-              <p className="mb-1.5 font-semibold text-white">
-                By Author name{" "}
-                <span className="ml-1 font-normal text-gray-500">— recommended</span>
-              </p>
-              <p className="mb-2">
-                Search your name in the <Pill>By Author</Pill> tab. Citey
-                searches <strong className="text-white">OpenAlex</strong> and{" "}
-                <strong className="text-white">Semantic Scholar</strong> in
-                parallel and shows matching author profiles with affiliation and
-                h-index to help you identify the right one. Select yours — all
-                your papers are imported in one step.
-              </p>
-              <p className="text-xs text-gray-500">
-                After import, Citey automatically cross-checks{" "}
-                <strong className="text-gray-400">PubMed</strong>,{" "}
-                <strong className="text-gray-400">NASA ADS</strong>,{" "}
-                <strong className="text-gray-400">INSPIRE-HEP</strong>, and{" "}
-                <strong className="text-gray-400">DBLP</strong> for any
-                additional papers the primary source may have missed.
-              </p>
-            </div>
+          <div className="flex flex-col gap-4">
+            <p>
+              Click <Pill>Add Papers</Pill> on the Dashboard and paste anything
+              into the single input field. Citey auto-detects what you pasted
+              and handles the lookup.
+            </p>
 
-            <div className="border-t border-white/10" />
+            <div className="flex flex-col gap-2.5">
+              {/* arXiv */}
+              <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                <p className="mb-1 font-semibold text-white">arXiv URL or paper ID</p>
+                <p className="text-xs text-gray-400">
+                  Paste a full URL (e.g.{" "}
+                  <Pill>https://arxiv.org/abs/2310.06825</Pill>) or a bare ID
+                  like <Pill>2310.06825</Pill>. Citey looks up the paper on
+                  Semantic Scholar and shows the author list so you can select
+                  yourself and import all your papers.
+                </p>
+              </div>
 
-            {/* By arXiv */}
-            <div>
-              <p className="mb-1.5 font-semibold text-white">By arXiv link</p>
-              <p>
-                Paste an arXiv URL (e.g.{" "}
-                <Pill>https://arxiv.org/abs/2310.06825</Pill>) into the{" "}
-                <Pill>arXiv Link</Pill> tab. Citey looks up the paper on
-                Semantic Scholar and shows you the author list — select
-                yourself to import all papers by that author profile.
-              </p>
-            </div>
+              {/* DOI */}
+              <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                <p className="mb-1 font-semibold text-white">DOI or doi.org URL</p>
+                <p className="text-xs text-gray-400">
+                  Paste a bare DOI (e.g.{" "}
+                  <Pill>10.48550/arXiv.2310.06825</Pill>) or a full{" "}
+                  <Pill>https://doi.org/…</Pill> link. If your author profile is
+                  already linked, the paper is added immediately. Otherwise Citey
+                  shows the author list so you can link your profile first.
+                </p>
+              </div>
 
-            <div className="border-t border-white/10" />
+              {/* Author name */}
+              <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                <p className="mb-1 font-semibold text-white">
+                  Author name{" "}
+                  <span className="ml-1 font-normal text-gray-500">(recommended for first import)</span>
+                </p>
+                <p className="text-xs text-gray-400">
+                  Type your name and Citey searches{" "}
+                  <strong className="text-gray-300">OpenAlex</strong> and{" "}
+                  <strong className="text-gray-300">Semantic Scholar</strong> in
+                  parallel, showing matching profiles with affiliation and h-index.
+                  Select yours to import all your papers in one step.
+                </p>
+                <p className="mt-1.5 text-xs text-gray-500">
+                  After import, Citey automatically cross-checks{" "}
+                  <strong className="text-gray-400">PubMed</strong>,{" "}
+                  <strong className="text-gray-400">NASA ADS</strong>,{" "}
+                  <strong className="text-gray-400">INSPIRE-HEP</strong>, and{" "}
+                  <strong className="text-gray-400">DBLP</strong> for any
+                  additional papers the primary source may have missed.
+                </p>
+              </div>
 
-            {/* By DOI */}
-            <div>
-              <p className="mb-1.5 font-semibold text-white">By DOI</p>
-              <p className="mb-2">
-                Paste any DOI (e.g.{" "}
-                <Pill>10.48550/arXiv.2310.06825</Pill>) into the{" "}
-                <Pill>DOI</Pill> tab to add a single paper directly.
-              </p>
-              <ul className="list-disc space-y-1 pl-4 text-xs text-gray-500">
-                <li>
-                  If your author profile is already linked, Citey verifies you
-                  are listed as an author before adding the paper.
-                </li>
-                <li>
-                  If no profile is linked yet, Citey looks up the paper&apos;s
-                  authors on Semantic Scholar and lets you pick yours — then
-                  imports all papers by that author.
-                </li>
-              </ul>
+              {/* INSPIRE */}
+              <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                <p className="mb-1 font-semibold text-white">INSPIRE-HEP author profile URL</p>
+                <p className="text-xs text-gray-400">
+                  Paste your profile URL (e.g.{" "}
+                  <Pill>https://inspirehep.net/authors/1234567</Pill>). Citey
+                  imports all papers from that INSPIRE profile directly, including
+                  JACoW conference proceedings that other databases miss.
+                </p>
+              </div>
+
+              {/* DBLP */}
+              <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                <p className="mb-1 font-semibold text-white">DBLP author profile URL</p>
+                <p className="text-xs text-gray-400">
+                  Paste your DBLP profile URL (e.g.{" "}
+                  <Pill>https://dblp.org/pid/12/3456</Pill>). Citey imports all
+                  papers associated with that DBLP author entry, which has
+                  near-complete ACM and IEEE conference coverage.
+                </p>
+              </div>
             </div>
           </div>
         </Section>
@@ -184,11 +199,10 @@ export default function HelpPage() {
         <Section id="sources" title="Data Sources">
           <p className="mb-4">
             Citey uses the following databases when importing and checking for
-            new citations. Each source is queried automatically — you don&apos;t
+            new citations. Each source is queried automatically; you do not
             need to choose.
           </p>
           <div className="flex flex-col gap-3">
-            {/* Row */}
             <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
               <div className="mb-1 flex items-center gap-2">
                 <span className="font-semibold text-white">OpenAlex</span>
@@ -234,8 +248,8 @@ export default function HelpPage() {
               </div>
               <p className="text-xs text-gray-400">
                 Astrophysics Data System. Covers astronomy, astrophysics, and
-                space-science literature — a major gap in OpenAlex and S2.
-                Requires an ADS API key configured on the server.
+                space-science literature. Requires an ADS API key configured on
+                the server.
               </p>
             </div>
 
@@ -269,8 +283,8 @@ export default function HelpPage() {
           </div>
 
           <p className="mt-4 text-xs text-gray-500">
-            <strong className="text-gray-400">Coverage note —</strong> all
-            cross-source boosts apply automatically on every import. More
+            <strong className="text-gray-400">Coverage note:</strong>{" "}
+            all cross-source boosts apply automatically on every import. More
             sources are planned.
           </p>
         </Section>
@@ -284,22 +298,22 @@ export default function HelpPage() {
             </p>
             <ul className="list-disc space-y-1.5 pl-5 text-gray-400">
               <li>
-                <span className="text-gray-300">New citation emails</span> —
-                toggle in{" "}
+                <span className="text-gray-300">New citation emails</span>{" "}
+                can be toggled in{" "}
                 <Link href="/settings" className="text-gray-300 underline hover:text-white">
                   Settings
                 </Link>{" "}
-                → Notification Preferences.
+                under Notification Preferences.
               </li>
               <li>
                 <span className="text-gray-300">New publication alerts</span>{" "}
-                — get notified when a new paper from your author profile is
+                notify you when a new paper from your author profile is
                 auto-added to your tracked list.
               </li>
               <li>
-                <span className="text-gray-300">Notification email</span> — by
-                default, alerts go to your account email. You can set a
-                different address in Settings.
+                <span className="text-gray-300">Notification email</span>{" "}
+                defaults to your account email. You can set a different address
+                in Settings.
               </li>
             </ul>
           </div>
@@ -313,20 +327,20 @@ export default function HelpPage() {
             </p>
             <ul className="list-disc space-y-1.5 pl-5 text-gray-400">
               <li>
-                <span className="text-gray-300">Notification email</span> —
-                override the address that receives alerts.
+                <span className="text-gray-300">Notification email</span>{" "}
+                overrides the address that receives alerts.
               </li>
               <li>
-                <span className="text-gray-300">Google Scholar URL</span> —
-                store a link to your Scholar profile (display only, never
+                <span className="text-gray-300">Google Scholar URL</span>{" "}
+                stores a link to your Scholar profile (display only, never
                 scraped).
               </li>
               <li>
-                <span className="text-gray-300">Tracked Works</span> — review
-                and remove individual papers from your list.
+                <span className="text-gray-300">Tracked Works</span>{" "}
+                lets you review and remove individual papers from your list.
               </li>
               <li>
-                <span className="text-gray-300">Change linked author</span> —
+                <span className="text-gray-300">Change linked author</span>{" "}
                 resets your entire library and lets you re-link a different
                 author profile.
               </li>
