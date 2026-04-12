@@ -11,6 +11,7 @@ const navLinks = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Settings",  href: "/settings" },
   { label: "FAQ",       href: "/faq" },
+  { label: "Help",      href: "/help" },
 ];
 
 export default function Nav() {
