@@ -23,28 +23,8 @@ def _name_tokens(name: str) -> list[str]:
     return [t for t in re.sub(r"[^a-z\s]", "", name.lower().replace(".", " ").replace("-", " ")).split() if t]
 
 
-def _names_match(a: str, b: str) -> bool:
-    """
-    Fuzzy name match that tolerates:
-      - Case differences
-      - Middle name omission: "Timothy Do" matches "Timothy Khang Do"
-      - First initials: "T. Do" matches "Timothy Do"
-      - Reversed order is NOT allowed — last name must match last name.
-    """
-    a_tok = _name_tokens(a)
-    b_tok = _name_tokens(b)
-    if not a_tok or not b_tok:
-        return False
-    if a_tok == b_tok:
-        return True
-    # Last token (family name) must match exactly.
-    if a_tok[-1] != b_tok[-1]:
-        return False
-    # Compare given-name tokens: take the shorter list and try to match
-    # each token against tokens in the longer list in order, allowing
-    # a single-char token to match any longer token that starts with it.
-    short_given = a_tok[:-1] if len(a_tok) <= len(b_tok) else b_tok[:-1]
-    long_given = a_tok[:-1] if len(a_tok) > len(b_tok) else b_tok[:-1]
+def _given_names_match(short_given: list[str], long_given: list[str]) -> bool:
+    """Match given-name token lists, allowing initial abbreviations and middle-name omission."""
     if not short_given:
         return True  # Only family name — accept.
     si = 0
@@ -55,6 +35,41 @@ def _names_match(a: str, b: str) -> bool:
         if s == token or (len(s) == 1 and token.startswith(s)) or (len(token) == 1 and s.startswith(token)):
             si += 1
     return si == len(short_given)
+
+
+def _names_match(a: str, b: str) -> bool:
+    """
+    Fuzzy name match that tolerates:
+      - Case differences
+      - Middle name omission: "Timothy Do" matches "Timothy Khang Do"
+      - First initials: "T. Do" matches "Timothy Do"
+      - Compound surnames: "Yann LeCun" matches "Yann Le Cun"
+      - Reversed order is NOT allowed — last name must match last name.
+    """
+    a_tok = _name_tokens(a)
+    b_tok = _name_tokens(b)
+    if not a_tok or not b_tok:
+        return False
+    if a_tok == b_tok:
+        return True
+    # Standard case: last token is the family name and must match exactly.
+    if a_tok[-1] == b_tok[-1]:
+        short_given = a_tok[:-1] if len(a_tok) <= len(b_tok) else b_tok[:-1]
+        long_given = a_tok[:-1] if len(a_tok) > len(b_tok) else b_tok[:-1]
+        return _given_names_match(short_given, long_given)
+    # Compound-surname fallback: last 2 tokens of one name concatenate to match
+    # the last token of the other (e.g. "Le"+"Cun" == "lecun").
+    if len(a_tok) >= 2 and "".join(a_tok[-2:]) == b_tok[-1]:
+        a_given, b_given = a_tok[:-2], b_tok[:-1]
+        short_given = a_given if len(a_given) <= len(b_given) else b_given
+        long_given = a_given if len(a_given) > len(b_given) else b_given
+        return _given_names_match(short_given, long_given)
+    if len(b_tok) >= 2 and "".join(b_tok[-2:]) == a_tok[-1]:
+        b_given, a_given = b_tok[:-2], a_tok[:-1]
+        short_given = a_given if len(a_given) <= len(b_given) else b_given
+        long_given = a_given if len(a_given) > len(b_given) else b_given
+        return _given_names_match(short_given, long_given)
+    return False
 
 
 def _author_in_paper(paper_authors: list[str], names_to_check: list[str]) -> bool:

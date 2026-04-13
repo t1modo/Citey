@@ -208,9 +208,11 @@ async def search_authors(name: str) -> list[dict]:
         if not display_name:
             continue
         paper_count = (meta.get("stats") or {}).get("number_of_papers", 0)
+        # Use the raw "Last, First" name as the authorId — this is the form
+        # that INSPIRE's literature `a` query accepts directly.
         candidates.append({
             "name": display_name,
-            "authorId": str(hit_item.get("id", "")),
+            "authorId": raw_name,
             "paperCount": paper_count,
         })
 
