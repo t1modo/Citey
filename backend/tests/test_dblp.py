@@ -141,7 +141,7 @@ async def test_search_authors_returns_candidates() -> None:
     result = await search_authors("DBLP Author AA1")
     assert len(result) == 1
     assert result[0]["name"] == "Timothy Do"
-    assert result[0]["authorId"] == "12/3456"
+    assert result[0]["authorId"] == "Timothy Do"
 
 
 @respx.mock

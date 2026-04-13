@@ -133,8 +133,9 @@ async def test_search_authors_returns_candidates() -> None:
     )
     result = await search_authors("Inspire Author AA1")
     assert len(result) == 1
-    assert result[0]["authorId"] == "1111111"
-    # Name should be in First Last form for _names_match compatibility
+    # authorId is the raw "Last, First" name — used directly in INSPIRE `a` queries
+    assert result[0]["authorId"] == "Do, Timothy"
+    # name should be in First Last form for _names_match compatibility
     assert result[0]["name"] == "Timothy Do"
     assert result[0]["paperCount"] == 8
 

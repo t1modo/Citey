@@ -193,8 +193,9 @@ async def search_authors(name: str) -> list[dict]:
         profile_url = (info.get("url") or "").strip()
         if not display_name or not profile_url:
             continue
-        pid = _extract_pid(profile_url)
-        candidates.append({"name": display_name, "authorId": pid})
+        # Use the display name as authorId — DBLP's publication search API
+        # is keyword-based (author:name), so the name is more reliable than the PID.
+        candidates.append({"name": display_name, "authorId": display_name})
 
     await _author_search_cache.set(cache_key, candidates)
     return candidates
