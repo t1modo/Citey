@@ -33,19 +33,36 @@ async def _send(params: resend.Emails.SendParams) -> dict:
     return result
 
 
-def make_unsubscribe_url(uid: str, settings: Settings) -> str:
-    """Return a signed, stateless one-click unsubscribe URL for *uid*.
-
-    The token is HMAC-SHA256(CRON_SECRET, "unsubscribe:<uid>"), so it is
-    valid as long as CRON_SECRET doesn't rotate.  No DB lookup is needed.
-    """
-    token = hmac.new(
+def _make_signed_token(purpose: str, uid: str, settings: Settings) -> str:
+    """Return an HMAC-SHA256 hex token for the given purpose + uid pair."""
+    return hmac.new(
         key=settings.cron_secret.encode(),
-        msg=f"unsubscribe:{uid}".encode(),
+        msg=f"{purpose}:{uid}".encode(),
         digestmod=hashlib.sha256,
     ).hexdigest()
+
+
+def verify_signed_token(purpose: str, uid: str, token: str, settings: Settings) -> bool:
+    """Return True if *token* is the valid HMAC for *purpose* + *uid*."""
+    expected = _make_signed_token(purpose, uid, settings)
+    return hmac.compare_digest(expected, token)
+
+
+def make_unsubscribe_url(uid: str, settings: Settings) -> str:
+    """Return a signed, stateless one-click unsubscribe URL for *uid*."""
+    token = _make_signed_token("unsubscribe", uid, settings)
     qs = urlencode({"uid": uid, "token": token})
     return f"{settings.app_url}/unsubscribe?{qs}"
+
+
+def make_rss_url(uid: str, api_base_url: str, settings: Settings) -> str:
+    """Return a signed, shareable RSS/Atom feed URL for *uid*.
+
+    *api_base_url* should be the backend's base URL (e.g. from ``request.base_url``),
+    so the link is correct in both local dev and production.
+    """
+    token = _make_signed_token("rss", uid, settings)
+    return f"{api_base_url.rstrip('/')}/rss/{uid}?token={token}"
 
 
 def _get_jinja_env() -> Environment:
