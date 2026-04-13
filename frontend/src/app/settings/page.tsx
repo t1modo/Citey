@@ -10,6 +10,7 @@ import {
   deleteWork,
   deleteAccount,
   unlinkAuthor,
+  getRssUrl,
 } from "@/lib/api";
 import type { UserProfile, TrackedWork } from "@/lib/types";
 
@@ -82,6 +83,12 @@ export default function SettingsPage() {
   const [unlinkPending, setUnlinkPending] = useState(false);
   const [unlinkLoading, setUnlinkLoading] = useState(false);
   const [unlinkError, setUnlinkError] = useState<string | null>(null);
+
+  // RSS feed state
+  const [rssUrl, setRssUrl] = useState<string | null>(null);
+  const [rssLoading, setRssLoading] = useState(false);
+  const [rssError, setRssError] = useState<string | null>(null);
+  const [rssCopied, setRssCopied] = useState(false);
 
   // Account deletion state
   const [deleteAccountPending, setDeleteAccountPending] = useState(false);
@@ -184,8 +191,8 @@ export default function SettingsPage() {
     try {
       await deleteWork(workId);
       setWorks((prev) => prev.filter((w) => w.id !== workId));
-    } catch {
-      // ignore — could add toast here
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to remove work.");
     } finally {
       setRemovingIds((prev) => {
         const next = new Set(prev);
@@ -510,6 +517,77 @@ export default function SettingsPage() {
               </table>
             </div>
           )}
+        </SectionCard>
+
+        {/* ─── RSS Feed ───────────────────────────────────────────── */}
+        <SectionCard
+          title="RSS Feed"
+          description="Subscribe to your citation alerts in any RSS reader — Feedly, Slack, Zapier, and more."
+        >
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-gray-400">
+              Your feed URL is private and signed. Anyone with it can read your citation alerts,
+              so treat it like a password.
+            </p>
+
+            {rssError && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                {rssError}
+              </div>
+            )}
+
+            {!rssUrl ? (
+              <button
+                onClick={async () => {
+                  setRssLoading(true);
+                  setRssError(null);
+                  try {
+                    const url = await getRssUrl();
+                    setRssUrl(url);
+                  } catch (err) {
+                    setRssError(err instanceof Error ? err.message : "Failed to generate RSS URL.");
+                  } finally {
+                    setRssLoading(false);
+                  }
+                }}
+                disabled={rssLoading}
+                className="flex w-fit items-center gap-2 rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:border-white/20 hover:text-white disabled:opacity-50"
+              >
+                {rssLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7M6 17a1 1 0 110 2 1 1 0 010-2z" />
+                  </svg>
+                )}
+                {rssLoading ? "Generating…" : "Get RSS Feed URL"}
+              </button>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={rssUrl}
+                    className="flex-1 rounded-lg border border-white/10 bg-gray-900 px-3 py-2 font-mono text-xs text-gray-300 outline-none select-all"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(rssUrl);
+                      setRssCopied(true);
+                      setTimeout(() => setRssCopied(false), 2000);
+                    }}
+                    className="shrink-0 rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-xs font-medium text-gray-300 transition-colors hover:border-white/20 hover:text-white"
+                  >
+                    {rssCopied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Paste this URL into any RSS reader to receive new citation alerts.
+                </p>
+              </div>
+            )}
+          </div>
         </SectionCard>
 
         {/* ─── Danger Zone ────────────────────────────────────────── */}
