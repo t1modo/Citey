@@ -25,6 +25,9 @@ export interface TrackedWork {
   title: string | null;
   authors: string[];
   year: number | null;
+  venue: string | null;
+  work_type: string | null;
+  topics: string[];
   last_checked_at: string | null;
   added_at: string | null;
   citation_count: number;

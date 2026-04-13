@@ -11,6 +11,7 @@ import {
   runJob,
   getNotifications,
   pruneNotifications,
+  downloadBibtex,
 } from "@/lib/api";
 import type { TrackedWork, Notification } from "@/lib/types";
 
@@ -345,6 +346,7 @@ export default function DashboardPage() {
   const [worksPage, setWorksPage] = useState(1);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [jobRunning, setJobRunning] = useState(false);
+  const [exportingBibtex, setExportingBibtex] = useState(false);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [cooldownSecsLeft, setCooldownSecsLeft] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -481,6 +483,17 @@ export default function DashboardPage() {
       }
     } finally {
       setJobRunning(false);
+    }
+  };
+
+  const handleExportBibtex = async () => {
+    setExportingBibtex(true);
+    try {
+      await downloadBibtex();
+    } catch {
+      addToast("Failed to export citations. Please try again.", "error");
+    } finally {
+      setExportingBibtex(false);
     }
   };
 
@@ -787,6 +800,19 @@ export default function DashboardPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                {citationTotal > 0 && (
+                  <button
+                    onClick={handleExportBibtex}
+                    disabled={exportingBibtex}
+                    className="flex items-center gap-1 text-xs font-medium text-gray-500 transition-colors hover:text-gray-300 disabled:opacity-40"
+                    title="Download all citations as BibTeX"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    {exportingBibtex ? "Exporting…" : ".bib"}
+                  </button>
+                )}
                 {unreadCount > 0 && (
                   <button
                     onClick={markAllSeen}

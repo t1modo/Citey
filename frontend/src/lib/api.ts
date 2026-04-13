@@ -204,6 +204,26 @@ export async function pruneNotifications(): Promise<{ deleted: number }> {
   return res.json();
 }
 
+export async function downloadBibtex(): Promise<void> {
+  const res = await authFetch("/notifications/export.bib");
+  const text = await res.text();
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "citey-citations.bib";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function getRssUrl(): Promise<string> {
+  const res = await authFetch("/rss/url");
+  const data = await res.json();
+  return data.url as string;
+}
+
 export async function runJob(dryRun: boolean = false): Promise<{ message: string }> {
   const res = await authFetch("/jobs/run", {
     method: "POST",
