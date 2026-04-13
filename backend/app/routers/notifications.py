@@ -1,9 +1,11 @@
 import logging
 import math
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import PlainTextResponse
 
 from app.deps import get_current_user
 from app.firebase_client import get_db
@@ -108,6 +110,64 @@ async def list_notifications(
         page=page,
         limit=limit,
         pages=pages,
+    )
+
+
+def _notification_to_bibtex(n: Notification) -> str:
+    """Convert a single Notification to a BibTeX @misc entry."""
+    if n.citing_work_doi:
+        key = re.sub(r"[^a-zA-Z0-9]", "_", n.citing_work_doi)[:50]
+    else:
+        key = f"citey_{re.sub(r'[^a-zA-Z0-9]', '_', n.id)[:30]}"
+
+    authors = " and ".join(n.citing_authors) if n.citing_authors else "Unknown"
+    title = (n.citing_work_title or "Untitled").replace("{", "\\{").replace("}", "\\}")
+    cited = (n.cited_work_title or n.cited_work_id).replace("{", "\\{").replace("}", "\\}")
+
+    lines = [f"@misc{{{key},"]
+    lines.append(f"  author       = {{{{{authors}}}}},")
+    lines.append(f"  title        = {{{{{title}}}}},")
+    if n.citing_year:
+        lines.append(f"  year         = {{{n.citing_year}}},")
+    if n.citing_work_doi:
+        lines.append(f"  doi          = {{{n.citing_work_doi}}},")
+        lines.append(f"  howpublished = {{\\url{{https://doi.org/{n.citing_work_doi}}}}},")
+    elif n.citing_work_url:
+        lines.append(f"  howpublished = {{\\url{{{n.citing_work_url}}}}},")
+    lines.append(f"  note         = {{Cites: {cited}}},")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+@router.get("/export.bib", response_class=PlainTextResponse)
+async def export_bibtex(
+    uid: str = Depends(get_current_user),
+    db: Any = Depends(get_db),
+) -> PlainTextResponse:
+    """
+    Export all of the authenticated user's citation notifications as a BibTeX
+    file.  Unlike the paginated list endpoint this returns the full history
+    (no 30-day window) so researchers can build a complete reference list.
+    """
+    docs = (
+        db.collection("users")
+        .document(uid)
+        .collection("notifications")
+        .stream()
+    )
+    notifications = [_doc_to_notification(doc.id, doc.to_dict() or {}) for doc in docs]
+    notifications.sort(key=lambda n: n.created_at or _EPOCH, reverse=True)
+
+    if not notifications:
+        body = "% No citation notifications found.\n"
+    else:
+        header = f"% Citey citation export — {len(notifications)} citing paper(s)\n\n"
+        body = header + "\n\n".join(_notification_to_bibtex(n) for n in notifications) + "\n"
+
+    return PlainTextResponse(
+        content=body,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="citey-citations.bib"'},
     )
 
 
