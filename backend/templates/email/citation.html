@@ -7,83 +7,77 @@ You have {{ notification_count }} new citation{% if notification_count != 1 %}s{
 {% endblock %}
 
 {% block body_content %}
-<h2>You have {{ notification_count }} new citation{% if notification_count != 1 %}s{% endif %}!</h2>
 
-<p>Hi {{ recipient_name }},</p>
-
-<p>
+<p class="greeting">Hi {{ recipient_name }},</p>
+<p class="intro">
   {% if notification_count == 1 %}
-    A new paper has cited your work. Here are the details:
+    {{ app_name }} has detected <strong>1 new citation</strong> of your work.
   {% else %}
-    {{ notification_count }} new papers have cited your work. Here are the details:
+    {{ app_name }} has detected <strong>{{ notification_count }} new citations</strong> of your work.
   {% endif %}
+  The details are below.
 </p>
 
-{% for notification in notifications %}
-<div class="notification-card">
+{% for n in notifications %}
 
-  <!-- Cited work (the user's own paper) -->
-  <div class="label">Your paper</div>
-  <div class="work-title">
-    {% set cited_doi = notification.cited_work_id | replace('__', '/') %}
-    {% if cited_doi and '/' in cited_doi %}
-      <a href="https://doi.org/{{ cited_doi }}" target="_blank" rel="noopener">{{ notification.cited_work_title }}</a>
-    {% else %}
-      {{ notification.cited_work_title }}
+<div style="margin-bottom: 20px;">
+
+  <!-- Your paper -->
+  <div class="paper-header">
+    <div class="paper-header-label">Your paper</div>
+    <div class="paper-header-title">
+      {% set cited_doi = n.cited_work_id | replace('__', '/') %}
+      {% if cited_doi and '/' in cited_doi %}
+        <a href="https://doi.org/{{ cited_doi }}" target="_blank" rel="noopener">{{ n.cited_work_title }}</a>
+      {% else %}
+        {{ n.cited_work_title }}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Citing paper -->
+  <div class="citation-card">
+    <div class="citation-card-label">Cited by</div>
+
+    <div class="citation-title">
+      {% if n.citing_work_url %}
+        <a href="{{ n.citing_work_url }}" target="_blank" rel="noopener">{{ n.citing_work_title }}</a>
+      {% elif n.citing_work_doi %}
+        <a href="https://doi.org/{{ n.citing_work_doi }}" target="_blank" rel="noopener">{{ n.citing_work_title }}</a>
+      {% else %}
+        {{ n.citing_work_title }}
+      {% endif %}
+    </div>
+
+    {% if n.citing_authors %}
+    <div class="citation-meta">
+      {{ n.citing_authors[:3] | join(', ') }}{% if n.citing_authors | length > 3 %}&nbsp;&middot;&nbsp;<em>+{{ n.citing_authors | length - 3 }} more</em>{% endif %}
+    </div>
     {% endif %}
-  </div>
 
-  <!-- Was cited by -->
-  <div class="label">Was cited by</div>
-  <div class="citing-title">
-    {% if notification.citing_work_url %}
-      <a href="{{ notification.citing_work_url }}" target="_blank" rel="noopener">{{ notification.citing_work_title }}</a>
-    {% elif notification.citing_work_doi %}
-      <a href="https://doi.org/{{ notification.citing_work_doi }}" target="_blank" rel="noopener">{{ notification.citing_work_title }}</a>
-    {% else %}
-      {{ notification.citing_work_title }}
-    {% endif %}
-  </div>
+    <div class="citation-meta" style="margin-top: 5px;">
+      {% if n.citing_year %}{{ n.citing_year }}{% endif %}
+      {% if n.citing_work_doi %}
+        {% if n.citing_year %}&nbsp;&middot;&nbsp;{% endif %}
+        <a href="https://doi.org/{{ n.citing_work_doi }}" class="citation-doi" target="_blank" rel="noopener">doi:{{ n.citing_work_doi }}</a>
+      {% endif %}
+    </div>
 
-  <!-- Metadata -->
-  {% if notification.citing_authors %}
-  <div class="meta">
-    <strong>Authors:</strong> {{ notification.citing_authors | join(', ') }}
   </div>
-  {% endif %}
-
-  {% if notification.citing_affiliations %}
-  <div class="meta">
-    <strong>Affiliations:</strong> {{ notification.citing_affiliations | join(', ') }}
-  </div>
-  {% endif %}
-
-  {% if notification.citing_year %}
-  <div class="meta">
-    <strong>Year:</strong> {{ notification.citing_year }}
-  </div>
-  {% endif %}
-
-  {% if notification.citing_work_doi %}
-  <div class="meta">
-    <strong>DOI:</strong>
-    <a href="https://doi.org/{{ notification.citing_work_doi }}" target="_blank" rel="noopener">
-      {{ notification.citing_work_doi }}
-    </a>
-  </div>
-  {% endif %}
 
 </div>
-{% if not loop.last %}<hr class="divider" />{% endif %}
+
+{% if not loop.last %}<hr class="section-divider" />{% endif %}
 {% endfor %}
 
-<p style="margin-top: 32px;">
-  <a href="{{ app_url }}/notifications" class="btn-primary">View all notifications</a>
+<div class="btn-wrap">
+  <a href="{{ app_url }}/dashboard" class="btn-primary">View all notifications</a>
+</div>
+
+<p style="font-size: 12px; color: #9ca3af; margin-top: 22px; line-height: 1.7;">
+  Citation data is provided by OpenAlex and Semantic Scholar. Coverage may
+  differ from Google Scholar. To update your notification preferences, visit
+  your <a href="{{ app_url }}/settings" style="color: #6b7280;">account settings</a>.
 </p>
 
-<p style="font-size: 14px; color: #718096; margin-top: 24px;">
-  Keep up the great work! Citations reflect the impact your research is having on the scientific community.
-</p>
 {% endblock %}
-
-{% block footer_extra %}{% endblock %}
