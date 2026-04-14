@@ -8,7 +8,6 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
 
 from app.config import get_settings
 from app.routers import auth, chat, health, jobs, notifications, profile, works
@@ -96,10 +95,10 @@ def create_app() -> FastAPI:
     application.include_router(jobs.router)
     application.include_router(chat.router)
 
-    # ---- Root redirect -------------------------------------------------------
+    # ---- Root (Render health check hits "/" by default) ----------------------
     @application.get("/", include_in_schema=False)
-    async def root() -> RedirectResponse:
-        return RedirectResponse(url="/health")
+    async def root() -> dict:
+        return {"status": "ok"}
 
     return application
 
