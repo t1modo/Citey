@@ -10,6 +10,8 @@ The agent has three live tools:
 
 import json
 import logging
+import time
+from collections import defaultdict
 from typing import Annotated
 
 import httpx
@@ -135,6 +137,18 @@ _OA_BASE = "https://api.openalex.org"
 _OA_HEADERS = {"User-Agent": "Citey/0.1 (mailto:support@citey.app)"}
 
 # ---------------------------------------------------------------------------
+# Rate limiting — 10 requests per minute per user, in-memory
+# ---------------------------------------------------------------------------
+
+_CHAT_RATE_LIMIT = 10          # max requests
+_CHAT_RATE_WINDOW = 60         # per N seconds
+_MAX_MESSAGE_LENGTH = 4000     # chars per individual message
+_MAX_HISTORY_MESSAGES = 20     # messages sent to Claude (trimmed from oldest)
+
+# uid -> list of timestamps of recent requests
+_chat_timestamps: dict[str, list[float]] = defaultdict(list)
+
+# ---------------------------------------------------------------------------
 # Tool execution
 # ---------------------------------------------------------------------------
 
@@ -225,8 +239,30 @@ async def chat(
             detail="Chat assistant is not configured (missing API key).",
         )
 
+    # Rate limit: max 10 requests per minute per user.
+    now = time.monotonic()
+    timestamps = _chat_timestamps[uid]
+    _chat_timestamps[uid] = [t for t in timestamps if now - t < _CHAT_RATE_WINDOW]
+    if len(_chat_timestamps[uid]) >= _CHAT_RATE_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please wait a moment before sending another message.",
+        )
+    _chat_timestamps[uid].append(now)
+
+    # Validate message content lengths.
+    for msg in body.messages:
+        if len(msg.content) > _MAX_MESSAGE_LENGTH:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Message exceeds maximum length of {_MAX_MESSAGE_LENGTH} characters.",
+            )
+
+    # Trim history to the last N messages before sending to Claude to keep
+    # token usage bounded as conversations grow.
+    trimmed = body.messages[-_MAX_HISTORY_MESSAGES:]
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-    messages: list[dict] = [{"role": m.role, "content": m.content} for m in body.messages]
+    messages: list[dict] = [{"role": m.role, "content": m.content} for m in trimmed]
 
     try:
         # Agentic loop — keep going until Claude stops requesting tools (max 5 rounds)
