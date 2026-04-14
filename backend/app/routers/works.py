@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -16,6 +17,34 @@ from app.services.openalex import extract_topics, extract_venue
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/works", tags=["works"])
+
+# ---------------------------------------------------------------------------
+# Simple in-memory rate limiters for search endpoints
+# ---------------------------------------------------------------------------
+
+_SEARCH_RATE_LIMIT = 5       # requests
+_SEARCH_RATE_WINDOW = 60     # per N seconds
+_PAPER_AUTHORS_RATE_LIMIT = 10
+
+_author_search_timestamps: dict[str, list[float]] = defaultdict(list)
+_paper_authors_timestamps: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_rate_limit(
+    store: dict[str, list[float]],
+    uid: str,
+    limit: int,
+    window: int = _SEARCH_RATE_WINDOW,
+) -> None:
+    """Raise HTTP 429 if uid has exceeded limit requests within the window."""
+    now = time.monotonic()
+    store[uid] = [t for t in store[uid] if now - t < window]
+    if len(store[uid]) >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please wait before searching again.",
+        )
+    store[uid].append(now)
 
 
 def _name_tokens(name: str) -> list[str]:
@@ -259,6 +288,8 @@ async def search_authors_endpoint(
     uid: str = Depends(get_current_user),
 ) -> list[dict]:
     """Search OpenAlex and Semantic Scholar in parallel for author candidates."""
+    _check_rate_limit(_author_search_timestamps, uid, _SEARCH_RATE_LIMIT)
+
     from app.services import openalex as openalex_svc
     from app.services import semantic_scholar as s2_svc
 
@@ -292,6 +323,8 @@ async def get_paper_authors_endpoint(
 ) -> dict:
     """Look up a paper by DOI on Semantic Scholar and return its authors as
     AuthorCandidate records.  Used for the 'find by paper DOI' import mode."""
+    _check_rate_limit(_paper_authors_timestamps, uid, _PAPER_AUTHORS_RATE_LIMIT)
+
     from app.services import semantic_scholar as s2_svc
 
     paper = await s2_svc.get_paper_with_authors(doi)
