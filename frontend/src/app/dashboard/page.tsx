@@ -281,25 +281,25 @@ function FirstPaperInfoModal({ onClose }: { onClose: () => void }) {
         transition={{ type: "spring", stiffness: 380, damping: 28 }}
         className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-gray-950 shadow-2xl shadow-black/60"
       >
-        {/* Gradient header strip */}
-        <div className="h-1.5 bg-gradient-to-r from-violet-500 via-indigo-400 to-sky-500" />
+        {/* Top accent line */}
+        <div className="h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
 
         <div className="p-6">
           {/* Animated icon with pulsing rings */}
           <div className="mb-5 flex justify-center">
             <div className="relative flex h-16 w-16 items-center justify-center">
               <motion.div
-                animate={{ scale: [1, 1.55, 1], opacity: [0.35, 0, 0.35] }}
+                animate={{ scale: [1, 1.55, 1], opacity: [0.2, 0, 0.2] }}
                 transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 rounded-full bg-indigo-500/25"
+                className="absolute inset-0 rounded-full bg-white/15"
               />
               <motion.div
-                animate={{ scale: [1, 1.9, 1], opacity: [0.15, 0, 0.15] }}
+                animate={{ scale: [1, 1.9, 1], opacity: [0.1, 0, 0.1] }}
                 transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut", delay: 0.35 }}
-                className="absolute inset-0 rounded-full bg-indigo-500/15"
+                className="absolute inset-0 rounded-full bg-white/10"
               />
-              <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500/30 to-violet-600/30 ring-1 ring-white/15">
-                <svg className="h-7 w-7 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20">
+                <svg className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
@@ -315,7 +315,7 @@ function FirstPaperInfoModal({ onClose }: { onClose: () => void }) {
           >
             <motion.p
               variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
-              className="mb-0.5 text-xs font-semibold uppercase tracking-widest text-indigo-400"
+              className="mb-0.5 text-xs font-semibold uppercase tracking-widest text-gray-500"
             >
               You&apos;re all set
             </motion.p>
@@ -351,7 +351,7 @@ function FirstPaperInfoModal({ onClose }: { onClose: () => void }) {
             <motion.button
               variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
               onClick={onClose}
-              className="w-full rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-opacity hover:opacity-90 active:scale-[0.98]"
+              className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-gray-950 shadow-lg shadow-black/30 transition-opacity hover:bg-gray-100 active:scale-[0.98]"
             >
               Start tracking
             </motion.button>

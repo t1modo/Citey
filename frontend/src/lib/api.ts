@@ -267,7 +267,8 @@ export async function importByAuthor(
   authorId: string,
   authorName?: string,
   source: "openalex" | "semantic_scholar" | "inspire" | "dblp" = "openalex",
-  confirmMerge = false
+  confirmMerge = false,
+  extraSources: string[] = [],
 ): Promise<ImportByAuthorResult> {
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error("Not authenticated");
@@ -284,6 +285,7 @@ export async function importByAuthor(
       author_name: authorName,
       source,
       confirm_merge: confirmMerge,
+      extra_sources: extraSources,
     }),
   });
 

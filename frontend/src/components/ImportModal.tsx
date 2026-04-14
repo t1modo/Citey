@@ -146,6 +146,7 @@ export default function ImportModal({
   const [importingId, setImportingId] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [fallbackLoading, setFallbackLoading] = useState(false);
+  const [extraSources, setExtraSources] = useState<Set<string>>(new Set());
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -157,6 +158,7 @@ export default function ImportModal({
     setImportingId(null);
     setImportError(null);
     setFallbackLoading(false);
+    setExtraSources(new Set());
   };
 
   useEffect(() => {
@@ -283,7 +285,7 @@ export default function ImportModal({
     setImportingId(authorId);
     setImportError(null);
     try {
-      const result = await importByAuthor(authorId, authorName, source, confirmMerge);
+      const result = await importByAuthor(authorId, authorName, source, confirmMerge, [...extraSources]);
       if (result.status === "merge_required") {
         const currentPhase = phase;
         const author: AuthorCandidate = phase.type === "author-select"
@@ -701,6 +703,50 @@ export default function ImportModal({
                     </div>
                   )
                 )}
+
+                {/* ── Cross-source toggles ──────────────────────────── */}
+                <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                  <p className="mb-2 text-xs font-medium text-gray-400">
+                    Also search additional databases
+                    <span className="ml-1.5 font-normal text-gray-600">
+                      (off by default — enable only if your papers are missing)
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(["openalex", "semantic_scholar", "pubmed", "nasa_ads", "inspire", "dblp"] as const).map((src) => {
+                      const labels: Record<string, string> = {
+                        openalex: "OpenAlex",
+                        semantic_scholar: "Semantic Scholar",
+                        pubmed: "PubMed",
+                        nasa_ads: "NASA ADS",
+                        inspire: "INSPIRE-HEP",
+                        dblp: "DBLP",
+                      };
+                      const on = extraSources.has(src);
+                      return (
+                        <button
+                          key={src}
+                          type="button"
+                          onClick={() => {
+                            setExtraSources((prev) => {
+                              const next = new Set(prev);
+                              on ? next.delete(src) : next.add(src);
+                              return next;
+                            });
+                          }}
+                          disabled={anyBusy}
+                          className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors disabled:opacity-40 ${
+                            on
+                              ? "border-white/30 bg-white/15 text-white"
+                              : "border-white/10 bg-transparent text-gray-500 hover:border-white/20 hover:text-gray-400"
+                          }`}
+                        >
+                          {on ? "✓ " : ""}{labels[src]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 <button
                   onClick={() => { setPhase({ type: "input" }); setImportError(null); }}
