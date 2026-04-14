@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { sendVerificationEmail } from "@/lib/api";
@@ -8,7 +8,6 @@ import { useNotifications } from "@/contexts/NotificationsContext";
 import {
   getWorks,
   deleteWork,
-  runJob,
   getNotifications,
   pruneNotifications,
   downloadBibtex,
@@ -259,6 +258,38 @@ function VerificationBanner({ onToast }: { onToast: (msg: string, type: ToastTyp
   );
 }
 
+function FirstPaperInfoModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className="relative z-10 w-full max-w-sm rounded-2xl border border-white/10 bg-gray-900 p-6 shadow-2xl">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10">
+          <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h2 className="mb-2 text-lg font-semibold text-white">Citations checked daily</h2>
+        <p className="mb-2 text-sm text-gray-400">
+          Citey automatically checks for new citations to your papers once a day at midnight.
+        </p>
+        <p className="mb-6 text-sm text-gray-400">
+          Papers added today will be included in tonight&apos;s check. You&apos;ll receive an email when new citations are found.
+        </p>
+        <button
+          onClick={onClose}
+          className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-gray-950 transition-opacity hover:bg-gray-100"
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -345,11 +376,8 @@ export default function DashboardPage() {
   const [worksSort, setWorksSort] = useState<WorksSort>("year");
   const [worksPage, setWorksPage] = useState(1);
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [jobRunning, setJobRunning] = useState(false);
   const [exportingBibtex, setExportingBibtex] = useState(false);
-  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
-  const [cooldownSecsLeft, setCooldownSecsLeft] = useState(0);
-  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showFirstPaperModal, setShowFirstPaperModal] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const addToast = useCallback((message: string, type: ToastType = "info") => {
@@ -363,43 +391,6 @@ export default function DashboardPage() {
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
-
-  // Restore cooldown from localStorage and tick down every second.
-  const COOLDOWN_KEY = "citey_job_cooldown_until";
-  const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
-
-  const startCooldown = useCallback((until: number) => {
-    setCooldownUntil(until);
-    localStorage.setItem(COOLDOWN_KEY, String(until));
-    const remaining = Math.max(0, Math.ceil((until - Date.now()) / 1000));
-    setCooldownSecsLeft(remaining);
-  }, []);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(COOLDOWN_KEY);
-    if (saved) {
-      const until = Number(saved);
-      if (until > Date.now()) startCooldown(until);
-      else localStorage.removeItem(COOLDOWN_KEY);
-    }
-  }, [startCooldown]);
-
-  useEffect(() => {
-    if (cooldownUntil === null) return;
-    if (cooldownRef.current) clearInterval(cooldownRef.current);
-    cooldownRef.current = setInterval(() => {
-      const secs = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
-      setCooldownSecsLeft(secs);
-      if (secs === 0) {
-        setCooldownUntil(null);
-        localStorage.removeItem(COOLDOWN_KEY);
-        if (cooldownRef.current) clearInterval(cooldownRef.current);
-      }
-    }, 1000);
-    return () => {
-      if (cooldownRef.current) clearInterval(cooldownRef.current);
-    };
-  }, [cooldownUntil]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -453,36 +444,6 @@ export default function DashboardPage() {
         next.delete(workId);
         return next;
       });
-    }
-  };
-
-  const handleRunJob = async () => {
-    if (cooldownUntil !== null && cooldownUntil > Date.now()) return;
-    setJobRunning(true);
-    try {
-      const result = await runJob(false);
-      startCooldown(Date.now() + COOLDOWN_MS);
-      addToast(result.message ?? "Citation check complete.", "success");
-      await Promise.all([loadNotifications(1), loadWorks()]);
-      setCitationPage(1);
-    } catch (err) {
-      if (err instanceof Error && err.message.includes("retry_after_seconds")) {
-        try {
-          const detail = JSON.parse(err.message);
-          const retryAfter: number = detail.retry_after_seconds ?? 600;
-          startCooldown(Date.now() + retryAfter * 1000);
-          addToast(detail.message ?? "Please wait before running another check.", "info");
-        } catch {
-          addToast(err.message, "error");
-        }
-      } else {
-        addToast(
-          err instanceof Error ? err.message : "Failed to run citation check.",
-          "error"
-        );
-      }
-    } finally {
-      setJobRunning(false);
     }
   };
 
@@ -556,6 +517,9 @@ export default function DashboardPage() {
   return (
     <>
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      {showFirstPaperModal && (
+        <FirstPaperInfoModal onClose={() => setShowFirstPaperModal(false)} />
+      )}
       {!user.emailVerified && <VerificationBanner onToast={addToast} />}
       <ImportModal
         isOpen={addModalOpen}
@@ -563,13 +527,17 @@ export default function DashboardPage() {
         linkedAuthorId={linkedAuthorId}
         linkedAuthorName={linkedAuthorName}
         onAdded={(work) => {
+          const wasEmpty = works.length === 0;
           setWorks((prev) => [work, ...prev]);
           addToast(`"${work.title ?? work.doi}" added to tracking.`, "success");
+          if (wasEmpty) setShowFirstPaperModal(true);
         }}
         onImported={(count) => {
+          const wasEmpty = works.length === 0;
           loadWorks();
           refreshProfile();
           addToast(`Imported ${count} paper${count !== 1 ? "s" : ""} successfully.`, "success");
+          if (wasEmpty && count > 0) setShowFirstPaperModal(true);
         }}
       />
 
@@ -589,32 +557,6 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <button
-            onClick={handleRunJob}
-            disabled={jobRunning || (cooldownUntil !== null && cooldownUntil > Date.now())}
-            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {jobRunning ? (
-              <>
-                <Spinner />
-                Running check…
-              </>
-            ) : cooldownUntil !== null && cooldownUntil > Date.now() ? (
-              <>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {`${Math.floor(cooldownSecsLeft / 60)}:${String(cooldownSecsLeft % 60).padStart(2, "0")}`}
-              </>
-            ) : (
-              <>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Run Citation Check
-              </>
-            )}
-          </button>
         </ScrollReveal>
 
         {/* Stats row */}
@@ -850,7 +792,7 @@ export default function DashboardPage() {
                 <div className="text-4xl">📑</div>
                 <p className="text-sm font-semibold text-gray-300">No citations yet</p>
                 <p className="text-xs text-gray-500 max-w-xs">
-                  Run a citation check to discover papers that have cited your work.
+                  Citations are checked automatically every day. New citations will appear here after the next scheduled check.
                 </p>
               </div>
             ) : (
