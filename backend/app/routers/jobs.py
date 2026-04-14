@@ -14,7 +14,7 @@ from typing import Any
 # Minimum seconds between manual job triggers from the same user.
 _MANUAL_CHECK_COOLDOWN = 600      # /jobs/run       — 10 minutes
 _MANUAL_SYNC_COOLDOWN  = 600      # /jobs/sync-publications — 10 minutes
-_EMAIL_TEST_COOLDOWN   = 300      # /jobs/email-test — 5 minutes
+_EMAIL_TEST_COOLDOWN   = 3600     # /jobs/email-test — 60 minutes
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
