@@ -190,40 +190,45 @@ export default function HelpPage() {
           </div>
         </ScrollReveal>
 
-        <div className="flex flex-wrap justify-center gap-3">
+        <div className="grid gap-3 sm:grid-cols-6">
           {[
             {
               icon: "📄",
               title: "arXiv URL or ID",
               example: "2310.06825",
               body: "Citey looks up the paper on Semantic Scholar and shows the author list so you can select yourself and import all your papers.",
+              colClass: "sm:col-span-2",
             },
             {
               icon: "🔗",
               title: "DOI or doi.org link",
               example: "10.48550/arXiv.2310.06825",
               body: "If your author profile is already linked, the paper is added immediately. Otherwise Citey shows the author list for linking.",
+              colClass: "sm:col-span-2",
             },
             {
               icon: "👤",
               title: "Author name",
               example: "Jane Smith",
               body: "Searches OpenAlex and Semantic Scholar in parallel, showing matching profiles with affiliation and h-index. One click to import all.",
+              colClass: "sm:col-span-2",
             },
             {
               icon: "⚡",
               title: "INSPIRE-HEP profile URL",
               example: "inspirehep.net/authors/1234567",
               body: "Imports all papers from that INSPIRE profile, including JACoW proceedings that other databases miss.",
+              colClass: "sm:col-start-2 sm:col-span-2",
             },
             {
               icon: "💻",
               title: "DBLP profile URL",
               example: "dblp.org/pid/12/3456",
               body: "Imports all papers from that DBLP author entry — near-complete ACM and IEEE conference coverage.",
+              colClass: "sm:col-start-4 sm:col-span-2",
             },
-          ].map(({ icon, title, example, body }, i) => (
-            <ScrollReveal key={title} delay={i * 0.07} className="w-full sm:w-[calc(50%-6px)]">
+          ].map(({ icon, title, example, body, colClass }, i) => (
+            <ScrollReveal key={title} delay={i * 0.07} className={colClass}>
               <div className="glass-card flex h-full flex-col gap-3 p-5 transition-all duration-300 hover:border-white/20 hover:bg-white/5">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/8 text-lg">
