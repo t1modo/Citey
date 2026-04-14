@@ -190,7 +190,7 @@ export default function HelpPage() {
           </div>
         </ScrollReveal>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-wrap justify-center gap-3">
           {[
             {
               icon: "📄",
@@ -223,7 +223,7 @@ export default function HelpPage() {
               body: "Imports all papers from that DBLP author entry — near-complete ACM and IEEE conference coverage.",
             },
           ].map(({ icon, title, example, body }, i) => (
-            <ScrollReveal key={title} delay={i * 0.07}>
+            <ScrollReveal key={title} delay={i * 0.07} className="w-full sm:w-[calc(50%-6px)]">
               <div className="glass-card flex h-full flex-col gap-3 p-5 transition-all duration-300 hover:border-white/20 hover:bg-white/5">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/8 text-lg">
@@ -293,7 +293,7 @@ export default function HelpPage() {
             <span className="normal-case tracking-normal text-gray-700">— opt-in per import</span>
           </p>
         </ScrollReveal>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="flex flex-wrap justify-center gap-3">
           {[
             {
               name: "PubMed",
@@ -326,7 +326,7 @@ export default function HelpPage() {
               body: "Used as a fallback for DOI metadata when primary sources are missing a record.",
             },
           ].map(({ name, icon, tags, body }, i) => (
-            <ScrollReveal key={name} delay={0.2 + i * 0.06}>
+            <ScrollReveal key={name} delay={0.2 + i * 0.06} className="w-full sm:w-[calc(50%-6px)] lg:w-[calc(33.333%-8px)]">
               <div className="glass-card flex h-full flex-col gap-2 p-4 transition-all duration-300 hover:border-white/20 hover:bg-white/5">
                 <div className="flex items-center gap-2">
                   <span className="text-base">{icon}</span>
@@ -453,7 +453,7 @@ export default function HelpPage() {
             <div className="mb-3 flex justify-center text-3xl">💬</div>
             <h2 className="mb-2 text-xl font-bold text-white">Still have questions?</h2>
             <p className="mb-5 text-sm text-gray-400">
-              Check the FAQ for common questions about data accuracy, privacy, and how Citey works under the hood.
+              Common questions about accuracy, privacy, and how it all works.
             </p>
             <Link
               href="/faq"
