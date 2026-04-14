@@ -12,6 +12,8 @@ const WELCOME: ChatMessage = {
     "Hi! I'm Citey Assistant. I can help you find DOIs, add papers, or answer questions about citation tracking. What do you need?",
 };
 
+const MAX_HISTORY = 50;
+
 export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
@@ -37,7 +39,7 @@ export default function ChatWidget() {
     const text = input.trim();
     if (!text || loading) return;
 
-    const updated: ChatMessage[] = [...messages, { role: "user", content: text }];
+    const updated: ChatMessage[] = [...messages, { role: "user", content: text }].slice(-MAX_HISTORY);
     setMessages(updated);
     setInput("");
     setError(null);
