@@ -218,14 +218,14 @@ export default function HelpPage() {
               title: "INSPIRE-HEP profile URL",
               example: "inspirehep.net/authors/1234567",
               body: "Imports all papers from that INSPIRE profile, including JACoW proceedings that other databases miss.",
-              colClass: "sm:col-start-2 sm:col-span-2",
+              colClass: "sm:col-span-3",
             },
             {
               icon: "💻",
               title: "DBLP profile URL",
               example: "dblp.org/pid/12/3456",
               body: "Imports all papers from that DBLP author entry — near-complete ACM and IEEE conference coverage.",
-              colClass: "sm:col-start-4 sm:col-span-2",
+              colClass: "sm:col-span-3",
             },
           ].map(({ icon, title, example, body, colClass }, i) => (
             <ScrollReveal key={title} delay={i * 0.07} className={colClass}>
