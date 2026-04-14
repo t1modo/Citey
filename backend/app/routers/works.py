@@ -667,6 +667,11 @@ async def import_works_by_author(
     works_ref = db.collection("users").document(uid).collection("trackedWorks")
     existing_ids = {doc.id for doc in works_ref.stream()}
 
+    # Cap total tracked works at 500 per user to prevent runaway Firestore
+    # writes and excessive citation-check workload.
+    _MAX_TRACKED_WORKS = 500
+    remaining_capacity = max(0, _MAX_TRACKED_WORKS - len(existing_ids))
+
     imported = 0
     skipped = 0
     now = datetime.now(tz=timezone.utc)
@@ -680,6 +685,10 @@ async def import_works_by_author(
 
         work_id = doi.replace("/", "__")
         if work_id in existing_ids:
+            skipped += 1
+            continue
+
+        if imported >= remaining_capacity:
             skipped += 1
             continue
 
