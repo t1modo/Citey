@@ -10,7 +10,6 @@ import {
   deleteWork,
   deleteAccount,
   unlinkAuthor,
-  getRssUrl,
 } from "@/lib/api";
 import type { UserProfile, TrackedWork } from "@/lib/types";
 
@@ -78,17 +77,13 @@ export default function SettingsPage() {
   const [worksLoading, setWorksLoading] = useState(true);
   const [worksError, setWorksError] = useState<string | null>(null);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
+  const [worksPage, setWorksPage] = useState(1);
+  const WORKS_PER_PAGE = 10;
 
   // Change linked author state
   const [unlinkPending, setUnlinkPending] = useState(false);
   const [unlinkLoading, setUnlinkLoading] = useState(false);
   const [unlinkError, setUnlinkError] = useState<string | null>(null);
-
-  // RSS feed state
-  const [rssUrl, setRssUrl] = useState<string | null>(null);
-  const [rssLoading, setRssLoading] = useState(false);
-  const [rssError, setRssError] = useState<string | null>(null);
-  const [rssCopied, setRssCopied] = useState(false);
 
   // Account deletion state
   const [deleteAccountPending, setDeleteAccountPending] = useState(false);
@@ -467,127 +462,92 @@ export default function SettingsPage() {
               </a>
               .
             </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                    <th className="pb-3 pr-4">Title / DOI</th>
-                    <th className="pb-3 pr-4">Year</th>
-                    <th className="pb-3 pr-4">Last checked</th>
-                    <th className="pb-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {works.map((work) => (
-                    <tr key={work.id} className="group">
-                      <td className="py-3 pr-4">
-                        <p className="font-medium text-white leading-snug">
-                          {work.title ?? "Untitled"}
-                        </p>
-                        <a
-                          href={`https://doi.org/${work.doi}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-0.5 block font-mono text-xs text-gray-400 underline decoration-dotted underline-offset-2 hover:text-gray-300 transition-colors"
-                        >
-                          {work.doi}
-                        </a>
-                      </td>
-                      <td className="py-3 pr-4 text-gray-400">
-                        {work.year ?? "."}
-                      </td>
-                      <td className="py-3 pr-4 text-gray-400">
-                        {work.last_checked_at
-                          ? new Date(work.last_checked_at).toLocaleDateString()
-                          : "."}
-                      </td>
-                      <td className="py-3 text-right">
-                        <button
-                          onClick={() => handleRemoveWork(work.id)}
-                          disabled={removingIds.has(work.id)}
-                          className="rounded px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
-                        >
-                          {removingIds.has(work.id) ? "Removing…" : "Remove"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </SectionCard>
-
-        {/* ─── RSS Feed ───────────────────────────────────────────── */}
-        <SectionCard
-          title="RSS Feed"
-          description="Subscribe to your citation alerts in any RSS reader — Feedly, Slack, Zapier, and more."
-        >
-          <div className="flex flex-col gap-4">
-            <p className="text-sm text-gray-400">
-              Your feed URL is private and signed. Anyone with it can read your citation alerts,
-              so treat it like a password.
-            </p>
-
-            {rssError && (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                {rssError}
-              </div>
-            )}
-
-            {!rssUrl ? (
-              <button
-                onClick={async () => {
-                  setRssLoading(true);
-                  setRssError(null);
-                  try {
-                    const url = await getRssUrl();
-                    setRssUrl(url);
-                  } catch (err) {
-                    setRssError(err instanceof Error ? err.message : "Failed to generate RSS URL.");
-                  } finally {
-                    setRssLoading(false);
-                  }
-                }}
-                disabled={rssLoading}
-                className="flex w-fit items-center gap-2 rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:border-white/20 hover:text-white disabled:opacity-50"
-              >
-                {rssLoading ? (
-                  <Spinner className="h-4 w-4" />
-                ) : (
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7M6 17a1 1 0 110 2 1 1 0 010-2z" />
-                  </svg>
-                )}
-                {rssLoading ? "Generating…" : "Get RSS Feed URL"}
-              </button>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    readOnly
-                    value={rssUrl}
-                    className="flex-1 rounded-lg border border-white/10 bg-gray-900 px-3 py-2 font-mono text-xs text-gray-300 outline-none select-all"
-                    onClick={(e) => (e.target as HTMLInputElement).select()}
-                  />
-                  <button
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(rssUrl);
-                      setRssCopied(true);
-                      setTimeout(() => setRssCopied(false), 2000);
-                    }}
-                    className="shrink-0 rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-xs font-medium text-gray-300 transition-colors hover:border-white/20 hover:text-white"
-                  >
-                    {rssCopied ? "Copied!" : "Copy"}
-                  </button>
-                </div>
+          ) : (() => {
+            const totalPages = Math.max(1, Math.ceil(works.length / WORKS_PER_PAGE));
+            const page = Math.min(worksPage, totalPages);
+            const pageWorks = works.slice((page - 1) * WORKS_PER_PAGE, page * WORKS_PER_PAGE);
+            return (
+              <div className="flex flex-col gap-3">
                 <p className="text-xs text-gray-500">
-                  Paste this URL into any RSS reader to receive new citation alerts.
+                  {works.length} paper{works.length !== 1 ? "s" : ""}
+                  {totalPages > 1 && ` · page ${page} of ${totalPages}`}
                 </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                        <th className="pb-3 pr-4">Title / DOI</th>
+                        <th className="pb-3 pr-4">Year</th>
+                        <th className="pb-3 pr-4">Last checked</th>
+                        <th className="pb-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {pageWorks.map((work) => (
+                        <tr key={work.id} className="group">
+                          <td className="py-3 pr-4">
+                            <p className="font-medium text-white leading-snug">
+                              {work.title ?? "Untitled"}
+                            </p>
+                            <a
+                              href={`https://doi.org/${work.doi}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-0.5 block font-mono text-xs text-gray-400 underline decoration-dotted underline-offset-2 hover:text-gray-300 transition-colors"
+                            >
+                              {work.doi}
+                            </a>
+                          </td>
+                          <td className="py-3 pr-4 text-gray-400">
+                            {work.year ?? "–"}
+                          </td>
+                          <td className="py-3 pr-4 text-gray-400">
+                            {work.last_checked_at
+                              ? new Date(work.last_checked_at).toLocaleDateString()
+                              : "–"}
+                          </td>
+                          <td className="py-3 text-right">
+                            <button
+                              onClick={() => handleRemoveWork(work.id)}
+                              disabled={removingIds.has(work.id)}
+                              className="rounded px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+                            >
+                              {removingIds.has(work.id) ? "Removing…" : "Remove"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <button
+                      onClick={() => setWorksPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                      className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      Prev
+                    </button>
+                    <span className="text-xs text-gray-500">Page {page} of {totalPages}</span>
+                    <button
+                      onClick={() => setWorksPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page >= totalPages}
+                      className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      Next
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
         </SectionCard>
 
         {/* ─── Danger Zone ────────────────────────────────────────── */}
