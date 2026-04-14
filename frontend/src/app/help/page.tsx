@@ -2,6 +2,16 @@
 
 import Link from "next/link";
 import ScrollReveal from "@/components/ScrollReveal";
+import TypewriterCycle from "@/components/TypewriterCycle";
+
+const IMPORT_EXAMPLES = [
+  "2310.06825",
+  "https://arxiv.org/abs/2310.06825",
+  "10.48550/arXiv.2310.06825",
+  "Jane Smith",
+  "https://inspirehep.net/authors/1234567",
+  "https://dblp.org/pid/12/3456",
+];
 
 // ─── Shared mini-components ──────────────────────────────────────────────────
 
@@ -164,10 +174,20 @@ export default function HelpPage() {
       <section id="import" className="scroll-mt-6 mb-20">
         <ScrollReveal>
           <SectionLabel>Importing Papers</SectionLabel>
-          <h2 className="mb-2 text-2xl font-bold text-white">Paste anything. Citey figures it out.</h2>
-          <p className="mb-6 text-sm text-gray-400">
-            One input field accepts all of these formats automatically.
-          </p>
+          <h2 className="mb-4 text-2xl font-bold text-white">Paste anything. Citey figures it out.</h2>
+          {/* Animated mock input */}
+          <div className="mb-6 flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+            <svg className="h-4 w-4 shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <TypewriterCycle
+              phrases={IMPORT_EXAMPLES}
+              className="flex-1 text-sm text-gray-300"
+            />
+            <span className="shrink-0 rounded-lg bg-white/10 px-3 py-1 text-xs font-medium text-gray-400">
+              Add
+            </span>
+          </div>
         </ScrollReveal>
 
         <div className="grid gap-3 sm:grid-cols-2">
