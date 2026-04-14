@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { sendVerificationEmail } from "@/lib/api";
@@ -259,33 +260,104 @@ function VerificationBanner({ onToast }: { onToast: (msg: string, type: ToastTyp
 }
 
 function FirstPaperInfoModal({ onClose }: { onClose: () => void }) {
+  const chips = [
+    { icon: "🔔", label: "Email alerts" },
+    { icon: "📅", label: "Daily checks" },
+    { icon: "⚡", label: "Auto-updates" },
+  ];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="absolute inset-0 bg-black/75 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative z-10 w-full max-w-sm rounded-2xl border border-white/10 bg-gray-900 p-6 shadow-2xl">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10">
-          <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.88, y: 24 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 380, damping: 28 }}
+        className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-gray-950 shadow-2xl shadow-black/60"
+      >
+        {/* Gradient header strip */}
+        <div className="h-1.5 bg-gradient-to-r from-violet-500 via-indigo-400 to-sky-500" />
+
+        <div className="p-6">
+          {/* Animated icon with pulsing rings */}
+          <div className="mb-5 flex justify-center">
+            <div className="relative flex h-16 w-16 items-center justify-center">
+              <motion.div
+                animate={{ scale: [1, 1.55, 1], opacity: [0.35, 0, 0.35] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute inset-0 rounded-full bg-indigo-500/25"
+              />
+              <motion.div
+                animate={{ scale: [1, 1.9, 1], opacity: [0.15, 0, 0.15] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut", delay: 0.35 }}
+                className="absolute inset-0 rounded-full bg-indigo-500/15"
+              />
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500/30 to-violet-600/30 ring-1 ring-white/15">
+                <svg className="h-7 w-7 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Staggered text */}
+          <motion.div
+            initial="hidden"
+            animate="show"
+            variants={{ show: { transition: { staggerChildren: 0.07 } } }}
+            className="flex flex-col items-center text-center"
+          >
+            <motion.p
+              variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
+              className="mb-0.5 text-xs font-semibold uppercase tracking-widest text-indigo-400"
+            >
+              You&apos;re all set
+            </motion.p>
+            <motion.h2
+              variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
+              className="mb-3 text-xl font-bold text-white"
+            >
+              Citations checked daily
+            </motion.h2>
+            <motion.p
+              variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
+              className="mb-5 text-sm leading-relaxed text-gray-400"
+            >
+              Papers added today will be scanned tonight at midnight. You&apos;ll get an email the moment a new citation is found.
+            </motion.p>
+
+            {/* Chips */}
+            <motion.div
+              variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
+              className="mb-6 flex flex-wrap justify-center gap-2"
+            >
+              {chips.map(({ icon, label }) => (
+                <span
+                  key={label}
+                  className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-gray-300"
+                >
+                  <span>{icon}</span>
+                  {label}
+                </span>
+              ))}
+            </motion.div>
+
+            <motion.button
+              variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
+              onClick={onClose}
+              className="w-full rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-opacity hover:opacity-90 active:scale-[0.98]"
+            >
+              Start tracking
+            </motion.button>
+          </motion.div>
         </div>
-        <h2 className="mb-2 text-lg font-semibold text-white">Citations checked daily</h2>
-        <p className="mb-2 text-sm text-gray-400">
-          Citey automatically checks for new citations to your papers once a day at midnight.
-        </p>
-        <p className="mb-6 text-sm text-gray-400">
-          Papers added today will be included in tonight&apos;s check. You&apos;ll receive an email when new citations are found.
-        </p>
-        <button
-          onClick={onClose}
-          className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-gray-950 transition-opacity hover:bg-gray-100"
-        >
-          Got it
-        </button>
-      </div>
+      </motion.div>
     </div>
   );
 }

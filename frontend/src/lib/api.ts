@@ -218,12 +218,6 @@ export async function downloadBibtex(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
-export async function getRssUrl(): Promise<string> {
-  const res = await authFetch("/rss/url");
-  const data = await res.json();
-  return data.url as string;
-}
-
 export async function runJob(dryRun: boolean = false): Promise<{ message: string }> {
   const res = await authFetch("/jobs/run", {
     method: "POST",

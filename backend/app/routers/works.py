@@ -496,7 +496,7 @@ async def import_works_by_author(
                                 if d:
                                     extra_dois.add(d.lower())
                             overlap = primary_dois & extra_dois
-                            if not primary_dois or overlap:
+                            if overlap:
                                 raw_works = raw_works + oa_extra
                                 logger.info(
                                     "Cross-source: merged %d OpenAlex works for '%s' "
@@ -517,7 +517,7 @@ async def import_works_by_author(
                                 if d:
                                     extra_dois.add(d.lower())
                             overlap = primary_dois & extra_dois
-                            if not primary_dois or overlap:
+                            if overlap:
                                 raw_works = raw_works + s2_extra
                                 logger.info(
                                     "Cross-source: merged %d S2 works for '%s' "
@@ -553,7 +553,7 @@ async def import_works_by_author(
                             if d:
                                 pm_dois.add(d.lower())
                         overlap = current_dois & pm_dois
-                        if not current_dois or overlap:
+                        if overlap:
                             raw_works = raw_works + pm_extra
                             logger.info(
                                 "Cross-source: merged %d PubMed works for '%s' "
@@ -587,7 +587,7 @@ async def import_works_by_author(
                             if d:
                                 ads_dois.add(d.lower())
                         overlap = current_dois_ads & ads_dois
-                        if not current_dois_ads or overlap:
+                        if overlap:
                             raw_works = raw_works + ads_extra
                             logger.info(
                                 "Cross-source: merged %d NASA ADS works for '%s' "
@@ -623,7 +623,7 @@ async def import_works_by_author(
                             if d:
                                 inspire_dois.add(d.lower())
                         overlap = current_dois_inspire & inspire_dois
-                        if not current_dois_inspire or overlap:
+                        if overlap:
                             raw_works = raw_works + inspire_extra
                             logger.info(
                                 "Cross-source: merged %d INSPIRE-HEP works for '%s' "
@@ -660,7 +660,7 @@ async def import_works_by_author(
                             if d:
                                 dblp_dois.add(d.lower())
                         overlap = current_dois_dblp & dblp_dois
-                        if not current_dois_dblp or overlap:
+                        if overlap:
                             raw_works = raw_works + dblp_extra
                             logger.info(
                                 "Cross-source: merged %d DBLP works for '%s' "
