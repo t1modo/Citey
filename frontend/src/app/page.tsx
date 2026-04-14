@@ -105,7 +105,7 @@ export default function HomePage() {
             href={user ? "/dashboard" : "/signup"}
             className="rounded-xl bg-white px-8 py-3.5 text-base font-semibold text-gray-950 shadow-xl shadow-white/10 transition-all hover:scale-105 hover:bg-gray-100"
           >
-            {user ? "Go to Dashboard" : "Get Started, it's free"}
+            {user ? "Go to Dashboard" : "Get Started, It's Free!"}
           </Link>
           <a
             href="#features"
