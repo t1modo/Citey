@@ -39,7 +39,7 @@ export default function ChatWidget() {
     const text = input.trim();
     if (!text || loading) return;
 
-    const updated: ChatMessage[] = [...messages, { role: "user", content: text }].slice(-MAX_HISTORY);
+    const updated: ChatMessage[] = [...messages, { role: "user" as const, content: text }].slice(-MAX_HISTORY);
     setMessages(updated);
     setInput("");
     setError(null);
