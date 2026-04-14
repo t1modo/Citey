@@ -332,8 +332,7 @@ export default function FaqPage() {
           Still have questions?
         </h2>
         <p className="mb-6 text-sm text-gray-400">
-          If you can&apos;t find the answer you need, check the dashboard or reach out
-          via your notification email settings.
+          Still stuck? Check the dashboard or update your preferences in Settings.
         </p>
         <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
@@ -372,7 +371,7 @@ export default function FaqPage() {
         >
           Crossref
         </a>
-        , and{" "}
+        ,{" "}
         <a
           href="https://www.semanticscholar.org"
           target="_blank"
@@ -380,6 +379,42 @@ export default function FaqPage() {
           className="text-gray-500 hover:text-gray-400"
         >
           Semantic Scholar
+        </a>
+        ,{" "}
+        <a
+          href="https://pubmed.ncbi.nlm.nih.gov"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-gray-500 hover:text-gray-400"
+        >
+          PubMed
+        </a>
+        ,{" "}
+        <a
+          href="https://ui.adsabs.harvard.edu"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-gray-500 hover:text-gray-400"
+        >
+          NASA ADS
+        </a>
+        ,{" "}
+        <a
+          href="https://inspirehep.net"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-gray-500 hover:text-gray-400"
+        >
+          INSPIRE-HEP
+        </a>
+        , and{" "}
+        <a
+          href="https://dblp.org"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-gray-500 hover:text-gray-400"
+        >
+          DBLP
         </a>
         .
       </p>
