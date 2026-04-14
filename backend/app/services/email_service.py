@@ -224,28 +224,28 @@ async def send_verification_email(
 <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
   <div style="padding:40px 16px;">
     <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
-      <div style="background:linear-gradient(135deg,#0d9488 0%,#4f46e5 100%);padding:36px 48px;">
-        <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">{settings.app_name}<span style="color:rgba(255,255,255,0.6);">.</span></div>
-        <div style="font-size:12px;font-weight:500;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.1em;margin-top:5px;">Citation Intelligence</div>
+      <div style="background:linear-gradient(160deg,#0f0f14 0%,#1c1c28 100%);padding:36px 48px;">
+        <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">{settings.app_name}<span style="color:rgba(255,255,255,0.35);">.</span></div>
+        <div style="font-size:12px;font-weight:500;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.1em;margin-top:5px;">Citation Tracking</div>
       </div>
       <div style="padding:40px 48px 36px;">
-        <p style="font-size:17px;font-weight:600;color:#1e2530;margin:0 0 8px;">Verify your email address</p>
-        <p style="font-size:14px;color:#5a6478;margin:0 0 24px;line-height:1.7;">
+        <p style="font-size:17px;font-weight:600;color:#1a1d23;margin:0 0 8px;">Verify your email address</p>
+        <p style="font-size:14px;color:#4b5563;margin:0 0 24px;line-height:1.7;">
           Thanks for signing up. Click the button below to verify your email address and activate your account.
         </p>
-        <a href="{verification_link}" style="display:inline-block;background:linear-gradient(135deg,#0d9488 0%,#4f46e5 100%);color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:7px;font-weight:600;font-size:14px;">Verify Email</a>
-        <p style="font-size:13px;color:#9aa3b5;margin:28px 0 0;line-height:1.7;">
+        <a href="{verification_link}" style="display:inline-block;background-color:#111111;color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:7px;font-weight:600;font-size:14px;">Verify Email</a>
+        <p style="font-size:13px;color:#9ca3af;margin:28px 0 0;line-height:1.7;">
           If the button does not work, paste this link into your browser:<br />
-          <a href="{verification_link}" style="color:#6366f1;word-break:break-all;">{verification_link}</a>
+          <a href="{verification_link}" style="color:#374151;word-break:break-all;">{verification_link}</a>
         </p>
-        <p style="font-size:13px;color:#9aa3b5;margin:16px 0 0;line-height:1.7;">
+        <p style="font-size:13px;color:#9ca3af;margin:16px 0 0;line-height:1.7;">
           If you did not create a {settings.app_name} account, you can safely ignore this email.
         </p>
       </div>
-      <div style="background:#f4f6f9;border-top:1px solid #e8ecf2;padding:24px 48px;font-size:11px;color:#9aa3b5;line-height:2;">
+      <div style="background:#f8f9fb;border-top:1px solid #e8ecf2;padding:24px 48px;font-size:11px;color:#9ca3af;line-height:2;">
         Best regards,<br />
-        <strong style="color:#5a6478;">{settings.app_name} Team</strong><br />
-        <a href="mailto:{settings.support_email}" style="color:#7b849a;">{settings.support_email}</a>
+        <strong style="color:#4b5563;">{settings.app_name} Team</strong><br />
+        <a href="mailto:{settings.support_email}" style="color:#6b7280;">{settings.support_email}</a>
       </div>
     </div>
   </div>
@@ -361,24 +361,24 @@ async def send_test_email(
 <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
   <div style="padding:40px 16px;">
     <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
-      <div style="background:linear-gradient(135deg,#0d9488 0%,#4f46e5 100%);padding:36px 48px;">
-        <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">{settings.app_name}<span style="color:rgba(255,255,255,0.6);">.</span></div>
-        <div style="font-size:12px;font-weight:500;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.1em;margin-top:5px;">Citation Intelligence</div>
+      <div style="background:linear-gradient(160deg,#0f0f14 0%,#1c1c28 100%);padding:36px 48px;">
+        <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">{settings.app_name}<span style="color:rgba(255,255,255,0.35);">.</span></div>
+        <div style="font-size:12px;font-weight:500;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.1em;margin-top:5px;">Citation Tracking</div>
       </div>
       <div style="padding:40px 48px 36px;">
-        <p style="font-size:17px;font-weight:600;color:#1e2530;margin:0 0 8px;">Notifications are active, {recipient_name}</p>
-        <p style="font-size:14px;color:#5a6478;margin:0 0 24px;line-height:1.7;">
+        <p style="font-size:17px;font-weight:600;color:#1a1d23;margin:0 0 8px;">Notifications are active, {recipient_name}</p>
+        <p style="font-size:14px;color:#4b5563;margin:0 0 24px;line-height:1.7;">
           This is a confirmation that your email notification settings are working correctly.
           You will receive an alert like this whenever new citations are detected for your tracked publications.
         </p>
-        <p style="font-size:14px;color:#5a6478;margin:0 0 32px;line-height:1.7;">
+        <p style="font-size:14px;color:#4b5563;margin:0 0 32px;line-height:1.7;">
           To manage your preferences or review your tracked works, visit your dashboard.
         </p>
-        <a href="{settings.app_url}/dashboard" style="display:inline-block;background:linear-gradient(135deg,#0d9488 0%,#4f46e5 100%);color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:7px;font-weight:600;font-size:14px;">Go to Dashboard</a>
+        <a href="{settings.app_url}/dashboard" style="display:inline-block;background-color:#111111;color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:7px;font-weight:600;font-size:14px;">Go to Dashboard</a>
       </div>
-      <div style="background:#f4f6f9;border-top:1px solid #e8ecf2;padding:24px 48px;text-align:center;font-size:11px;color:#9aa3b5;line-height:2;">
-        &copy; {settings.app_name} &middot; <a href="mailto:{settings.support_email}" style="color:#7b849a;">{settings.support_email}</a><br />
-        <a href="{settings.app_url}/settings" style="color:#7b849a;">Manage notification preferences</a>
+      <div style="background:#f8f9fb;border-top:1px solid #e8ecf2;padding:24px 48px;text-align:center;font-size:11px;color:#9ca3af;line-height:2;">
+        &copy; {settings.app_name} &middot; <a href="mailto:{settings.support_email}" style="color:#6b7280;">{settings.support_email}</a><br />
+        <a href="{settings.app_url}/settings" style="color:#6b7280;">Manage notification preferences</a>
       </div>
     </div>
   </div>
