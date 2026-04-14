@@ -475,7 +475,7 @@ async def import_works_by_author(
     # Safety: we require at least one DOI to overlap between the primary works
     # and the candidate's works before merging, so a same-name researcher in
     # the other source doesn't pollute the import.
-    if author_display_name:
+    if author_display_name and body.extra_sources:
         primary_dois: set[str] = set()
         for r in raw_works:
             d = _strip_doi(r.get("doi"))
@@ -483,7 +483,7 @@ async def import_works_by_author(
                 primary_dois.add(d.lower())
 
         try:
-            if body.source == "semantic_scholar":
+            if body.source == "semantic_scholar" and "openalex" in body.extra_sources:
                 # Primary was S2 — also pull from OpenAlex
                 oa_candidates = await openalex_svc.search_authors(author_display_name)
                 for c in oa_candidates[:3]:
@@ -504,8 +504,8 @@ async def import_works_by_author(
                                     len(oa_extra), author_display_name, len(overlap),
                                 )
                         break
-            else:
-                # Primary was OpenAlex — also pull from S2
+            elif body.source != "semantic_scholar" and "semantic_scholar" in body.extra_sources:
+                # Primary was OpenAlex/other — also pull from S2
                 s2_candidates = await s2_svc.search_authors(author_display_name)
                 for c in s2_candidates[:3]:
                     if _names_match(c.get("name", ""), author_display_name):
@@ -532,10 +532,8 @@ async def import_works_by_author(
             )
 
     # ── PubMed cross-source boost ────────────────────────────────────────────
-    # Always attempted as a third source (biomedical coverage that neither OA
-    # nor S2 captures reliably).  Re-computes the DOI set to include any works
-    # already merged in the OA↔S2 pass above.
-    if author_display_name:
+    # Only runs when "pubmed" is explicitly requested in extra_sources.
+    if author_display_name and "pubmed" in body.extra_sources:
         current_dois: set[str] = set()
         for r in raw_works:
             d = _strip_doi(r.get("doi"))
@@ -567,9 +565,8 @@ async def import_works_by_author(
             )
 
     # ── NASA ADS cross-source boost ──────────────────────────────────────────
-    # Astrophysics / space-science literature that OA, S2, and PubMed all miss.
-    # Recomputes the DOI set to include any works already merged above.
-    if author_display_name:
+    # Only runs when "nasa_ads" is explicitly requested in extra_sources.
+    if author_display_name and "nasa_ads" in body.extra_sources:
         current_dois_ads: set[str] = set()
         for r in raw_works:
             d = _strip_doi(r.get("doi"))
@@ -605,7 +602,7 @@ async def import_works_by_author(
     # the only automated path for papers from those venues.
     # Uses a two-step author-search → works-by-id pattern (more precise than
     # a bare name search against the literature index).
-    if author_display_name and body.source != "inspire":
+    if author_display_name and body.source != "inspire" and "inspire" in body.extra_sources:
         current_dois_inspire: set[str] = set()
         for r in raw_works:
             d = _strip_doi(r.get("doi"))
@@ -642,7 +639,7 @@ async def import_works_by_author(
     # Uses a two-step author-search (returns PID) → publication-search pattern
     # so results are scoped to exactly one person, not a name-based full-text
     # match that would flood the results with same-name researchers.
-    if author_display_name and body.source != "dblp":
+    if author_display_name and body.source != "dblp" and "dblp" in body.extra_sources:
         current_dois_dblp: set[str] = set()
         for r in raw_works:
             d = _strip_doi(r.get("doi"))

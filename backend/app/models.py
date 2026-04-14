@@ -66,8 +66,11 @@ class AddWorkRequest(BaseModel):
 class ImportByAuthorRequest(BaseModel):
     author_id: str
     author_name: Optional[str] = None
-    source: str = "openalex"  # "openalex" | "semantic_scholar"
+    source: str = "openalex"  # "openalex" | "semantic_scholar" | "inspire" | "dblp"
     confirm_merge: bool = False  # user confirmed two profiles belong to the same person
+    # Cross-source boosts to enable. Empty = primary source only (safe default).
+    # Valid values: "openalex", "semantic_scholar", "pubmed", "nasa_ads", "inspire", "dblp"
+    extra_sources: list[str] = []
 
 
 class UpdateProfileRequest(BaseModel):
