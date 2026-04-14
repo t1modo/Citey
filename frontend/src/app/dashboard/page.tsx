@@ -864,7 +864,7 @@ export default function DashboardPage() {
                 <div className="text-4xl">📑</div>
                 <p className="text-sm font-semibold text-gray-300">No citations yet</p>
                 <p className="text-xs text-gray-500 max-w-xs">
-                  Citations are checked automatically every day. New citations will appear here after the next scheduled check.
+                  Citations are checked daily. New ones will appear here automatically.
                 </p>
               </div>
             ) : (
