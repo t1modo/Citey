@@ -79,7 +79,12 @@ export default function SignUpPage() {
     try {
       if (mode === "signup") {
         await signUp(email, password);
-        await sendVerificationEmail();
+        // Account created — attempt verification email but don't block progress on failure
+        try {
+          await sendVerificationEmail();
+        } catch {
+          // ignore — user can resend from the verify screen
+        }
         setVerifyScreen(true);
       } else {
         await signIn(email, password);
