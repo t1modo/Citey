@@ -104,7 +104,7 @@ function PhaseScanning() {
 
       <div className="w-full">
         <div className="mb-2 flex justify-between text-sm text-gray-500">
-          <span>Scanning OpenAlex, Crossref &amp; Semantic Scholar</span>
+          <span>Scanning OpenAlex, Crossref, Semantic Scholar, PubMed, NASA ADS, INSPIRE-HEP &amp; DBLP</span>
           <span className="text-white">{progress}%</span>
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
