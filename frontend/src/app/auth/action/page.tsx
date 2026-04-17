@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { applyActionCode, verifyPasswordResetCode, confirmPasswordReset } from "firebase/auth";
@@ -47,7 +47,7 @@ function Spinner() {
   );
 }
 
-export default function AuthActionPage() {
+function AuthActionContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -303,5 +303,13 @@ export default function AuthActionPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AuthActionPage() {
+  return (
+    <Suspense>
+      <AuthActionContent />
+    </Suspense>
   );
 }
