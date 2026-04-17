@@ -46,7 +46,7 @@ export default function TrackedWorkCard({
           href={`https://doi.org/${work.doi}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="w-fit rounded text-xs font-mono text-gray-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-gray-300 hover:decoration-solid"
+          className="block max-w-full truncate rounded text-xs font-mono text-gray-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-gray-300 hover:decoration-solid"
         >
           {work.doi}
         </a>

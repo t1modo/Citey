@@ -44,7 +44,7 @@ function ToastContainer({
   onDismiss: (id: number) => void;
 }) {
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-[calc(100vw-3rem)]">
       {toasts.map((t) => (
         <div
           key={t.id}
@@ -240,7 +240,7 @@ function VerificationBanner({ onToast }: { onToast: (msg: string, type: ToastTyp
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
-      <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
         <p>
           <span className="font-semibold">Verify your email</span> to receive citation notification emails.
           Check your inbox for the verification link.
@@ -614,7 +614,7 @@ export default function DashboardPage() {
       />
 
       <Galaxy speedMultiplier={3} />
-      <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+      <div className="relative z-10 mx-auto max-w-7xl overflow-x-hidden px-4 py-10 sm:px-6 lg:px-8">
         {/* Header */}
         <ScrollReveal className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -676,8 +676,8 @@ export default function DashboardPage() {
         <div className="grid gap-10 lg:grid-cols-2">
           {/* ─── Tracked Works ─────────────────────────────────────── */}
           <section>
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-y-2 gap-x-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <h2 className="text-xl font-bold text-white">Tracked Works</h2>
                 {/* Sort controls */}
                 {works.length > 1 && (
@@ -700,12 +700,12 @@ export default function DashboardPage() {
               </div>
               <button
                 onClick={() => setAddModalOpen(true)}
-                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-950 shadow transition-opacity hover:bg-gray-100"
+                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white px-3 sm:px-4 py-2 text-sm font-semibold text-gray-950 shadow transition-opacity hover:bg-gray-100"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
-                Import Papers
+                <span className="hidden sm:inline">Import Papers</span>
               </button>
             </div>
 
@@ -797,7 +797,7 @@ export default function DashboardPage() {
 
           {/* ─── Citations ──────────────────────────────────────────── */}
           <section>
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-y-2">
               <div>
                 <h2 className="text-xl font-bold text-white">
                   Citations
@@ -832,7 +832,8 @@ export default function DashboardPage() {
                     onClick={markAllSeen}
                     className="text-xs font-medium text-gray-500 transition-colors hover:text-gray-300"
                   >
-                    Mark all as read
+                    <span className="hidden sm:inline">Mark all as read</span>
+                    <span className="sm:hidden">Mark read</span>
                   </button>
                 )}
                 <button
