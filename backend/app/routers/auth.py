@@ -51,8 +51,15 @@ async def send_email_verification(
             detail="No email address on file.",
         )
 
+    action_code_settings = firebase_auth.ActionCodeSettings(
+        url=f"{settings.app_url}/dashboard",
+    )
+
     try:
-        verification_link = firebase_auth.generate_email_verification_link(fb_user.email)
+        verification_link = firebase_auth.generate_email_verification_link(
+            fb_user.email,
+            action_code_settings=action_code_settings,
+        )
     except Exception as exc:
         logger.error("Failed to generate verification link for uid=%s: %s", uid, exc)
         raise HTTPException(
