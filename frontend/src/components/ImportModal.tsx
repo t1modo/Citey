@@ -361,8 +361,8 @@ export default function ImportModal({
           </p>
         )}
         <p className="text-xs text-gray-500">
-          {author.works_count} works
-          {author.h_index > 0 && <span className="ml-2">h-index {author.h_index}</span>}
+          {author.works_count > 0 && <span>{author.works_count} works</span>}
+          {author.h_index > 0 && <span className={author.works_count > 0 ? "ml-2" : ""}>h-index {author.h_index}</span>}
         </p>
       </div>
       <button

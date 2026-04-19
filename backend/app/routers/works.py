@@ -362,10 +362,18 @@ async def get_paper_authors_endpoint(
 
     oa_work = await openalex_svc.get_work_by_doi(doi)
     if oa_work is not None:
-        authors = [
-            _format_oa_authorship_candidate(a)
-            for a in (oa_work.get("authorships") or [])
+        authorships = [
+            a for a in (oa_work.get("authorships") or [])
             if (a.get("author") or {}).get("id")
+        ]
+        author_ids = [a["author"]["id"] for a in authorships]
+        full_profiles = await openalex_svc.get_authors_by_ids(author_ids)
+        profile_by_id = {p["id"]: p for p in full_profiles}
+        authors = [
+            _format_author_candidate(profile_by_id[a["author"]["id"]])
+            if a["author"]["id"] in profile_by_id
+            else _format_oa_authorship_candidate(a)
+            for a in authorships
         ]
         return {
             "paper_title": oa_work.get("title") or "Unknown title",

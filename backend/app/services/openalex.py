@@ -233,6 +233,41 @@ async def get_citation_counts(openalex_ids: list[str]) -> dict[str, int]:
     return counts
 
 
+async def get_authors_by_ids(author_ids: list[str]) -> list[dict]:
+    """Batch-fetch full OpenAlex author records by their IDs.
+
+    Returns a list in arbitrary order; caller should key by 'id' if ordering matters.
+    Silently returns an empty list on any error.
+    """
+    if not author_ids:
+        return []
+
+    short_ids = [
+        aid[len("https://openalex.org/"):] if aid.startswith("https://openalex.org/") else aid
+        for aid in author_ids[:25]
+    ]
+    url = f"{_BASE_URL}/authors"
+    params: dict[str, Any] = {
+        "filter": f"ids.openalex:{'|'.join(short_ids)}",
+        "per_page": len(short_ids),
+        "mailto": _MAILTO,
+    }
+    logger.debug("OpenAlex batch author lookup: %d ids", len(short_ids))
+
+    async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
+        try:
+            response = await client.get(url, params=params)
+        except httpx.RequestError as exc:
+            logger.error("OpenAlex batch author lookup error: %s", exc)
+            return []
+
+    if response.status_code != 200:
+        logger.warning("OpenAlex batch author lookup status %s", response.status_code)
+        return []
+
+    return response.json().get("results", [])
+
+
 async def search_authors(query: str) -> list[dict]:
     """Search OpenAlex for authors by name. Returns up to 10 candidates."""
     hit, cached = await _author_search_cache.get(query)
