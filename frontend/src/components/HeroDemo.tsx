@@ -207,7 +207,7 @@ function PhaseAddPaper() {
     // Input click:   wp2 fires at 2100ms from phase start; mount offset ~320ms → ~1780ms from mount
     // Typing starts: 2000ms after click = ~3780ms from mount (2 s delay)
     // Look up click: wp5 fires at 7300ms from phase start → ~6980ms from mount → clicking at ~7360ms
-    const focusTimer = setTimeout(() => setFocused(true), 1780);
+    const focusTimer = setTimeout(() => setFocused(true), 3100);
     const clickTimer = setTimeout(() => setBtnClicked(true), 7360);
 
     // Typing starts 2 s after the input click
