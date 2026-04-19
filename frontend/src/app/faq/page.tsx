@@ -16,58 +16,63 @@ const faqItems: FaqItem[] = [
     answer: (
       <>
         <p>
-          Citey queries three major open scholarly databases to find citations to your
-          tracked works:
+          Citey draws from seven scholarly databases across two roles:
         </p>
-        <ul className="mt-3 list-disc space-y-2 pl-5">
+        <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-gray-600">
+          Primary citation sources
+        </p>
+        <ul className="mt-2 list-disc space-y-2 pl-5">
           <li>
-            <strong className="text-white">OpenAlex</strong>, a free, open index of
-            over 250 million scholarly works, authors, institutions, and sources. OpenAlex
-            provides rich reference and citation data and is updated daily. Learn more at{" "}
-            <a
-              href="https://openalex.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-400 underline hover:text-gray-300"
-            >
-              openalex.org
-            </a>
-            .
+            <strong className="text-white">OpenAlex</strong> — a free, open index of
+            over 250 million scholarly works updated daily. The main source for citation
+            tracking across all disciplines. Learn more at{" "}
+            <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">openalex.org</a>.
           </li>
           <li>
-            <strong className="text-white">Crossref</strong>, a digital object
-            identifier (DOI) registration agency that aggregates metadata from thousands of
-            publishers. Crossref provides reference lists submitted by publishers and is the
-            canonical source of DOI resolution. Learn more at{" "}
-            <a
-              href="https://www.crossref.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-400 underline hover:text-gray-300"
-            >
-              crossref.org
-            </a>
-            .
+            <strong className="text-white">Semantic Scholar</strong> — an AI-powered
+            index of over 200 million papers from the Allen Institute for AI. Provides
+            strong additional coverage for computer science, AI/ML, and biomedical
+            literature. Learn more at{" "}
+            <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">semanticscholar.org</a>.
           </li>
           <li>
-            <strong className="text-white">Semantic Scholar</strong>, a free, AI-powered
-            research tool from the Allen Institute for AI that indexes over 200 million
-            papers across all fields of science. Semantic Scholar provides additional
-            citation coverage, particularly for computer science and biomedical literature.
-            Learn more at{" "}
-            <a
-              href="https://www.semanticscholar.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-400 underline hover:text-gray-300"
-            >
-              semanticscholar.org
-            </a>
-            .
+            <strong className="text-white">Crossref</strong> — the canonical DOI
+            registration agency, aggregating reference lists from thousands of publishers.
+            Used both for DOI resolution and as a citation source. Learn more at{" "}
+            <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">crossref.org</a>.
+          </li>
+        </ul>
+        <p className="mt-4 text-xs font-semibold uppercase tracking-widest text-gray-600">
+          Author import sources
+        </p>
+        <p className="mt-1">
+          When you import papers via an author profile, Citey can additionally draw
+          from four specialist databases:
+        </p>
+        <ul className="mt-2 list-disc space-y-2 pl-5">
+          <li>
+            <strong className="text-white">PubMed</strong> — 35 million biomedical and
+            life-science records from the NCBI. Learn more at{" "}
+            <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">pubmed.ncbi.nlm.nih.gov</a>.
+          </li>
+          <li>
+            <strong className="text-white">NASA ADS</strong> — astronomy, astrophysics,
+            and space-science literature. Learn more at{" "}
+            <a href="https://ui.adsabs.harvard.edu" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">ui.adsabs.harvard.edu</a>.
+          </li>
+          <li>
+            <strong className="text-white">INSPIRE-HEP</strong> — the canonical database
+            for high-energy physics, including JACoW conference proceedings. Learn more at{" "}
+            <a href="https://inspirehep.net" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">inspirehep.net</a>.
+          </li>
+          <li>
+            <strong className="text-white">DBLP</strong> — near-complete ACM and IEEE
+            conference and journal coverage for computer science. Learn more at{" "}
+            <a href="https://dblp.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">dblp.org</a>.
           </li>
         </ul>
         <p className="mt-3">
-          Because these sources rely on publisher submissions and indexing pipelines,
+          Because all sources rely on publisher submissions and indexing pipelines,
           coverage is not 100% universal. Conference papers, preprints, and grey literature
           may have limited citation data.
         </p>
@@ -220,30 +225,57 @@ const faqItems: FaqItem[] = [
             </code>
           </li>
           <li>
-            <strong className="text-white">DOI.org URL:</strong>{" "}
+            <strong className="text-white">HTTPS URL:</strong>{" "}
             <code className="rounded bg-gray-800 px-1 py-0.5 font-mono text-xs text-gray-500">
               https://doi.org/10.1038/s41586-021-03819-2
             </code>
           </li>
           <li>
-            <strong className="text-white">HTTP DOI URL:</strong>{" "}
+            <strong className="text-white">HTTP URL:</strong>{" "}
             <code className="rounded bg-gray-800 px-1 py-0.5 font-mono text-xs text-gray-500">
-              http://dx.doi.org/10.1038/s41586-021-03819-2
+              http://doi.org/10.1038/s41586-021-03819-2
+            </code>
+          </li>
+          <li>
+            <strong className="text-white">Protocol-free URL:</strong>{" "}
+            <code className="rounded bg-gray-800 px-1 py-0.5 font-mono text-xs text-gray-500">
+              doi.org/10.1038/s41586-021-03819-2
             </code>
           </li>
         </ul>
         <p className="mt-3">
-          All valid DOIs begin with <code className="rounded bg-gray-800 px-1 py-0.5 font-mono text-xs text-gray-500">10.</code> followed
-          by a registrant code and suffix. DOIs are resolved via{" "}
+          All valid DOIs begin with{" "}
+          <code className="rounded bg-gray-800 px-1 py-0.5 font-mono text-xs text-gray-500">10.</code>{" "}
+          followed by a registrant code and suffix. Citey resolves DOIs through a
+          fallback chain —{" "}
           <a
-            href="https://www.doi.org"
+            href="https://www.crossref.org"
             target="_blank"
             rel="noopener noreferrer"
             className="text-gray-400 underline hover:text-gray-300"
           >
-            doi.org
+            Crossref
+          </a>
+          ,{" "}
+          <a
+            href="https://datacite.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-400 underline hover:text-gray-300"
+          >
+            DataCite
+          </a>
+          , and{" "}
+          <a
+            href="https://openalex.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-400 underline hover:text-gray-300"
+          >
+            OpenAlex
           </a>{" "}
-          to retrieve paper metadata. If your DOI is not recognised, double-check it at{" "}
+          — so publisher DOIs, arXiv preprints, and institutional repository records
+          are all supported. If your DOI is not recognised, double-check it at{" "}
           <a
             href="https://search.crossref.org"
             target="_blank"
@@ -331,8 +363,18 @@ export default function FaqPage() {
         <h2 className="mb-2 text-xl font-bold text-white">
           Still have questions?
         </h2>
+        <p className="mb-1 text-sm text-gray-400">
+          Check the dashboard or update your preferences in Settings.
+        </p>
         <p className="mb-6 text-sm text-gray-400">
-          Still stuck? Check the dashboard or update your preferences in Settings.
+          For anything else, email us at{" "}
+          <a
+            href="mailto:support@citey.email"
+            className="text-gray-300 underline hover:text-white"
+          >
+            support@citey.email
+          </a>
+          .
         </p>
         <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link

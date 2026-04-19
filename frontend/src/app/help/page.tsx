@@ -457,8 +457,18 @@ export default function HelpPage() {
           <div className="p-8">
             <div className="mb-3 flex justify-center text-3xl">💬</div>
             <h2 className="mb-2 text-xl font-bold text-white">Still have questions?</h2>
-            <p className="mb-5 text-sm text-gray-400">
+            <p className="mb-1 text-sm text-gray-400">
               Common questions about accuracy, privacy, and how it all works.
+            </p>
+            <p className="mb-5 text-sm text-gray-400">
+              Or email us at{" "}
+              <a
+                href="mailto:support@citey.email"
+                className="text-gray-300 underline hover:text-white"
+              >
+                support@citey.email
+              </a>
+              .
             </p>
             <Link
               href="/faq"
