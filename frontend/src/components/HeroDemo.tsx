@@ -464,9 +464,9 @@ const CURSOR_SEQUENCES: Waypoint[][] = [
   ],
   // Phase 1: Add Papers modal — hover over input, click, 2 s delay, type DOI, click Look up
   [
-    { lp: "50%", tp: "27%", afterMs: 2100 },              // cursor moves to input, hovers ~2 s
-    { lp: "50%", tp: "27%", afterMs: 700,  click: true }, // cursor clicks input
-    { lp: "50%", tp: "27%", afterMs: 3600 },              // wait while typing (2 s delay + DOI)
+    { lp: "50%", tp: "29%", afterMs: 2100 },              // cursor moves to input, hovers ~2 s
+    { lp: "50%", tp: "29%", afterMs: 700,  click: true }, // cursor clicks input
+    { lp: "50%", tp: "29%", afterMs: 3600 },              // wait while typing (2 s delay + DOI)
     { lp: "85%", tp: "47%", afterMs: 900  },              // cursor travels to Look up button
     { lp: "85%", tp: "47%", afterMs: 300,  click: true }, // cursor clicks Look up
   ],
