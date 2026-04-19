@@ -66,20 +66,6 @@ export default function TrackedWorkCard({
         </p>
       )}
 
-      {/* Topic tags */}
-      {work.topics && work.topics.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {work.topics.slice(0, 3).map((topic) => (
-            <span
-              key={topic}
-              className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-medium text-gray-500 ring-1 ring-white/10"
-            >
-              {topic}
-            </span>
-          ))}
-        </div>
-      )}
-
       {/* Citation stats */}
       <div className="flex items-center gap-2">
         {/* Lifetime total — best of S2 and OpenAlex */}
