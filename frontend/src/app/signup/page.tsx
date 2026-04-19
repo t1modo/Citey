@@ -35,7 +35,7 @@ function firebaseErrorMessage(err: unknown): string {
 }
 
 export default function SignUpPage() {
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -48,8 +48,21 @@ export default function SignUpPage() {
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
 
+  // Redirect verified users away from this page; surface verify screen for unverified ones.
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+    if (user.emailVerified) {
+      router.replace("/dashboard");
+    } else {
+      // Returning unverified user — show the verify screen with their email pre-filled.
+      setEmail(user.email ?? "");
+      setVerifyScreen(true);
+    }
+  }, [user, authLoading, router]);
+
   // Poll Firebase every 3 s while on the verify screen.
-  // As soon as emailVerified flips to true, redirect to home.
+  // As soon as emailVerified flips to true, redirect to the dashboard.
   useEffect(() => {
     if (!verifyScreen) return;
 
@@ -59,7 +72,7 @@ export default function SignUpPage() {
       await currentUser.reload();
       if (currentUser.emailVerified) {
         clearInterval(interval);
-        router.push("/");
+        router.push("/dashboard");
       }
     }, 3000);
 
@@ -87,8 +100,13 @@ export default function SignUpPage() {
         }
         setVerifyScreen(true);
       } else {
-        await signIn(email, password);
-        router.push("/dashboard");
+        const credential = await signIn(email, password);
+        if (!credential.user.emailVerified) {
+          // Account exists but email not yet confirmed — show the verify screen.
+          setVerifyScreen(true);
+        } else {
+          router.push("/dashboard");
+        }
       }
     } catch (err) {
       setError(firebaseErrorMessage(err));
