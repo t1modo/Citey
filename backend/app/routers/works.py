@@ -190,6 +190,17 @@ async def add_work(
             work_info["topics"] = extract_topics(oa_raw)
             work_info["venue"] = extract_venue(oa_raw)
             work_info["work_type"] = oa_raw.get("type")
+            # OpenAlex author names come from entity resolution and are more
+            # reliable than raw publisher-submitted names from Crossref.
+            oa_authors = [
+                s for s in (
+                    (a.get("author") or {}).get("display_name", "").strip()
+                    for a in (oa_raw.get("authorships") or [])
+                )
+                if s
+            ]
+            if oa_authors:
+                work_info["authors"] = oa_authors
             logger.info("Resolved OpenAlex ID for %s: %s", work_info["doi"], work_info["openalex_id"])
 
     # Normalise DOI to lowercase for consistent Firestore document IDs.
