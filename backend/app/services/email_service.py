@@ -226,7 +226,7 @@ async def send_verification_email(
     <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
       <div style="background:linear-gradient(160deg,#0f0f14 0%,#1c1c28 100%);padding:36px 48px;">
         <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">{settings.app_name}<span style="color:rgba(255,255,255,0.35);">.</span></div>
-        <div style="font-size:12px;font-weight:500;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.1em;margin-top:5px;">Citation Tracking</div>
+        <div style="font-size:12px;font-weight:500;color:#ffffff;text-transform:uppercase;letter-spacing:0.1em;margin-top:5px;">Citation Tracking</div>
       </div>
       <div style="padding:40px 48px 36px;">
         <p style="font-size:17px;font-weight:600;color:#1a1d23;margin:0 0 8px;">Verify your email address</p>
@@ -363,7 +363,7 @@ async def send_test_email(
     <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
       <div style="background:linear-gradient(160deg,#0f0f14 0%,#1c1c28 100%);padding:36px 48px;">
         <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">{settings.app_name}<span style="color:rgba(255,255,255,0.35);">.</span></div>
-        <div style="font-size:12px;font-weight:500;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.1em;margin-top:5px;">Citation Tracking</div>
+        <div style="font-size:12px;font-weight:500;color:#ffffff;text-transform:uppercase;letter-spacing:0.1em;margin-top:5px;">Citation Tracking</div>
       </div>
       <div style="padding:40px 48px 36px;">
         <p style="font-size:17px;font-weight:600;color:#1a1d23;margin:0 0 8px;">Notifications are active, {recipient_name}</p>
