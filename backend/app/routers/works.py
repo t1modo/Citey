@@ -265,7 +265,6 @@ def _format_author_candidate(r: dict) -> dict:
 
 def _format_s2_author_candidate(r: dict) -> dict:
     """Shape a raw Semantic Scholar author dict for the frontend."""
-    external = r.get("externalIds") or {}
     affiliations = [
         {"name": aff, "year_range": None}
         for aff in (r.get("affiliations") or [])[:3]
@@ -277,8 +276,28 @@ def _format_s2_author_candidate(r: dict) -> dict:
         "works_count": r.get("paperCount", 0),
         "h_index": r.get("hIndex", 0),
         "affiliations": affiliations,
-        "topics": [],  # S2 author search doesn't return topic data
+        "topics": [],
         "source": "semantic_scholar",
+    }
+
+
+def _format_oa_authorship_candidate(authorship: dict) -> dict:
+    """Shape an OpenAlex authorship entry (from a work) for the frontend."""
+    author = authorship.get("author") or {}
+    institutions = authorship.get("institutions") or []
+    affiliations = [
+        {"name": inst.get("display_name", ""), "year_range": None}
+        for inst in institutions[:3]
+        if inst.get("display_name")
+    ]
+    return {
+        "id": author.get("id", ""),
+        "display_name": author.get("display_name", ""),
+        "works_count": 0,
+        "h_index": 0,
+        "affiliations": affiliations,
+        "topics": [],
+        "source": "openalex",
     }
 
 
@@ -321,30 +340,43 @@ async def get_paper_authors_endpoint(
     doi: str = Query(..., min_length=5),
     uid: str = Depends(get_current_user),
 ) -> dict:
-    """Look up a paper by DOI on Semantic Scholar and return its authors as
-    AuthorCandidate records.  Used for the 'find by paper DOI' import mode."""
+    """Look up a paper by DOI and return its authors as AuthorCandidate records.
+    Tries Semantic Scholar first, falls back to OpenAlex for broader coverage."""
     _check_rate_limit(_paper_authors_timestamps, uid, _PAPER_AUTHORS_RATE_LIMIT)
 
+    from app.services import openalex as openalex_svc
     from app.services import semantic_scholar as s2_svc
 
     paper = await s2_svc.get_paper_with_authors(doi)
-    if paper is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Paper not found on Semantic Scholar. Check the DOI and try again.",
-        )
+    if paper is not None:
+        authors = [
+            _format_s2_author_candidate(a)
+            for a in (paper.get("authors") or [])
+            if a.get("authorId")
+        ]
+        return {
+            "paper_title": paper.get("title") or "Unknown title",
+            "paper_year": paper.get("year"),
+            "authors": authors,
+        }
 
-    authors = [
-        _format_s2_author_candidate(a)
-        for a in (paper.get("authors") or [])
-        if a.get("authorId")
-    ]
+    oa_work = await openalex_svc.get_work_by_doi(doi)
+    if oa_work is not None:
+        authors = [
+            _format_oa_authorship_candidate(a)
+            for a in (oa_work.get("authorships") or [])
+            if (a.get("author") or {}).get("id")
+        ]
+        return {
+            "paper_title": oa_work.get("title") or "Unknown title",
+            "paper_year": oa_work.get("publication_year"),
+            "authors": authors,
+        }
 
-    return {
-        "paper_title": paper.get("title") or "Unknown title",
-        "paper_year": paper.get("year"),
-        "authors": authors,
-    }
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Paper not found on Semantic Scholar or OpenAlex. Check the DOI and try again.",
+    )
 
 
 @router.post("/import")
