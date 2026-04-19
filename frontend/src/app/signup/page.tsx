@@ -318,17 +318,19 @@ export default function SignUpPage() {
         <p className="mt-6 text-center text-xs text-gray-600">
           By using Citey you agree to our terms of service and privacy policy.
           Citation data sourced from{" "}
-          <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">
-            OpenAlex
-          </a>
+          <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">OpenAlex</a>
           ,{" "}
-          <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">
-            Crossref
-          </a>
+          <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">Crossref</a>
+          ,{" "}
+          <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">Semantic Scholar</a>
+          ,{" "}
+          <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">PubMed</a>
+          ,{" "}
+          <a href="https://ui.adsabs.harvard.edu" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">NASA ADS</a>
+          ,{" "}
+          <a href="https://inspirehep.net" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">INSPIRE-HEP</a>
           , and{" "}
-          <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">
-            Semantic Scholar
-          </a>
+          <a href="https://dblp.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">DBLP</a>
           .
         </p>
       </div>

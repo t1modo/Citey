@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
+// The card is authored at this width. On narrower viewports we apply a
+// CSS scale transform so the layout never reflows and cursor hotspots
+// (which are % of the card) stay perfectly aligned at every screen size.
+const DESIGN_WIDTH = 576;
+
 type Phase = 0 | 1 | 2 | 3;
 
 const PHASE_LABELS = ["Dashboard", "Add papers", "Citey scans", "You're cited"];
@@ -27,8 +32,8 @@ function DemoCursor({ pos, clicking }: { pos: CursorPos; clicking: boolean }) {
         width="16"
         height="25"
         viewBox="0 0 16 25"
-        animate={clicking ? { scale: [1, 0.58, 1.28, 1] } : {}}
-        transition={{ duration: 0.38 }}
+        animate={clicking ? { scale: [1, 0.48, 1.42, 1] } : {}}
+        transition={{ duration: 0.44 }}
         style={{
           transformOrigin: "1px 0.5px",
           filter: "drop-shadow(1px 2px 2px rgba(0,0,0,0.55))",
@@ -69,6 +74,16 @@ function DemoCursor({ pos, clicking }: { pos: CursorPos; clicking: boolean }) {
 
 // ─── Phase 0: Tracked Works (matches real TrackedWorkCard) ────────────────────
 function PhaseDashboard() {
+  const [btnPressed, setBtnPressed] = useState(false);
+
+  useEffect(() => {
+    setBtnPressed(false);
+    // Cursor click fires at ~4100ms from phase start; mount offset ~0ms first load
+    // (~320ms when cycling). Using 4100ms keeps first-load perfect.
+    const t = setTimeout(() => setBtnPressed(true), 4100);
+    return () => clearTimeout(t);
+  }, []);
+
   const papers = [
     {
       title: "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
@@ -106,12 +121,16 @@ function PhaseDashboard() {
           </div>
         </div>
         {/* Import Papers button — matches real button */}
-        <button className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-950 shadow">
+        <motion.button
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-950 shadow"
+          animate={btnPressed ? { scale: [1, 0.84, 1.08, 1] } : {}}
+          transition={{ duration: 0.42, ease: "easeInOut" }}
+        >
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           Import Papers
-        </button>
+        </motion.button>
       </div>
 
       <p className="text-xs text-gray-500">2 papers</p>
@@ -173,12 +192,14 @@ function PhaseDashboard() {
 
 // ─── Phase 1: Import modal (matches real ImportModal input phase) ─────────────
 function PhaseAddPaper() {
+  const [focused, setFocused] = useState(false);
   const [typed, setTyped] = useState("");
   const [detected, setDetected] = useState(false);
   const [btnClicked, setBtnClicked] = useState(false);
 
   useEffect(() => {
     let idx = 0;
+    setFocused(false);
     setTyped("");
     setDetected(false);
     setBtnClicked(false);
@@ -186,6 +207,7 @@ function PhaseAddPaper() {
     // Input click:   wp2 fires at 2100ms from phase start; mount offset ~320ms → ~1780ms from mount
     // Typing starts: 2000ms after click = ~3780ms from mount (2 s delay)
     // Look up click: wp5 fires at 7300ms from phase start → ~6980ms from mount → clicking at ~7360ms
+    const focusTimer = setTimeout(() => setFocused(true), 1780);
     const clickTimer = setTimeout(() => setBtnClicked(true), 7360);
 
     // Typing starts 2 s after the input click
@@ -202,6 +224,7 @@ function PhaseAddPaper() {
     }, 3780);
 
     return () => {
+      clearTimeout(focusTimer);
       clearTimeout(clickTimer);
       clearTimeout(start);
     };
@@ -230,12 +253,19 @@ function PhaseAddPaper() {
       {/* Input */}
       <div>
         <div className="flex items-center rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5">
-          <span className="flex-1 font-mono text-sm">
-            {typed ? (
-              <span className="text-white">
-                {typed}
-                {!detected && <span className="inline-block w-px animate-pulse bg-white">&nbsp;</span>}
-              </span>
+          <span className="flex-1 text-left font-mono text-sm">
+            {focused ? (
+              <>
+                {typed && <span className="text-white">{typed}</span>}
+                {!detected && (
+                  <motion.span
+                    className="inline-block w-px bg-white"
+                    style={{ height: "1em", verticalAlign: "text-bottom", marginLeft: "1px" }}
+                    animate={{ opacity: [1, 1, 0, 0] }}
+                    transition={{ duration: 1, times: [0, 0.47, 0.5, 0.97], repeat: Infinity, ease: "linear" }}
+                  />
+                )}
+              </>
             ) : (
               <span className="text-gray-500">DOI, arXiv URL, author URL, or name…</span>
             )}
@@ -305,7 +335,7 @@ function PhaseScanning() {
 
   return (
     <div className="flex flex-col items-center gap-6">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">
+      <p className="text-center text-xs font-semibold uppercase tracking-widest text-gray-500">
         Daily citation scan
       </p>
 
@@ -318,9 +348,9 @@ function PhaseScanning() {
       </div>
 
       <div className="w-full">
-        <div className="mb-2 flex justify-between text-xs text-gray-500">
-          <span>OpenAlex · Crossref · Semantic Scholar · PubMed · NASA ADS · INSPIRE · DBLP</span>
-          <span className="font-medium text-white">{progress}%</span>
+        <div className="mb-2 flex justify-between gap-2 text-xs text-gray-500">
+          <span className="truncate">OpenAlex · Crossref · Semantic Scholar · PubMed · NASA ADS · INSPIRE · DBLP</span>
+          <span className="shrink-0 font-medium text-white">{progress}%</span>
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
           <motion.div
@@ -429,8 +459,8 @@ const CURSOR_SEQUENCES: Waypoint[][] = [
   [
     { lp: "72%", tp: "38%", afterMs: 1000 },              // first card "+12 new"
     { lp: "66%", tp: "66%", afterMs: 1100 },              // second card "+3 new"
-    { lp: "86%", tp: "17%", afterMs: 3000 },              // cursor settles on Import Papers (~3 s)
-    { lp: "86%", tp: "17%", afterMs: 600, click: true },  // then clicks
+    { lp: "86%", tp: "17%", afterMs: 1620 },              // hover Import Papers (~1.6 s → click ~2 s after)
+    { lp: "86%", tp: "17%", afterMs: 600, click: true },  // click
   ],
   // Phase 1: Add Papers modal — hover over input, click, 2 s delay, type DOI, click Look up
   [
@@ -460,6 +490,32 @@ export default function HeroDemo() {
   const [phase, setPhase] = useState<Phase>(0);
   const [cursorPos, setCursorPos] = useState<CursorPos>({ lp: "50%", tp: "50%" });
   const [clicking, setClicking] = useState(false);
+
+  // Scale-to-fit: card renders at DESIGN_WIDTH; on narrow viewports we apply a
+  // CSS transform so cursor hotspots (% of card) stay aligned at every size.
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  // Seed with a close estimate to avoid a height flash on first paint.
+  const [cardH, setCardH] = useState(490);
+
+  // Track wrapper width and recompute scale on resize.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const update = () => setScale(Math.min(1, wrapper.offsetWidth / DESIGN_WIDTH));
+    const ro = new ResizeObserver(update);
+    ro.observe(wrapper);
+    update();
+    return () => ro.disconnect();
+  }, []);
+
+  // Re-measure card natural height whenever phase or scale changes.
+  // offsetHeight is the layout height (pre-transform), which is what we need.
+  useEffect(() => {
+    const card = cardRef.current;
+    if (card && card.offsetHeight > 0) setCardH(card.offsetHeight);
+  }, [phase, scale]);
 
   useEffect(() => {
     const t = setTimeout(
@@ -500,9 +556,27 @@ export default function HeroDemo() {
     };
   }, [phase]);
 
+  const isScaled = scale < 1;
+
   return (
-    <div className="relative z-10 mx-auto w-full max-w-xl lg:max-w-2xl">
-      <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-gray-950/80 shadow-2xl shadow-black/50 backdrop-blur-xl">
+    // Outer wrapper: constrains max-width and provides height when card is scaled.
+    <div
+      ref={wrapperRef}
+      className="relative z-10 mx-auto w-full max-w-xl text-left lg:max-w-2xl"
+      style={isScaled ? { height: cardH * scale } : undefined}
+    >
+      {/* Card: fixed at DESIGN_WIDTH when scaled so layout never reflows. */}
+      <div
+        ref={cardRef}
+        className="relative overflow-hidden rounded-2xl border border-white/15 bg-gray-950/80 shadow-2xl shadow-black/50 backdrop-blur-xl"
+        style={isScaled ? {
+          width: DESIGN_WIDTH,
+          position: "absolute",
+          left: "50%",
+          transform: `translateX(-50%) scale(${scale})`,
+          transformOrigin: "top center",
+        } : undefined}
+      >
         <DemoCursor pos={cursorPos} clicking={clicking} />
 
         {/* Title bar */}
