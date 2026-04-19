@@ -47,6 +47,7 @@ export default function SignUpPage() {
   const [verifyScreen, setVerifyScreen] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
+  const [resendError, setResendError] = useState<string | null>(null);
 
   // Redirect verified users away from this page; surface verify screen for unverified ones.
   useEffect(() => {
@@ -117,11 +118,17 @@ export default function SignUpPage() {
 
   const handleResend = async () => {
     setResendLoading(true);
+    setResendError(null);
     try {
       await sendVerificationEmail();
       setResendSent(true);
-    } catch {
-      // ignore
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("already verified")) {
+        setResendError("Your email is already verified. Try signing in.");
+      } else {
+        setResendError("Failed to send — please try again in a moment.");
+      }
     } finally {
       setResendLoading(false);
     }
@@ -171,13 +178,18 @@ export default function SignUpPage() {
               {resendSent ? (
                 <p className="text-sm text-gray-400">Verification email resent.</p>
               ) : (
-                <button
-                  onClick={handleResend}
-                  disabled={resendLoading}
-                  className="text-sm font-medium text-gray-300 underline decoration-dotted underline-offset-2 hover:text-white disabled:opacity-50 transition-colors"
-                >
-                  {resendLoading ? "Sending…" : "Resend verification email"}
-                </button>
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    onClick={handleResend}
+                    disabled={resendLoading}
+                    className="text-sm font-medium text-gray-300 underline decoration-dotted underline-offset-2 hover:text-white disabled:opacity-50 transition-colors"
+                  >
+                    {resendLoading ? "Sending…" : "Resend verification email"}
+                  </button>
+                  {resendError && (
+                    <p className="text-xs text-red-400">{resendError}</p>
+                  )}
+                </div>
               )}
               <Link
                 href="/dashboard"
