@@ -13,11 +13,196 @@ type Phase = 0 | 1 | 2 | 3;
 const PHASE_LABELS = ["Dashboard", "Add papers", "Citey scans", "You're cited"];
 const PHASE_MS = [6400, 8500, 4000, 6500];
 
-const DOI = "10.18653/v1/2024.emnlp-main.291";
+// ─── Demo data pool ──────────────────────────────────────────────────────────
+
+type DemoTrackedPaper = {
+  title: string;
+  year: number;
+  authors: string;
+  citedBy: string;
+  newCitations: number;
+};
+
+type DemoCitation = {
+  citingTitle: string;
+  citingAuthors: string;
+  citingDate: string;
+  yourPaper: string;
+  affiliations: string[];
+};
+
+type DemoEntry = {
+  doi: string;
+  trackedPapers: [DemoTrackedPaper, DemoTrackedPaper];
+  citation: DemoCitation;
+};
+
+const DEMO_POOL: DemoEntry[] = [
+  // ── 1. Transformers / NLP ────────────────────────────────────────────────
+  {
+    doi: "10.48550/arXiv.1706.03762",
+    trackedPapers: [
+      {
+        title: "Attention Is All You Need",
+        year: 2017,
+        authors: "Vaswani · Shazeer · Parmar · +5 more",
+        citedBy: "131,204",
+        newCitations: 47,
+      },
+      {
+        title: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+        year: 2019,
+        authors: "Devlin · Chang · Lee · +1 more",
+        citedBy: "96,518",
+        newCitations: 29,
+      },
+    ],
+    citation: {
+      citingTitle: "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+      citingAuthors: "Gu · Dao",
+      citingDate: "Apr 12, 2026",
+      yourPaper: "Attention Is All You Need",
+      affiliations: ["Carnegie Mellon", "Princeton", "Together AI"],
+    },
+  },
+  // ── 2. Computer Vision ───────────────────────────────────────────────────
+  {
+    doi: "10.1109/CVPR.2016.90",
+    trackedPapers: [
+      {
+        title: "Deep Residual Learning for Image Recognition",
+        year: 2016,
+        authors: "He · Zhang · Ren · Sun",
+        citedBy: "208,347",
+        newCitations: 63,
+      },
+      {
+        title: "An Image is Worth 16×16 Words: Transformers for Image Recognition at Scale",
+        year: 2021,
+        authors: "Dosovitskiy · Beyer · Kolesnikov · +10 more",
+        citedBy: "44,281",
+        newCitations: 19,
+      },
+    ],
+    citation: {
+      citingTitle: "Segment Anything",
+      citingAuthors: "Kirillov · Mintun · Ravi · +9 more",
+      citingDate: "Apr 18, 2026",
+      yourPaper: "Deep Residual Learning for Image Recognition",
+      affiliations: ["Meta AI Research", "CMU"],
+    },
+  },
+  // ── 3. Large Language Models ─────────────────────────────────────────────
+  {
+    doi: "10.48550/arXiv.2005.14165",
+    trackedPapers: [
+      {
+        title: "Language Models are Few-Shot Learners",
+        year: 2020,
+        authors: "Brown · Mann · Ryder · +28 more",
+        citedBy: "57,831",
+        newCitations: 22,
+      },
+      {
+        title: "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+        year: 2022,
+        authors: "Wei · Wang · Schuurmans · +4 more",
+        citedBy: "11,842",
+        newCitations: 8,
+      },
+    ],
+    citation: {
+      citingTitle: "Llama 2: Open Foundation and Fine-Tuned Chat Models",
+      citingAuthors: "Touvron · Martin · Stone · +55 more",
+      citingDate: "Apr 15, 2026",
+      yourPaper: "Language Models are Few-Shot Learners",
+      affiliations: ["Meta AI", "UT Austin", "CMU"],
+    },
+  },
+  // ── 4. CRISPR / Genomics ─────────────────────────────────────────────────
+  {
+    doi: "10.1126/science.1225829",
+    trackedPapers: [
+      {
+        title: "A Programmable Dual-RNA–Guided DNA Endonuclease in Adaptive Bacterial Immunity",
+        year: 2012,
+        authors: "Jinek · Chylinski · Fonfara · +3 more",
+        citedBy: "24,108",
+        newCitations: 11,
+      },
+      {
+        title: "Multiplex Genome Engineering Using CRISPR/Cas Systems",
+        year: 2013,
+        authors: "Cong · Ran · Cox · +7 more",
+        citedBy: "18,392",
+        newCitations: 6,
+      },
+    ],
+    citation: {
+      citingTitle: "Programmable base editing of A·T to G·C in genomic DNA without DNA cleavage",
+      citingAuthors: "Gaudelli · Komor · Rees · +4 more",
+      citingDate: "Apr 9, 2026",
+      yourPaper: "A Programmable Dual-RNA–Guided DNA Endonuclease in Adaptive Bacterial Immunity",
+      affiliations: ["Broad Institute", "Harvard University", "MIT"],
+    },
+  },
+  // ── 5. Gravitational Waves / Astrophysics ────────────────────────────────
+  {
+    doi: "10.1103/PhysRevLett.116.061102",
+    trackedPapers: [
+      {
+        title: "Observation of Gravitational Waves from a Binary Black Hole Merger",
+        year: 2016,
+        authors: "Abbott · Abbott · Abbott · +1009 more",
+        citedBy: "18,743",
+        newCitations: 9,
+      },
+      {
+        title: "First M87 Event Horizon Telescope Results. I. The Shadow of the Supermassive Black Hole",
+        year: 2019,
+        authors: "Akiyama · Alberdi · Alef · +198 more",
+        citedBy: "4,821",
+        newCitations: 4,
+      },
+    ],
+    citation: {
+      citingTitle: "GW190521: A Binary Black Hole Merger with a Total Mass of 150 M☉",
+      citingAuthors: "Abbott · Abbott · Abbott · +1203 more",
+      citingDate: "Apr 7, 2026",
+      yourPaper: "Observation of Gravitational Waves from a Binary Black Hole Merger",
+      affiliations: ["LIGO Scientific Collaboration", "Virgo Collaboration"],
+    },
+  },
+  // ── 6. Behavioral Economics ──────────────────────────────────────────────
+  {
+    doi: "10.2307/1914185",
+    trackedPapers: [
+      {
+        title: "Prospect Theory: An Analysis of Decision under Risk",
+        year: 1979,
+        authors: "Kahneman · Tversky",
+        citedBy: "57,832",
+        newCitations: 18,
+      },
+      {
+        title: "The Strength of Weak Ties",
+        year: 1973,
+        authors: "Granovetter",
+        citedBy: "64,201",
+        newCitations: 21,
+      },
+    ],
+    citation: {
+      citingTitle: "A Model of Reference-Dependent Preferences",
+      citingAuthors: "Kőszegi · Rabin",
+      citingDate: "Apr 14, 2026",
+      yourPaper: "Prospect Theory: An Analysis of Decision under Risk",
+      affiliations: ["UC Berkeley", "Harvard University"],
+    },
+  },
+];
 
 // ─── Windows arrow cursor ─────────────────────────────────────────────────────
-// Tip of the arrow path sits at (1, 0.5). marginLeft/Top aligns that point with
-// the waypoint coordinate so the hotspot is always the tip, not the bounding box.
 interface CursorPos { lp: string; tp: string }
 
 function DemoCursor({ pos, clicking }: { pos: CursorPos; clicking: boolean }) {
@@ -72,38 +257,18 @@ function DemoCursor({ pos, clicking }: { pos: CursorPos; clicking: boolean }) {
   );
 }
 
-// ─── Phase 0: Tracked Works (matches real TrackedWorkCard) ────────────────────
-function PhaseDashboard() {
+// ─── Phase 0: Tracked Works ───────────────────────────────────────────────────
+function PhaseDashboard({ papers }: { papers: DemoEntry["trackedPapers"] }) {
   const [btnPressed, setBtnPressed] = useState(false);
 
   useEffect(() => {
     setBtnPressed(false);
-    // Cursor click fires at ~4100ms from phase start; mount offset ~0ms first load
-    // (~320ms when cycling). Using 4100ms keeps first-load perfect.
     const t = setTimeout(() => setBtnPressed(true), 4100);
     return () => clearTimeout(t);
   }, []);
 
-  const papers = [
-    {
-      title: "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
-      year: 2022,
-      authors: "Wei · Cobbe · Lu · +5 more",
-      citedBy: "3,241",
-      newCitations: 12,
-    },
-    {
-      title: "Finetuned Language Models Are Zero-Shot Learners",
-      year: 2022,
-      authors: "Wei · Bosma · Zhao · +3 more",
-      citedBy: "847",
-      newCitations: 3,
-    },
-  ];
-
   return (
     <div className="flex flex-col gap-3">
-      {/* Section header — matches real dashboard */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-bold text-white">Tracked Works</h2>
@@ -120,7 +285,6 @@ function PhaseDashboard() {
             ))}
           </div>
         </div>
-        {/* Import Papers button — matches real button */}
         <motion.button
           className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-950 shadow"
           animate={btnPressed ? { scale: [1, 0.84, 1.08, 1] } : {}}
@@ -135,7 +299,6 @@ function PhaseDashboard() {
 
       <p className="text-xs text-gray-500">2 papers</p>
 
-      {/* Paper cards — matches real TrackedWorkCard structure */}
       <div className="flex flex-col gap-3">
         {papers.map((p, i) => (
           <motion.div
@@ -145,7 +308,6 @@ function PhaseDashboard() {
             transition={{ delay: i * 0.13 }}
             className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-4 transition-all duration-200 hover:border-white/20"
           >
-            {/* Title + year badge */}
             <div className="flex items-start justify-between gap-3">
               <h3 className="flex-1 text-sm font-semibold leading-snug text-white line-clamp-2">
                 {p.title}
@@ -155,10 +317,8 @@ function PhaseDashboard() {
               </span>
             </div>
 
-            {/* Authors */}
             <p className="text-xs text-gray-400">{p.authors}</p>
 
-            {/* Citation stats — matches real badge styles */}
             <div className="flex items-center gap-2">
               <span className="rounded-full border border-white/10 bg-gray-800 px-2.5 py-0.5 text-xs font-medium text-gray-300">
                 Cited by {p.citedBy}
@@ -173,7 +333,6 @@ function PhaseDashboard() {
               </motion.span>
             </div>
 
-            {/* Footer row — matches real footer */}
             <div className="flex items-center justify-between gap-2 border-t border-white/5 pt-2">
               <span className="flex items-center gap-1.5 text-xs text-gray-500">
                 <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
@@ -190,8 +349,8 @@ function PhaseDashboard() {
   );
 }
 
-// ─── Phase 1: Import modal (matches real ImportModal input phase) ─────────────
-function PhaseAddPaper() {
+// ─── Phase 1: Import modal ────────────────────────────────────────────────────
+function PhaseAddPaper({ doi }: { doi: string }) {
   const [focused, setFocused] = useState(false);
   const [typed, setTyped] = useState("");
   const [detected, setDetected] = useState(false);
@@ -204,18 +363,14 @@ function PhaseAddPaper() {
     setDetected(false);
     setBtnClicked(false);
 
-    // Input click:   wp2 fires at 2100ms from phase start; mount offset ~320ms → ~1780ms from mount
-    // Typing starts: 2000ms after click = ~3780ms from mount (2 s delay)
-    // Look up click: wp5 fires at 7300ms from phase start → ~6980ms from mount → clicking at ~7360ms
     const focusTimer = setTimeout(() => setFocused(true), 2200);
     const clickTimer = setTimeout(() => setBtnClicked(true), 7360);
 
-    // Typing starts 2 s after the input click
     const start = setTimeout(() => {
       const iv = setInterval(() => {
         idx++;
-        setTyped(DOI.slice(0, idx));
-        if (idx >= DOI.length) {
+        setTyped(doi.slice(0, idx));
+        if (idx >= doi.length) {
           clearInterval(iv);
           setTimeout(() => setDetected(true), 300);
         }
@@ -228,19 +383,18 @@ function PhaseAddPaper() {
       clearTimeout(clickTimer);
       clearTimeout(start);
     };
-  }, []);
+  }, [doi]);
 
   const chips = [
-    { label: "DOI",            cls: "border-sky-500/25 bg-sky-500/10 text-sky-400" },
-    { label: "arXiv URL",      cls: "border-teal-500/25 bg-teal-500/10 text-teal-400" },
-    { label: "INSPIRE profile",cls: "border-purple-500/25 bg-purple-500/10 text-purple-400" },
-    { label: "DBLP profile",   cls: "border-orange-500/25 bg-orange-500/10 text-orange-400" },
-    { label: "author name",    cls: "border-white/10 bg-white/5 text-gray-400" },
+    { label: "DOI",             cls: "border-sky-500/25 bg-sky-500/10 text-sky-400" },
+    { label: "arXiv URL",       cls: "border-teal-500/25 bg-teal-500/10 text-teal-400" },
+    { label: "INSPIRE profile", cls: "border-purple-500/25 bg-purple-500/10 text-purple-400" },
+    { label: "DBLP profile",    cls: "border-orange-500/25 bg-orange-500/10 text-orange-400" },
+    { label: "author name",     cls: "border-white/10 bg-white/5 text-gray-400" },
   ];
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Modal header — matches real ImportModal */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-white">Add Papers</h2>
         <button className="rounded-md p-1.5 text-gray-400 hover:bg-white/5 hover:text-white">
@@ -250,7 +404,6 @@ function PhaseAddPaper() {
         </button>
       </div>
 
-      {/* Input */}
       <div>
         <div className="flex items-center rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5">
           <span className="flex-1 text-left font-mono text-sm">
@@ -272,7 +425,6 @@ function PhaseAddPaper() {
           </span>
         </div>
 
-        {/* Detected hint — matches real teal hint */}
         {detected && (
           <motion.p
             initial={{ opacity: 0, y: -3 }}
@@ -283,7 +435,6 @@ function PhaseAddPaper() {
           </motion.p>
         )}
 
-        {/* Format chips — shown before typing */}
         {!typed && (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] font-medium uppercase tracking-wider text-gray-600">Accepts</span>
@@ -299,7 +450,6 @@ function PhaseAddPaper() {
         )}
       </div>
 
-      {/* Action buttons — matches real modal buttons */}
       <div className="flex justify-end gap-3">
         <button className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-white/5">
           Cancel
@@ -366,11 +516,10 @@ function PhaseScanning() {
   );
 }
 
-// ─── Phase 3: Citations panel (matches real RecentCitationCard) ───────────────
-function PhaseCited() {
+// ─── Phase 3: Citations panel ─────────────────────────────────────────────────
+function PhaseCited({ citation }: { citation: DemoEntry["citation"] }) {
   return (
     <div className="flex flex-col gap-3">
-      {/* Section header — matches real Citations section */}
       <div className="flex items-start justify-between gap-2">
         <div>
           <h2 className="text-lg font-bold text-white">
@@ -388,14 +537,12 @@ function PhaseCited() {
         </div>
       </div>
 
-      {/* RecentCitationCard — mirrors real component exactly */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
         className="flex cursor-pointer flex-col gap-3 rounded-xl border border-white/15 bg-white/5 p-4 transition-all duration-200 hover:border-white/20"
       >
-        {/* Header: unread dot + label + date */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 shrink-0 rounded-full bg-white" />
@@ -403,39 +550,34 @@ function PhaseCited() {
               New citation
             </span>
           </div>
-          <span className="shrink-0 text-xs text-gray-600">Apr 18, 2026</span>
+          <span className="shrink-0 text-xs text-gray-600">{citation.citingDate}</span>
         </div>
 
-        {/* Citing paper title — underlined link style */}
         <p className="text-sm font-bold leading-snug text-white underline decoration-dotted underline-offset-2">
-          Attention Is All You Need
+          {citation.citingTitle}
         </p>
 
-        {/* Authors */}
         <p className="text-xs leading-relaxed text-gray-400 -mt-1">
-          Vaswani · Shazeer · Parmar
+          {citation.citingAuthors}
         </p>
 
-        {/* "cites your paper" divider */}
         <div className="flex items-center gap-2">
           <div className="h-px flex-1 bg-white/5" />
           <span className="text-[10px] italic text-gray-600">cites your paper</span>
           <div className="h-px flex-1 bg-white/5" />
         </div>
 
-        {/* Your paper */}
         <div>
           <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400">
             Your paper
           </p>
           <p className="text-xs leading-snug text-white/70">
-            Chain-of-Thought Prompting Elicits Reasoning in Large Language Models
+            {citation.yourPaper}
           </p>
         </div>
 
-        {/* Affiliation pills — matches real ring-1 ring-white/10 style */}
         <div className="flex flex-wrap gap-1.5">
-          {["Google Brain", "Univ. of Toronto", "Google Research"].map((affil) => (
+          {citation.affiliations.map((affil) => (
             <span
               key={affil}
               className="inline-flex items-center rounded-full bg-white/[0.08] px-2.5 py-0.5 text-xs font-medium text-gray-300 ring-1 ring-white/10"
@@ -450,56 +592,53 @@ function PhaseCited() {
 }
 
 // ─── Cursor waypoints per phase ───────────────────────────────────────────────
-// Coordinates are CSS left/top % relative to the full card (title bar + content + footer).
-// Card approx layout: title bar ~8%, content ~84%, footer ~8%.
 type Waypoint = { lp: string; tp: string; afterMs: number; click?: true };
 
 const CURSOR_SEQUENCES: Waypoint[][] = [
   // Phase 0: Dashboard — notice "+new" badges, hover Import Papers, then click
   [
-    { lp: "72%", tp: "38%", afterMs: 1000 },              // first card "+12 new"
-    { lp: "66%", tp: "66%", afterMs: 1100 },              // second card "+3 new"
-    { lp: "86%", tp: "17%", afterMs: 1620 },              // hover Import Papers (~1.6 s → click ~2 s after)
-    { lp: "86%", tp: "17%", afterMs: 600, click: true },  // click
+    { lp: "72%", tp: "38%", afterMs: 1000 },
+    { lp: "66%", tp: "66%", afterMs: 1100 },
+    { lp: "86%", tp: "17%", afterMs: 1620 },
+    { lp: "86%", tp: "17%", afterMs: 600, click: true },
   ],
   // Phase 1: Add Papers modal — hover over input, click, 2 s delay, type DOI, click Look up
   [
-    { lp: "50%", tp: "29%", afterMs: 2100 },              // cursor moves to input, hovers ~2 s
-    { lp: "50%", tp: "29%", afterMs: 700,  click: true }, // cursor clicks input
-    { lp: "50%", tp: "29%", afterMs: 3600 },              // wait while typing (2 s delay + DOI)
-    { lp: "85%", tp: "47%", afterMs: 900  },              // cursor travels to Look up button
-    { lp: "85%", tp: "47%", afterMs: 300,  click: true }, // cursor clicks Look up
+    { lp: "50%", tp: "29%", afterMs: 2100 },
+    { lp: "50%", tp: "29%", afterMs: 700,  click: true },
+    { lp: "50%", tp: "29%", afterMs: 3600 },
+    { lp: "85%", tp: "47%", afterMs: 900  },
+    { lp: "85%", tp: "47%", afterMs: 300,  click: true },
   ],
   // Phase 2: Scanning — watch search icon, then follow progress bar
   [
-    { lp: "50%", tp: "34%", afterMs: 1000 },             // search icon
-    { lp: "14%", tp: "62%", afterMs: 1100 },             // progress bar start
-    { lp: "88%", tp: "62%", afterMs: 1500 },             // progress bar end
+    { lp: "50%", tp: "34%", afterMs: 1000 },
+    { lp: "14%", tp: "62%", afterMs: 1100 },
+    { lp: "88%", tp: "62%", afterMs: 1500 },
   ],
   // Phase 3: Citations panel — unread dot → title → divider → affiliation pills
   [
-    { lp: "10%", tp: "25%", afterMs: 900 },              // unread dot
-    { lp: "45%", tp: "35%", afterMs: 1000 },             // paper title
-    { lp: "50%", tp: "54%", afterMs: 1000 },             // "cites your paper" divider
-    { lp: "38%", tp: "72%", afterMs: 1200 },             // affiliation pills
+    { lp: "10%", tp: "25%", afterMs: 900 },
+    { lp: "45%", tp: "35%", afterMs: 1000 },
+    { lp: "50%", tp: "54%", afterMs: 1000 },
+    { lp: "38%", tp: "72%", afterMs: 1200 },
   ],
 ];
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function HeroDemo() {
+  const [entry] = useState<DemoEntry>(
+    () => DEMO_POOL[Math.floor(Math.random() * DEMO_POOL.length)]
+  );
   const [phase, setPhase] = useState<Phase>(0);
   const [cursorPos, setCursorPos] = useState<CursorPos>({ lp: "50%", tp: "50%" });
   const [clicking, setClicking] = useState(false);
 
-  // Scale-to-fit: card renders at DESIGN_WIDTH; on narrow viewports we apply a
-  // CSS transform so cursor hotspots (% of card) stay aligned at every size.
   const wrapperRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  // Seed with a close estimate to avoid a height flash on first paint.
   const [cardH, setCardH] = useState(490);
 
-  // Track wrapper width and recompute scale on resize.
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
@@ -510,8 +649,6 @@ export default function HeroDemo() {
     return () => ro.disconnect();
   }, []);
 
-  // Re-measure card natural height whenever phase or scale changes.
-  // offsetHeight is the layout height (pre-transform), which is what we need.
   useEffect(() => {
     const card = cardRef.current;
     if (card && card.offsetHeight > 0) setCardH(card.offsetHeight);
@@ -559,13 +696,11 @@ export default function HeroDemo() {
   const isScaled = scale < 1;
 
   return (
-    // Outer wrapper: constrains max-width and provides height when card is scaled.
     <div
       ref={wrapperRef}
       className="relative z-10 mx-auto w-full max-w-xl text-left lg:max-w-2xl"
       style={isScaled ? { height: cardH * scale } : undefined}
     >
-      {/* Card: fixed at DESIGN_WIDTH when scaled so layout never reflows. */}
       <div
         ref={cardRef}
         className="relative overflow-hidden rounded-2xl border border-white/15 bg-gray-950/80 shadow-2xl shadow-black/50 backdrop-blur-xl"
@@ -605,10 +740,10 @@ export default function HeroDemo() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             >
-              {phase === 0 && <PhaseDashboard />}
-              {phase === 1 && <PhaseAddPaper />}
+              {phase === 0 && <PhaseDashboard papers={entry.trackedPapers} />}
+              {phase === 1 && <PhaseAddPaper doi={entry.doi} />}
               {phase === 2 && <PhaseScanning />}
-              {phase === 3 && <PhaseCited />}
+              {phase === 3 && <PhaseCited citation={entry.citation} />}
             </motion.div>
           </AnimatePresence>
         </div>
