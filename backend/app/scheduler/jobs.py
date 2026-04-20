@@ -121,13 +121,16 @@ def create_scheduler(
     main.py) is responsible for calling ``scheduler.start()`` and
     ``scheduler.shutdown()``.
     """
-    scheduler = BackgroundScheduler(timezone="UTC")
+    # All jobs run on a fixed PST schedule (UTC-8 / UTC-7 during DST).
+    # Using pytz "America/Los_Angeles" lets APScheduler handle DST automatically.
+    scheduler = BackgroundScheduler(timezone="America/Los_Angeles")
 
-    interval_hours = max(1, settings.scheduler_interval_hours)
+    # Citation check: every day at 00:00 PST
     scheduler.add_job(
         func=_make_job_func(db=db, email_service=email_service, settings=settings),
-        trigger="interval",
-        hours=interval_hours,
+        trigger="cron",
+        hour=0,
+        minute=0,
         id="citation_check",
         name="Citation Check",
         replace_existing=True,
@@ -135,10 +138,13 @@ def create_scheduler(
         misfire_grace_time=300,
     )
 
+    # Publication sync: every Sunday at 00:30 PST (offset slightly to avoid overlap)
     scheduler.add_job(
         func=_make_pub_sync_func(db=db, email_service=email_service, settings=settings),
-        trigger="interval",
-        weeks=1,
+        trigger="cron",
+        day_of_week="sun",
+        hour=0,
+        minute=30,
         id="publication_sync",
         name="Publication Sync",
         replace_existing=True,
@@ -146,10 +152,12 @@ def create_scheduler(
         misfire_grace_time=3600,
     )
 
+    # Notification cleanup: every day at 01:00 PST (after citation check completes)
     scheduler.add_job(
         func=_make_cleanup_func(db=db),
-        trigger="interval",
-        days=1,
+        trigger="cron",
+        hour=1,
+        minute=0,
         id="notification_cleanup",
         name="Notification Cleanup",
         replace_existing=True,
@@ -158,8 +166,7 @@ def create_scheduler(
     )
 
     logger.info(
-        "Scheduler configured: citation_check every %d hour(s), "
-        "publication_sync weekly, notification_cleanup daily.",
-        interval_hours,
+        "Scheduler configured: citation_check daily at 00:00 PST, "
+        "publication_sync weekly (Sun 00:30 PST), notification_cleanup daily at 01:00 PST.",
     )
     return scheduler
