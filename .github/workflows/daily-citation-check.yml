@@ -8,7 +8,7 @@ on:
 jobs:
   run-citation-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       # ── Step 1: Wake the Render instance ──────────────────────────────────
@@ -40,7 +40,7 @@ jobs:
         run: |
           echo "POSTing to https://api.citey.email/jobs/run ..."
           RESPONSE=$(curl -s -w "\n%{http_code}" \
-            --max-time 300 \
+            --max-time 900 \
             -X POST \
             -H "Content-Type: application/json" \
             -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
