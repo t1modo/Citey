@@ -149,6 +149,8 @@ async def export_bibtex(
     file.  Unlike the paginated list endpoint this returns the full history
     (no 30-day window) so researchers can build a complete reference list.
     """
+    _EXPORT_CAP = 5_000
+
     docs = (
         db.collection("users")
         .document(uid)
@@ -157,6 +159,7 @@ async def export_bibtex(
     )
     notifications = [_doc_to_notification(doc.id, doc.to_dict() or {}) for doc in docs]
     notifications.sort(key=lambda n: n.created_at or _EPOCH, reverse=True)
+    notifications = notifications[:_EXPORT_CAP]
 
     if not notifications:
         body = "% No citation notifications found.\n"

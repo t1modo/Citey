@@ -109,23 +109,23 @@ async def run_job(
         user_data: dict = user_doc.to_dict() or {} if user_doc.exists else {}
 
         # Rate-limit manual checks: reject if last check was within the cooldown window.
+        # Fall back to account creation time so new accounts can't bypass the limit
+        # by simply not having a last_manual_check_at value yet.
         now = datetime.now(tz=timezone.utc)
-        last_check = user_data.get("last_manual_check_at")
-        if last_check is not None:
-            # Firestore timestamps arrive as datetime; plain strings are ignored.
-            if isinstance(last_check, datetime):
-                if last_check.tzinfo is None:
-                    last_check = last_check.replace(tzinfo=timezone.utc)
-                elapsed = (now - last_check).total_seconds()
-                retry_after = int(_MANUAL_CHECK_COOLDOWN - elapsed)
-                if retry_after > 0:
-                    raise HTTPException(
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        detail={
-                            "message": "You've run a citation check recently. Please wait before trying again.",
-                            "retry_after_seconds": retry_after,
-                        },
-                    )
+        last_check = user_data.get("last_manual_check_at") or user_data.get("created_at")
+        if isinstance(last_check, datetime):
+            if last_check.tzinfo is None:
+                last_check = last_check.replace(tzinfo=timezone.utc)
+            elapsed = (now - last_check).total_seconds()
+            retry_after = int(_MANUAL_CHECK_COOLDOWN - elapsed)
+            if retry_after > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={
+                        "message": "You've run a citation check recently. Please wait before trying again.",
+                        "retry_after_seconds": retry_after,
+                    },
+                )
 
         works_processed, new_notifications = await run_job_for_user(
             uid=caller_id,
@@ -185,10 +185,12 @@ async def cleanup_notifications(
         notifs_ref = _db.collection("users").document(caller_id).collection("notifications")
         old_docs = list(notifs_ref.where("created_at", "<", cutoff).stream())
         if old_docs and not body.dry_run:
-            batch = _db.batch()
-            for doc in old_docs:
-                batch.delete(doc.reference)
-            batch.commit()
+            # Firestore batches are capped at 500 writes — chunk if needed.
+            for i in range(0, len(old_docs), 500):
+                batch = _db.batch()
+                for doc in old_docs[i : i + 500]:
+                    batch.delete(doc.reference)
+                batch.commit()
         count = len(old_docs)
         summary = {"users_processed": 1, "notifications_deleted": count}
 
@@ -242,7 +244,7 @@ async def sync_publications(
         user_data: dict = user_doc.to_dict() or {} if user_doc.exists else {}
 
         now = datetime.now(tz=timezone.utc)
-        last_sync = user_data.get("last_manual_sync_at")
+        last_sync = user_data.get("last_manual_sync_at") or user_data.get("created_at")
         if isinstance(last_sync, datetime):
             if last_sync.tzinfo is None:
                 last_sync = last_sync.replace(tzinfo=timezone.utc)
