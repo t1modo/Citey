@@ -25,6 +25,7 @@ router = APIRouter(prefix="/works", tags=["works"])
 _SEARCH_RATE_LIMIT = 5       # requests
 _SEARCH_RATE_WINDOW = 60     # per N seconds
 _PAPER_AUTHORS_RATE_LIMIT = 10
+_IMPORT_COOLDOWN = 300       # seconds between bulk imports per user
 
 _author_search_timestamps: dict[str, list[float]] = defaultdict(list)
 _paper_authors_timestamps: dict[str, list[float]] = defaultdict(list)
@@ -423,6 +424,23 @@ async def import_works_by_author(
     user_ref = db.collection("users").document(uid)
     user_snap = user_ref.get()
     user_data = user_snap.to_dict() or {} if user_snap.exists else {}
+
+    # Rate-limit bulk imports to prevent Firestore write floods.
+    now = datetime.now(tz=timezone.utc)
+    last_import = user_data.get("last_import_at") or user_data.get("created_at")
+    if isinstance(last_import, datetime):
+        if last_import.tzinfo is None:
+            last_import = last_import.replace(tzinfo=timezone.utc)
+        elapsed = (now - last_import).total_seconds()
+        retry_after = int(_IMPORT_COOLDOWN - elapsed)
+        if retry_after > 0:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "message": "You've run an import recently. Please wait before importing again.",
+                    "retry_after_seconds": retry_after,
+                },
+            )
 
     # Normalise IDs for comparison (strip full URL prefix if present).
     def _short_id(author_id: str) -> str:
@@ -824,6 +842,8 @@ async def import_works_by_author(
             incoming_short, author_display_name, uid,
         )
 
+    # Stamp import time for rate limiting on the next call.
+    user_ref.set({"last_import_at": now}, merge=True)
     logger.info("Bulk import: %d imported, %d skipped for uid=%s", imported, skipped, uid)
     return {"imported": imported, "skipped": skipped}
 

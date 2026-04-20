@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# Minimum seconds between verification email sends for the same user.
+_VERIFICATION_COOLDOWN = 60
+
 
 @router.post("/send-verification", status_code=status.HTTP_204_NO_CONTENT)
 async def send_email_verification(
@@ -31,6 +34,29 @@ async def send_email_verification(
     Generate a Firebase email verification link and deliver it via Resend.
     Safe to call on signup and for resend requests.
     """
+    from datetime import datetime, timezone
+
+    # Rate-limit: enforce cooldown between resend attempts.
+    user_ref = db.collection("users").document(uid)
+    user_snap = user_ref.get()
+    if user_snap.exists:
+        user_data = user_snap.to_dict() or {}
+        last_sent = user_data.get("last_verification_email_at")
+        if isinstance(last_sent, datetime):
+            if last_sent.tzinfo is None:
+                last_sent = last_sent.replace(tzinfo=timezone.utc)
+            now = datetime.now(tz=timezone.utc)
+            elapsed = (now - last_sent).total_seconds()
+            retry_after = int(_VERIFICATION_COOLDOWN - elapsed)
+            if retry_after > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={
+                        "message": "Verification email sent recently. Please wait before resending.",
+                        "retry_after_seconds": retry_after,
+                    },
+                )
+
     try:
         fb_user = firebase_auth.get_user(uid)
     except Exception as exc:
@@ -83,4 +109,7 @@ async def send_email_verification(
             detail="Could not send verification email.",
         ) from exc
 
+    # Stamp the send time so the cooldown check above works on subsequent calls.
+    now_utc = datetime.now(tz=timezone.utc)
+    user_ref.set({"last_verification_email_at": now_utc}, merge=True)
     logger.info("Verification email sent to %s (uid=%s)", fb_user.email, uid)
