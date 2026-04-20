@@ -138,13 +138,13 @@ def create_scheduler(
         misfire_grace_time=300,
     )
 
-    # Publication sync: every Sunday at 00:30 PST (offset slightly to avoid overlap)
+    # Publication sync: every Sunday at 00:00 PST
     scheduler.add_job(
         func=_make_pub_sync_func(db=db, email_service=email_service, settings=settings),
         trigger="cron",
         day_of_week="sun",
         hour=0,
-        minute=30,
+        minute=0,
         id="publication_sync",
         name="Publication Sync",
         replace_existing=True,
