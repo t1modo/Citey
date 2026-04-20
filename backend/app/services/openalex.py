@@ -368,11 +368,43 @@ def extract_topics(raw: dict) -> list[str]:
     return topics
 
 
+def _jacow_venue(doi: str) -> str | None:
+    """Extract human-readable conference name from a JACoW DOI.
+
+    JACoW DOIs follow the pattern 10.18429/jacow-{confcode}{year}-{paperid}.
+    Example: 10.18429/jacow-napac2025-tup099 → "NAPAC 2025"
+    """
+    import re
+    lower = doi.lower()
+    prefix = "10.18429/jacow-"
+    if not lower.startswith(prefix):
+        return None
+    rest = lower[len(prefix):]           # e.g. "napac2025-tup099"
+    slug = rest.split("-")[0]            # e.g. "napac2025"
+    m = re.match(r"^([a-z]+)(\d{4})$", slug)
+    if not m:
+        return None
+    conf, year = m.group(1).upper(), m.group(2)
+    return f"{conf} {year}"
+
+
 def extract_venue(raw: dict) -> str | None:
     """
     Extract the primary publication venue name (journal, conference, repository)
     from a raw OpenAlex work dict.
     """
+    # For JACoW conference proceedings the DOI encodes the conference name
+    # precisely; OpenAlex sometimes assigns an unrelated source name (e.g.
+    # "Open MIND") to these papers.  Always prefer the DOI-derived name.
+    doi_raw = raw.get("doi") or ""
+    for pfx in ("https://doi.org/", "http://doi.org/"):
+        if doi_raw.startswith(pfx):
+            doi_raw = doi_raw[len(pfx):]
+            break
+    jacow = _jacow_venue(doi_raw)
+    if jacow:
+        return jacow
+
     loc = raw.get("primary_location") or {}
     source = loc.get("source") or {}
     name = (source.get("display_name") or "").strip()
