@@ -203,6 +203,13 @@ async def add_work(
                 work_info["authors"] = oa_authors
             logger.info("Resolved OpenAlex ID for %s: %s", work_info["doi"], work_info["openalex_id"])
 
+    # For arXiv papers, override author names with the arXiv API which stores
+    # names exactly as submitted — more reliable than OpenAlex abbreviations.
+    from app.services.arxiv_api import get_authors as _arxiv_authors
+    arxiv_names = await _arxiv_authors(work_info["doi"])
+    if arxiv_names:
+        work_info["authors"] = arxiv_names
+
     # Normalise DOI to lowercase for consistent Firestore document IDs.
     # DOIs are case-insensitive; mixing cases creates phantom duplicates.
     work_info["doi"] = work_info["doi"].lower()
