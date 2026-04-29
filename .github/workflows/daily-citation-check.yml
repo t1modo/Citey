@@ -18,7 +18,7 @@ jobs:
         run: |
           echo "Pinging https://api.citey.email/health ..."
           for i in $(seq 1 12); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 https://api.citey.email/health)
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 https://api.citey.email/health || echo "000")
             echo "  attempt $i — HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then
               echo "Instance is awake."
