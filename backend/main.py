@@ -28,28 +28,39 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Start APScheduler on startup and shut it down cleanly on teardown."""
+    """Start APScheduler on startup (local dev only) and shut it down on teardown.
+
+    In production on Cloud Run, DISABLE_SCHEDULER=true so APScheduler never
+    starts — Cloud Scheduler calls the /jobs/* HTTP endpoints instead.
+    """
     from app.firebase_client import get_db
-    from app.scheduler.jobs import create_scheduler
     from app.services import email_service
 
     db = get_db()
-    scheduler = create_scheduler(
-        db=db,
-        email_service=email_service,
-        settings=settings,
-    )
-    scheduler.start()
-    logger.info("APScheduler started.")
-
-    # Store on app.state so it can be accessed from tests/routes if needed.
-    app.state.scheduler = scheduler
     app.state.db = db
+
+    if not settings.disable_scheduler:
+        from app.scheduler.jobs import create_scheduler
+
+        scheduler = create_scheduler(
+            db=db,
+            email_service=email_service,
+            settings=settings,
+        )
+        scheduler.start()
+        logger.info("APScheduler started.")
+        app.state.scheduler = scheduler
+    else:
+        logger.info(
+            "APScheduler disabled (DISABLE_SCHEDULER=true); "
+            "Cloud Scheduler will call /jobs/* HTTP endpoints."
+        )
 
     yield
 
-    scheduler.shutdown(wait=False)
-    logger.info("APScheduler shut down.")
+    if not settings.disable_scheduler and hasattr(app.state, "scheduler"):
+        app.state.scheduler.shutdown(wait=False)
+        logger.info("APScheduler shut down.")
 
 
 # ---------------------------------------------------------------------------
