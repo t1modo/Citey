@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # CORS
     allowed_origins: str = "*"
 
+    # Scheduler — set DISABLE_SCHEDULER=true on Cloud Run (Cloud Scheduler
+    # calls the HTTP endpoints instead; APScheduler only runs locally)
+    disable_scheduler: bool = False
+
 
 @lru_cache()
 def get_settings() -> Settings:
