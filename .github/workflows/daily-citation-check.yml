@@ -17,18 +17,18 @@ jobs:
       - name: Wake Render instance
         run: |
           echo "Pinging https://api.citey.email/health ..."
-          for i in $(seq 1 9); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 https://api.citey.email/health)
+          for i in $(seq 1 12); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 https://api.citey.email/health)
             echo "  attempt $i — HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then
               echo "Instance is awake."
               break
             fi
-            if [ "$i" = "9" ]; then
-              echo "ERROR: Instance did not respond after 9 attempts."
+            if [ "$i" = "12" ]; then
+              echo "ERROR: Instance did not respond after 12 attempts."
               exit 1
             fi
-            sleep 10
+            sleep 15
           done
 
       # ── Step 2: Brief pause so any in-flight startup tasks can settle ──────
