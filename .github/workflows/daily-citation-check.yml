@@ -1,0 +1,61 @@
+name: Daily Citation Check
+
+on:
+  schedule:
+    - cron: "0 8 * * *"   # 08:00 UTC daily = 00:00 AM PST
+  workflow_dispatch:       # allow manual runs from the GitHub Actions UI
+
+jobs:
+  run-citation-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # ── Step 1: Wake the Render instance ──────────────────────────────────
+      # Render free tier spins down after inactivity. Ping the health endpoint
+      # first and wait up to 90 s for a 200 before proceeding.
+      - name: Wake Render instance
+        run: |
+          echo "Pinging https://api.citey.email/health ..."
+          for i in $(seq 1 9); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 https://api.citey.email/health)
+            echo "  attempt $i — HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Instance is awake."
+              break
+            fi
+            if [ "$i" = "9" ]; then
+              echo "ERROR: Instance did not respond after 9 attempts."
+              exit 1
+            fi
+            sleep 10
+          done
+
+      # ── Step 2: Brief pause so any in-flight startup tasks can settle ──────
+      - name: Wait for startup to settle
+        run: sleep 5
+
+      # ── Step 3: Trigger the citation-check job ────────────────────────────
+      - name: Run citation check
+        run: |
+          echo "POSTing to https://api.citey.email/jobs/run ..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            --max-time 900 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            -d '{"dry_run": false}' \
+            https://api.citey.email/jobs/run)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          echo "HTTP status: $HTTP_CODE"
+          echo "Response body: $BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "ERROR: Job request failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "Citation check completed successfully."
