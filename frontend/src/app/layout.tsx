@@ -9,7 +9,10 @@ const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakart
 const syne = Syne({ subsets: ["latin"], variable: "--font-syne" });
 
 export const metadata: Metadata = {
-  title: "Citey",
+  title: {
+    default: "Citey — Citation alerts for researchers",
+    template: "%s · Citey",
+  },
   description:
     "Citey monitors citations to your published works and sends you instant email alerts when a new paper cites your research. Track any DOI, powered by OpenAlex, Crossref, and Semantic Scholar.",
   icons: {

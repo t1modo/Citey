@@ -92,11 +92,11 @@ const faqItems: FaqItem[] = [
         <p className="mt-3">
           Email notifications are dispatched immediately after new citations are found, so
           you should receive an alert within 24 hours of a paper being indexed by OpenAlex,
-          Crossref, or Semantic Scholar. You can also trigger a manual check from the{" "}
+          Crossref, or Semantic Scholar. New citations appear automatically on your{" "}
           <Link href="/dashboard" className="text-gray-400 underline hover:text-gray-300">
             Dashboard
           </Link>{" "}
-          using the &ldquo;Run Citation Check&rdquo; button.
+          — no manual action needed.
         </p>
       </>
     ),
