@@ -94,6 +94,11 @@ export default function HomePage() {
       {/* ─── Hero ─────────────────────────────────────────────────────── */}
       <section className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4 pt-20 pb-8 text-center [@media(max-height:820px)]:pt-10 [@media(max-height:820px)]:pb-4">
 
+        {/* Headline */}
+        <h1 className="relative z-10 mb-5 max-w-3xl text-balance text-4xl font-extrabold leading-[1.08] tracking-tight text-white sm:text-6xl lg:text-7xl [@media(max-height:820px)]:mb-3 [@media(max-height:820px)]:text-4xl">
+          <BlurText text="Never miss a citation again" />
+        </h1>
+
         {/* Subheading */}
         <p className="relative z-10 mb-8 max-w-xl text-lg leading-relaxed text-gray-400 sm:text-xl [@media(max-height:820px)]:mb-4 [@media(max-height:820px)]:text-base">
           Citey monitors your research and emails you the moment a new paper cites your work.
