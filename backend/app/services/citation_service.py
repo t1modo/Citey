@@ -455,8 +455,12 @@ async def run_job_for_all_users(
     works_processed = 0
     total_new_notifications = 0
 
+    auth_uids = _get_auth_uids()
     for user_doc in db.collection("users").stream():
         uid: str = user_doc.id
+        if uid not in auth_uids:
+            logger.warning("Skipping orphaned Firestore user uid=%s in citation job", uid)
+            continue
         user_data: dict = user_doc.to_dict() or {}
         users_processed += 1
 
@@ -549,8 +553,12 @@ async def cleanup_old_notifications(db: Any, dry_run: bool = False) -> dict:
     users_processed = 0
     total_deleted = 0
 
+    auth_uids = _get_auth_uids()
     for user_doc in db.collection("users").stream():
         uid: str = user_doc.id
+        if uid not in auth_uids:
+            logger.warning("Skipping orphaned Firestore user uid=%s in notification cleanup", uid)
+            continue
         users_processed += 1
         count = await prune_user_notifications(uid, db, dry_run)
         total_deleted += count
@@ -558,6 +566,56 @@ async def cleanup_old_notifications(db: Any, dry_run: bool = False) -> dict:
     summary = {"users_processed": users_processed, "notifications_deleted": total_deleted}
     logger.info("Notification cleanup complete: %s", summary)
     return summary
+
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_auth_uids() -> set[str]:
+    """Return the set of all Firebase Auth user UIDs (paginated, single sweep)."""
+    uids: set[str] = set()
+    page = firebase_auth.list_users()
+    while page:
+        for user in page.users:
+            uids.add(user.uid)
+        page = page.get_next_page()
+    return uids
+
+
+async def cleanup_orphan_users(db: Any, dry_run: bool = False) -> dict:
+    """
+    Delete Firestore user documents (and their subcollections) that have no
+    corresponding Firebase Auth account.
+    """
+    auth_uids = _get_auth_uids()
+    orphans_found = 0
+    orphans_deleted = 0
+
+    for user_doc in db.collection("users").stream():
+        uid: str = user_doc.id
+        if uid in auth_uids:
+            continue
+        orphans_found += 1
+        logger.warning("Orphaned Firestore user found: uid=%s", uid)
+        if not dry_run:
+            for subcoll in ("trackedWorks", "notifications"):
+                for doc in db.collection("users").document(uid).collection(subcoll).stream():
+                    doc.reference.delete()
+            user_doc.reference.delete()
+            orphans_deleted += 1
+            logger.info("Deleted orphaned Firestore user: uid=%s", uid)
+
+    return {
+        "orphans_found": orphans_found,
+        "orphans_deleted": orphans_deleted,
+        "message": (
+            f"Found {orphans_found} orphaned user(s) — dry run, nothing deleted."
+            if dry_run
+            else f"Deleted {orphans_deleted} orphaned user(s)."
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -703,8 +761,12 @@ async def send_daily_digest_for_all_users(
     users_emailed = 0
     total_citations_sent = 0
 
+    auth_uids = _get_auth_uids()
     for user_doc in db.collection("users").stream():
         uid: str = user_doc.id
+        if uid not in auth_uids:
+            logger.warning("Skipping orphaned Firestore user uid=%s in digest job", uid)
+            continue
         user_data: dict = user_doc.to_dict() or {}
 
         notify_enabled: bool = user_data.get("notify_enabled", True)

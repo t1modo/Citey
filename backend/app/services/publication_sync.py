@@ -194,11 +194,16 @@ async def sync_new_publications_for_all_users(
     users_processed = 0
     total_added = 0
 
+    from app.services.citation_service import _get_auth_uids
+    auth_uids = _get_auth_uids()
     for user_doc in db.collection("users").stream():
+        uid: str = user_doc.id
+        if uid not in auth_uids:
+            logger.warning("Skipping orphaned Firestore user uid=%s in publication sync", uid)
+            continue
         data: dict = user_doc.to_dict() or {}
         if not data.get("linked_author_id"):
             continue
-        uid: str = user_doc.id
         try:
             added = await sync_new_publications_for_user(
                 uid=uid,

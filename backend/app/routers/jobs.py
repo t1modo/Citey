@@ -281,6 +281,31 @@ async def sync_publications(
     return summary
 
 
+@router.post("/cleanup-orphan-users")
+async def cleanup_orphan_users(
+    body: JobRunRequest,
+    caller_id: str = Depends(_authorize_job_request),
+) -> dict:
+    """
+    Delete Firestore user documents (and their subcollections) that have no
+    corresponding Firebase Auth account.
+
+    Authorization: X-Cron-Secret header **or** Firebase Bearer token.
+    """
+    from app.firebase_client import get_db as _get_db
+    from app.services.citation_service import cleanup_orphan_users as _cleanup
+
+    _db = _get_db()
+    logger.info(
+        "Job /cleanup-orphan-users triggered by caller_id=%s dry_run=%s",
+        caller_id,
+        body.dry_run,
+    )
+    summary = await _cleanup(db=_db, dry_run=body.dry_run)
+    logger.info("Orphan cleanup complete: %s", summary)
+    return summary
+
+
 @router.post("/email-test")
 async def email_test(
     credentials: HTTPAuthorizationCredentials | None = Depends(
