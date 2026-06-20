@@ -2,7 +2,8 @@ name: Daily Citation Check
 
 on:
   schedule:
-    - cron: "0 8 * * *"   # 08:00 UTC daily = 00:00 AM PST
+    - cron: "0 8 * * *"   # 08:00 UTC = 00:00 PST (standard time, UTC-8)
+    - cron: "0 7 * * *"   # 07:00 UTC = 00:00 PDT (daylight time, UTC-7)
   workflow_dispatch:       # allow manual runs from the GitHub Actions UI
 
 jobs:
@@ -11,10 +12,33 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      # ── Step 0: DST guard ─────────────────────────────────────────────────
+      # Both cron entries fire every day; only one will land at midnight Pacific.
+      # Skip all subsequent steps if this isn't actually midnight Pacific time.
+      # Manual dispatches always proceed.
+      - name: Check Pacific midnight
+        id: time_check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual dispatch — skipping DST check."
+            echo "skip=false" >> $GITHUB_OUTPUT
+          else
+            PACIFIC_HOUR=$(TZ="America/Los_Angeles" date +%H)
+            echo "Current Pacific hour: $PACIFIC_HOUR"
+            if [ "$PACIFIC_HOUR" = "00" ]; then
+              echo "Confirmed midnight Pacific. Proceeding."
+              echo "skip=false" >> $GITHUB_OUTPUT
+            else
+              echo "Not midnight Pacific (hour: $PACIFIC_HOUR). Skipping."
+              echo "skip=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
       # ── Step 1: Wake the Render instance ──────────────────────────────────
       # Render free tier spins down after inactivity. Ping the health endpoint
       # first and wait up to 90 s for a 200 before proceeding.
       - name: Wake Render instance
+        if: steps.time_check.outputs.skip != 'true'
         run: |
           echo "Pinging https://api.citey.email/health ..."
           for i in $(seq 1 18); do
@@ -33,10 +57,12 @@ jobs:
 
       # ── Step 2: Brief pause so any in-flight startup tasks can settle ──────
       - name: Wait for startup to settle
+        if: steps.time_check.outputs.skip != 'true'
         run: sleep 5
 
       # ── Step 3: Trigger the citation-check job ────────────────────────────
       - name: Run citation check
+        if: steps.time_check.outputs.skip != 'true'
         run: |
           echo "POSTing to https://api.citey.email/jobs/run ..."
           RESPONSE=$(curl -s -w "\n%{http_code}" \
