@@ -40,9 +40,15 @@ jobs:
       - name: Wake Render instance
         if: steps.time_check.outputs.skip != 'true'
         run: |
+          echo "Resolving api.citey.email..."
+          nslookup api.citey.email || { echo "ERROR: DNS resolution failed for api.citey.email"; exit 1; }
+
           echo "Pinging https://api.citey.email/health ..."
           for i in $(seq 1 18); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 https://api.citey.email/health || echo "000")
+            # -s silences the progress meter; -S still prints errors to stderr so
+            # they appear in the Actions log. Remove || echo "000" — curl's
+            # -w "%{http_code}" already outputs "000" on connection failure.
+            STATUS=$(curl -s -S -o /dev/null -w "%{http_code}" --max-time 60 https://api.citey.email/health)
             echo "  attempt $i — HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then
               echo "Instance is awake."
