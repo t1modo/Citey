@@ -167,6 +167,6 @@ def create_scheduler(
 
     logger.info(
         "Scheduler configured: citation_check daily at 00:00 PST, "
-        "publication_sync weekly (Sun 00:30 PST), notification_cleanup daily at 01:00 PST.",
+        "publication_sync weekly (Sun 00:00 PST), notification_cleanup daily at 01:00 PST.",
     )
     return scheduler

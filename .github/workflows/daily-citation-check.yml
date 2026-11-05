@@ -9,7 +9,7 @@ on:
 jobs:
   run-citation-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     steps:
       # ── Step 0: DST guard ─────────────────────────────────────────────────
@@ -91,3 +91,41 @@ jobs:
           fi
 
           echo "Citation check completed successfully."
+
+      # ── Step 4: Delete notifications older than 30 days ───────────────────
+      # Formerly an in-process APScheduler job (01:00 PT), which rarely fired
+      # because the free Render instance sleeps. Production now runs with
+      # DISABLE_SCHEDULER=true, so every scheduled job is driven from here.
+      - name: Clean up old notifications
+        if: steps.time_check.outputs.skip != 'true'
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 300 -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            -d '{"dry_run": false}' \
+            https://api.citey.email/jobs/cleanup-notifications)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          echo "HTTP status: $HTTP_CODE"
+          echo "Response body: $(echo "$RESPONSE" | head -n -1)"
+          [ "$HTTP_CODE" = "200" ] || { echo "ERROR: cleanup failed"; exit 1; }
+
+      # ── Step 5: Weekly publication sync (Sundays, Pacific time) ───────────
+      # Adds new papers from each user's linked author profile. Manual
+      # dispatches run it too so it can be triggered on demand.
+      - name: Sync new publications
+        if: steps.time_check.outputs.skip != 'true'
+        run: |
+          DOW=$(TZ="America/Los_Angeles" date +%u)   # 7 = Sunday
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "$DOW" != "7" ]; then
+            echo "Not Sunday in Pacific time (day $DOW). Skipping publication sync."
+            exit 0
+          fi
+          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 900 -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            -d '{"dry_run": false}' \
+            https://api.citey.email/jobs/sync-publications)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          echo "HTTP status: $HTTP_CODE"
+          echo "Response body: $(echo "$RESPONSE" | head -n -1)"
+          [ "$HTTP_CODE" = "200" ] || { echo "ERROR: publication sync failed"; exit 1; }
