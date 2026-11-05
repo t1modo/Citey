@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef } from "react";
-import { motion, useInView } from "framer-motion";
+import { motion } from "framer-motion";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
 
 interface SplitTextProps {
   text: string;
@@ -19,7 +20,7 @@ export default function SplitText({
   duration = 0.5,
 }: SplitTextProps) {
   const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-80px 0px" });
+  const hidden = useScrollReveal(ref, "-80px 0px");
 
   const words = text.split(" ");
 
@@ -45,17 +46,13 @@ export default function SplitText({
               <span key={ci} className="inline-block overflow-hidden leading-[1.15]">
                 <motion.span
                   className="inline-block"
-                  initial={{ y: "110%", opacity: 0 }}
-                  animate={
-                    inView
-                      ? { y: "0%", opacity: 1 }
-                      : { y: "110%", opacity: 0 }
+                  initial={false}
+                  animate={hidden ? { y: "110%", opacity: 0 } : { y: "0%", opacity: 1 }}
+                  transition={
+                    hidden
+                      ? { duration: 0 }
+                      : { duration, delay: globalIdx * charDelay, ease: [0.22, 1, 0.36, 1] }
                   }
-                  transition={{
-                    duration,
-                    delay: globalIdx * charDelay,
-                    ease: [0.22, 1, 0.36, 1],
-                  }}
                 >
                   {char}
                 </motion.span>

@@ -6,12 +6,12 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/components/Logo";
 
-const navLinks = [
-  { label: "Home",      href: "/" },
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Settings",  href: "/settings" },
-  { label: "FAQ",       href: "/faq" },
-  { label: "Help",      href: "/help" },
+const allNavLinks = [
+  { label: "Home",      href: "/",          authOnly: false },
+  { label: "Dashboard", href: "/dashboard", authOnly: true },
+  { label: "Settings",  href: "/settings",  authOnly: true },
+  { label: "FAQ",       href: "/faq",       authOnly: false },
+  { label: "Help",      href: "/help",      authOnly: false },
 ];
 
 export default function Nav() {
@@ -19,6 +19,8 @@ export default function Nav() {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Signed out visitors would just be bounced to sign in from these pages.
+  const navLinks = allNavLinks.filter((l) => user || !l.authOnly);
 
   const handleSignOut = async () => {
     try {

@@ -61,3 +61,15 @@ Citey also automatically discovers new publications from your linked author prof
 **[INSPIRE-HEP](https://inspirehep.net)** — High-energy physics literature database. Supports direct profile URL import and is queried during bulk import for physics and accelerator-science papers. No API key required.
 
 **[DBLP](https://dblp.org)** — Computer science bibliography covering ACM, IEEE, and major CS conference proceedings. Supports direct profile URL import. No API key required.
+---
+
+## Backend configuration
+
+Security related environment variables for the API:
+
+| Variable | Purpose |
+| --- | --- |
+| `CRON_SECRET` | Required. Sent as `X-Cron-Secret` by the scheduler. Job endpoints refuse requests while it is unset or `changeme` (outside localhost). |
+| `TOKEN_SECRET` | Signs unsubscribe and email confirmation links. Set it to a value different from `CRON_SECRET`. Links signed with the old `CRON_SECRET` keep working. |
+| `API_URL` | Public base URL of the API (e.g. `https://api.citey.email`), used for links inside emails. Falls back to the request URL. |
+| `ALLOWED_ORIGINS` | Comma separated frontend origins for CORS. |

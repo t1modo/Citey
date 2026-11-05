@@ -7,43 +7,70 @@ interface GalaxyProps {
   speedMultiplier?: number;
 }
 
+interface Star {
+  angle: number;
+  distance: number;
+  size: number;
+  opacity: number;
+  speed: number;
+  twinkleOffset: number;
+  twinkleSpeed: number;
+}
+
+const NUM_STARS = 320;
+const BACKGROUND = "#030712";
+const GLOW_SPRITE_SIZE = 64;
+
+/** Soft white glow drawn once, then stamped with drawImage each frame. */
+function makeGlowSprite(): HTMLCanvasElement {
+  const sprite = document.createElement("canvas");
+  sprite.width = sprite.height = GLOW_SPRITE_SIZE;
+  const g = sprite.getContext("2d")!;
+  const r = GLOW_SPRITE_SIZE / 2;
+  const grad = g.createRadialGradient(r, r, 0, r, r, r);
+  grad.addColorStop(0, "rgba(255,255,255,0.18)");
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, GLOW_SPRITE_SIZE, GLOW_SPRITE_SIZE);
+  return sprite;
+}
+
+/**
+ * Slowly rotating star field used as a page background.
+ *
+ * Performance notes: rendering pauses while the tab is hidden, honours
+ * prefers-reduced-motion (one static frame), scales for high-DPI screens
+ * (capped at 2x), and reuses a pre-rendered glow sprite rather than
+ * building a radial gradient per star per frame.
+ */
 export default function Galaxy({ className = "", speedMultiplier = 1 }: GalaxyProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let raf: number;
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const glow = makeGlowSprite();
+    let raf = 0;
+    let t = 0;
+    let width = 0;
+    let height = 0;
 
     const resize = () => {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = canvas.offsetWidth;
+      height = canvas.offsetHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
 
-    const ro = new ResizeObserver(resize);
-    ro.observe(canvas);
-
-    interface Star {
-      angle: number;
-      distance: number;
-      size: number;
-      opacity: number;
-      speed: number;
-      twinkleOffset: number;
-      twinkleSpeed: number;
-    }
-
-    const NUM_STARS = 320;
+    const radius = Math.max(width, height) * 0.65;
     const stars: Star[] = Array.from({ length: NUM_STARS }, () => {
-      const distance =
-        Math.pow(Math.random(), 0.6) *
-          Math.max(canvas.width, canvas.height) * 0.65 +
-        8;
+      const distance = Math.pow(Math.random(), 0.6) * radius + 8;
       return {
         angle: Math.random() * Math.PI * 2,
         distance,
@@ -55,57 +82,73 @@ export default function Galaxy({ className = "", speedMultiplier = 1 }: GalaxyPr
       };
     });
 
-    let t = 0;
+    const render = (advance: boolean) => {
+      if (advance) t++;
+      const cx = width / 2;
+      const cy = height / 2;
 
-    const draw = () => {
-      t++;
-      const cx = canvas.width / 2;
-      const cy = canvas.height / 2;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#030712";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = BACKGROUND;
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = "#ffffff";
 
       for (const s of stars) {
-        s.angle += s.speed;
+        if (advance) s.angle += s.speed;
         const x = cx + Math.cos(s.angle) * s.distance;
         const y = cy + Math.sin(s.angle) * s.distance * 0.38;
+        if (x < -10 || x > width + 10 || y < -10 || y > height + 10) continue;
 
-        const twinkle =
-          Math.sin(t * s.twinkleSpeed + s.twinkleOffset) * 0.18 + 0.82;
-        const alpha = s.opacity * twinkle;
-
+        const alpha = s.opacity * (Math.sin(t * s.twinkleSpeed + s.twinkleOffset) * 0.18 + 0.82);
+        ctx.globalAlpha = alpha;
         ctx.beginPath();
         ctx.arc(x, y, s.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.fill();
 
         if (s.size > 1.1) {
-          const g = ctx.createRadialGradient(x, y, 0, x, y, s.size * 3.5);
-          g.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.18})`);
-          g.addColorStop(1, "rgba(0, 0, 0, 0)");
-          ctx.beginPath();
-          ctx.arc(x, y, s.size * 3.5, 0, Math.PI * 2);
-          ctx.fillStyle = g;
-          ctx.fill();
+          const r = s.size * 3.5;
+          ctx.drawImage(glow, x - r, y - r, r * 2, r * 2);
         }
       }
-
-      raf = requestAnimationFrame(draw);
+      ctx.globalAlpha = 1;
     };
 
-    draw();
+    const loop = () => {
+      render(true);
+      raf = requestAnimationFrame(loop);
+    };
+
+    const start = () => {
+      cancelAnimationFrame(raf);
+      if (motionQuery.matches) {
+        render(false); // static frame only
+      } else if (document.visibilityState === "visible") {
+        raf = requestAnimationFrame(loop);
+      }
+    };
+    const stop = () => cancelAnimationFrame(raf);
+
+    const onVisibility = () => (document.visibilityState === "visible" ? start() : stop());
+    const ro = new ResizeObserver(() => {
+      resize();
+      if (motionQuery.matches) render(false);
+    });
+
+    ro.observe(canvas);
+    document.addEventListener("visibilitychange", onVisibility);
+    motionQuery.addEventListener("change", start);
+    start();
 
     return () => {
-      cancelAnimationFrame(raf);
+      stop();
       ro.disconnect();
+      document.removeEventListener("visibilitychange", onVisibility);
+      motionQuery.removeEventListener("change", start);
     };
-  }, []);
+  }, [speedMultiplier]);
 
   return (
     <canvas
       ref={canvasRef}
-      className={`pointer-events-none fixed inset-0 -z-10 w-screen h-screen ${className}`}
+      className={`pointer-events-none fixed inset-0 -z-10 h-screen w-screen ${className}`}
       aria-hidden="true"
     />
   );

@@ -185,13 +185,15 @@ export default function Particles({
 
     const mesh = new Mesh(gl, { mode: gl.POINTS, geometry, program });
 
-    let raf: number;
+    let raf = 0;
+    let running = false;
     let lastTime = performance.now();
     let elapsed = 0;
 
     const update = (t: number) => {
       raf = requestAnimationFrame(update);
-      elapsed += (t - lastTime) * speed;
+      // Clamp the step so resuming after a pause doesn't jump.
+      elapsed += Math.min(t - lastTime, 50) * speed;
       lastTime = t;
 
       program.uniforms.uTime.value = elapsed * 0.001;
@@ -209,13 +211,40 @@ export default function Particles({
 
       renderer.render({ scene: mesh, camera });
     };
-    raf = requestAnimationFrame(update);
+    // Only animate while the canvas is on screen, the tab is visible, and
+    // the visitor hasn't asked for reduced motion. Otherwise draw one frame.
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let onScreen = true;
+    const sync = () => {
+      const shouldRun = onScreen && document.visibilityState === "visible" && !motionQuery.matches;
+      if (shouldRun && !running) {
+        running = true;
+        lastTime = performance.now();
+        raf = requestAnimationFrame(update);
+      } else if (!shouldRun && running) {
+        running = false;
+        cancelAnimationFrame(raf);
+      }
+    };
+    const io = new IntersectionObserver(([entry]) => {
+      onScreen = entry.isIntersecting;
+      sync();
+    });
+    io.observe(container);
+    document.addEventListener("visibilitychange", sync);
+    motionQuery.addEventListener("change", sync);
+    renderer.render({ scene: mesh, camera });
+    sync();
 
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      io.disconnect();
+      document.removeEventListener("visibilitychange", sync);
+      motionQuery.removeEventListener("change", sync);
       if (moveParticlesOnHover) container.removeEventListener("mousemove", onMouseMove);
       if (gl.canvas.parentElement === container) container.removeChild(gl.canvas);
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
   }, [
     particleCount, particleSpread, speed, moveParticlesOnHover,

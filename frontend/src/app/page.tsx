@@ -114,9 +114,10 @@ export default function HomePage() {
           </Link>
           <a
             href="#features"
-            className="rounded-xl border border-white/10 px-8 py-3.5 text-base font-semibold text-gray-300 transition-all hover:border-white/25 hover:bg-white/5 hover:text-white"
+            className="group inline-flex items-center gap-1.5 px-4 py-3 text-base font-medium text-gray-400 transition-colors hover:text-white"
           >
-            Learn more
+            See how it works
+            <span aria-hidden="true" className="transition-transform group-hover:translate-y-0.5">&darr;</span>
           </a>
         </div>
 
@@ -242,9 +243,10 @@ export default function HomePage() {
 
             <nav className="flex flex-wrap justify-center gap-6 text-sm text-gray-500">
               <Link href="/"          className="transition-colors hover:text-gray-300">Home</Link>
-              <Link href="/dashboard" className="transition-colors hover:text-gray-300">Dashboard</Link>
-              <Link href="/settings"  className="transition-colors hover:text-gray-300">Settings</Link>
+              {user && <Link href="/dashboard" className="transition-colors hover:text-gray-300">Dashboard</Link>}
+              {user && <Link href="/settings"  className="transition-colors hover:text-gray-300">Settings</Link>}
               <Link href="/faq"       className="transition-colors hover:text-gray-300">FAQ</Link>
+              <Link href="/help"      className="transition-colors hover:text-gray-300">Help</Link>
             </nav>
           </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useInView } from "framer-motion";
 
 // The card is authored at this width. On narrower viewports we apply a
 // CSS scale transform so the layout never reflows and cursor hotspots
@@ -654,13 +654,18 @@ export default function HeroDemo() {
     if (card && card.offsetHeight > 0) setCardH(card.offsetHeight);
   }, [phase, scale]);
 
+  // Stop cycling scenes while the demo is scrolled out of view, so its
+  // animations (and the frame loop driving them) go idle.
+  const visible = useInView(wrapperRef, { margin: "100px 0px" });
+
   useEffect(() => {
+    if (!visible) return;
     const t = setTimeout(
       () => setPhase((p) => (((p + 1) % 4) as Phase)),
       PHASE_MS[phase],
     );
     return () => clearTimeout(t);
-  }, [phase]);
+  }, [phase, visible]);
 
   useEffect(() => {
     const waypoints = CURSOR_SEQUENCES[phase];

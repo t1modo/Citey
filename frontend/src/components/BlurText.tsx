@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 interface BlurTextProps {
   text: string;
@@ -16,6 +16,7 @@ export default function BlurText({
   wordClassName = "",
 }: BlurTextProps) {
   const words = text.split(" ");
+  const reduceMotion = useReducedMotion();
 
   const containerVariants = {
     hidden: {},
@@ -47,7 +48,7 @@ export default function BlurText({
     <motion.span
       className={`inline ${className}`}
       variants={containerVariants}
-      initial="hidden"
+      initial={reduceMotion ? false : "hidden"}
       animate="visible"
       aria-label={text}
     >

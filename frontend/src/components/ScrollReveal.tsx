@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef } from "react";
-import { motion, useInView } from "framer-motion";
+import { motion } from "framer-motion";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
 
 interface ScrollRevealProps {
   children: React.ReactNode;
@@ -20,15 +21,17 @@ export default function ScrollReveal({
   distance = 36,
 }: ScrollRevealProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-70px 0px" });
+  const hidden = useScrollReveal(ref);
 
   return (
     <motion.div
       ref={ref}
       className={className}
-      initial={{ opacity: 0, y: distance }}
-      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: distance }}
-      transition={{ duration, delay, ease: [0.22, 1, 0.36, 1] }}
+      // initial={false}: render in the visible state on the server and on
+      // first paint; useScrollReveal only hides content that starts offscreen.
+      initial={false}
+      animate={hidden ? { opacity: 0, y: distance } : { opacity: 1, y: 0 }}
+      transition={hidden ? { duration: 0 } : { duration, delay, ease: [0.22, 1, 0.36, 1] }}
     >
       {children}
     </motion.div>
