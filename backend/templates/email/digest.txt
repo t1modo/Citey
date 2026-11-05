@@ -1,69 +1,47 @@
-{{ app_name }} — {{ total_citations }} New Citation{% if total_citations != 1 %}s{% endif %}
+{% if total_citations == 1 %}A new paper cites your work{% else %}{{ total_citations }} new papers cite your work{% endif %}
 
-Dear {{ recipient_name }},
 
-{% if total_citations == 1 %}
-{{ app_name }} has detected 1 new citation of your work. The details are
-provided below.
-{% else %}
-{{ app_name }} has detected {{ total_citations }} new citations across
-{{ total_papers }} of your publication{% if total_papers != 1 %}s{% endif %}.
-The details are provided below.
+{% if recipient_name %}Hi {{ recipient_name }},
+
 {% endif %}
-
-{{ "=" * 72 }}
-
+{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} across {{ total_papers }} of your paper{% if total_papers != 1 %}s{% endif %}, found in OpenAlex and Semantic Scholar on {{ digest_date }}.
 {% for group in citation_groups %}
 {% set shown = group.citations[:5] %}
 {% set overflow = (group.citations | length) - 5 %}
-YOUR PAPER  ({{ group.citations | length }} new citation{% if group.citations | length != 1 %}s{% endif %})
-{{ group.cited_work_title }}
-{% if group.cited_work_doi %}https://doi.org/{{ group.cited_work_doi }}{% endif %}
 
+------------------------------------------------------------
 
-{{ "-" * 72 }}
+New citation{% if group.citations | length != 1 %}s{% endif %} of: {{ group.cited_work_title }}
+{% if group.cited_work_doi %}https://doi.org/{{ group.cited_work_doi }}
+{% endif %}
 
 {% for n in shown %}
-  [{{ loop.index }}]  {{ n.citing_work_title }}
-{% if n.citing_work_url %}
-       {{ n.citing_work_url }}
-{% elif n.citing_work_doi %}
-       https://doi.org/{{ n.citing_work_doi }}
+{{ loop.index }}. {{ n.citing_work_title }}
+{% if n.citing_authors %}   {{ n.citing_authors | author_line(3, "others") }}
 {% endif %}
-{% if n.citing_authors %}
-       {{ n.citing_authors[:3] | join(', ') }}{% if n.citing_authors | length > 3 %} (+{{ n.citing_authors | length - 3 }} more){% endif %}
-
+{% if n.citing_affiliations %}   {{ n.citing_affiliations | author_line(3, "more") }}
 {% endif %}
-{% if n.citing_publication_date %}
-       Published: {{ n.citing_publication_date }}
-{% elif n.citing_year %}
-       Year:      {{ n.citing_year }}
+{% if n.citing_publication_date %}   {{ n.citing_publication_date | nice_date }}
+{% elif n.citing_year %}   {{ n.citing_year }}
 {% endif %}
-{% if n.citing_work_doi %}
-       DOI:       {{ n.citing_work_doi }}
+{% if n.citing_work_url %}   {{ n.citing_work_url }}
+{% elif n.citing_work_doi %}   https://doi.org/{{ n.citing_work_doi }}
 {% endif %}
 
 {% endfor %}
-{% if overflow > 0 %}
-  + {{ overflow }} more citation{% if overflow != 1 %}s{% endif %} — view all at:
-  {{ app_url }}/dashboard
-
-{% endif %}
-{% if not loop.last %}
-{{ "=" * 72 }}
-
+{% if overflow > 0 %}And {{ overflow }} more on your dashboard: {{ app_url }}/dashboard
 {% endif %}
 {% endfor %}
-{{ "=" * 72 }}
+------------------------------------------------------------
 
-View your dashboard:
-{{ app_url }}/dashboard
+Open your dashboard: {{ app_url }}/dashboard
 
-Citation data is provided by OpenAlex and Semantic Scholar.
-Coverage may differ from Google Scholar.
+Citation data comes from OpenAlex and Semantic Scholar. Lifetime counts can
+differ from Google Scholar, which also counts theses, slides and duplicate
+versions.
 
-────────────────────────────────────────────────────────────────────────
-© {{ current_year | default('2025') }} {{ app_name }}  ·  {{ support_email }}
-Notification preferences:  {{ app_url }}/settings
-{% if unsubscribe_url %}Unsubscribe from all emails:  {{ unsubscribe_url }}
-{% endif %}You are receiving this because you track citations on {{ app_name }}.
+You get these emails because you track citations on {{ app_name }}.
+Choose what we send: {{ app_url }}/settings
+{% if unsubscribe_url %}Unsubscribe from all emails: {{ unsubscribe_url }}
+{% endif %}
+Questions? Write to {{ support_email }}.

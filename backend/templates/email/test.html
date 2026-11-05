@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Your email alerts are on | {{ app_name }}{% endblock %}
+{% block preheader %}This is what a citation alert from {{ app_name }} looks like.{% endblock %}
+
+{% block body_content %}
+{% import "_ui.html" as ui %}
+
+{% if recipient_name %}{% call ui.p(tone="muted", size=14, bottom=8) %}Hi {{ recipient_name }},{% endcall %}{% endif %}
+
+{% call ui.h1() %}Your email alerts are on{% endcall %}
+
+{% call ui.p(bottom=0) %}
+  This is a test. When a new paper cites one of yours, an email arrives here
+  with the citing paper's title, authors, affiliations and a link, so you know
+  what happened without opening the dashboard.
+{% endcall %}
+
+{{ ui.button(app_url ~ "/dashboard", "Open your dashboard") }}
+{% endblock %}

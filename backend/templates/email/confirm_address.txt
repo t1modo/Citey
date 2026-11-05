@@ -1,0 +1,10 @@
+Confirm your alert address
+
+Someone asked {{ app_name }} to send citation alerts to this address. If that
+was you, confirm it and alerts will start arriving here.
+
+Confirm address: {{ link }}
+
+If it wasn't you, ignore this email and nothing will be sent here.
+
+Questions? Write to {{ support_email }}.

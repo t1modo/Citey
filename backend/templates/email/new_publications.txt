@@ -1,37 +1,21 @@
-{{ app_name }} — {{ count }} new publication{% if count != 1 %}s{% endif %} added to your tracking list
-================================================================================
+{% if count == 1 %}1 new paper{% else %}{{ count }} new papers{% endif %} added to your {{ app_name }} list
 
-Hi {{ recipient_name }},
 
-{% if count == 1 %}
-We found 1 new paper on your author profile and automatically added it to your
-tracking list on {{ app_name }}:
-{% else %}
-We found {{ count }} new papers on your author profile and automatically added
-them to your tracking list on {{ app_name }}:
+{% if recipient_name %}Hi {{ recipient_name }},
+
 {% endif %}
+{% if count == 1 %}It appeared on your author profile, so we added it for you.{% else %}They appeared on your author profile, so we added them for you.{% endif %}
+
+You'll get an email as soon as {% if count == 1 %}this paper is{% else %}any of these papers are{% endif %} cited.
 
 {% for title in new_titles %}
-  • {{ title }}
+{{ loop.index }}. {{ title }}
 {% endfor %}
 
-================================================================================
+See your papers: {{ app_url }}/dashboard
 
-You'll receive a separate notification as soon as {% if count == 1 %}this paper is{% else %}any of these papers are{% endif %} cited.
-
-View your full tracked paper list:
-{{ app_url }}/dashboard
-
-================================================================================
-
-© {{ current_year }} {{ app_name }}
-{{ support_email }}
-
-Manage your notification preferences:
-{{ app_url }}/settings
-{% if unsubscribe_url %}
-Unsubscribe from all emails:
-{{ unsubscribe_url }}
+You get this because new publication alerts are on for your {{ app_name }} account.
+Turn them off in Settings: {{ app_url }}/settings
+{% if unsubscribe_url %}Unsubscribe from all emails: {{ unsubscribe_url }}
 {% endif %}
-You're receiving this email because you have auto-sync enabled on {{ app_name }}.
-To stop receiving these emails, turn off "New publication alerts" in Settings.
+Questions? Write to {{ support_email }}.

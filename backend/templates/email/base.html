@@ -1,255 +1,92 @@
+{#-
+  Shared layout for every Citey email, in the site's "annotated manuscript"
+  style: paper background, one white sheet, ink text, serif for titles and the
+  highlighter only on what is new.
+
+  Styles are inline because Gmail and Outlook drop or rewrite <style> blocks.
+  The <style> block below only adds progressive extras: the mobile padding and
+  a dark palette for clients that honour prefers-color-scheme (Apple Mail,
+  Outlook for Mac, some mobile apps). Everything reads correctly without it.
+-#}
+{% import "_ui.html" as ui %}
 <!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="supported-color-schemes" content="light dark" />
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
   <!--[if mso]>
   <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
   <![endif]-->
   <style>
     body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
-    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
-    img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
-
-    body {
-      margin: 0 !important;
-      padding: 0 !important;
-      background-color: #f0f2f5;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      font-size: 15px;
-      line-height: 1.6;
-      color: #1a1d23;
-    }
-
-    .preheader {
-      display: none; font-size: 1px; line-height: 1px; max-height: 0;
-      max-width: 0; opacity: 0; overflow: hidden; mso-hide: all;
-    }
-
-    .email-wrapper {
-      width: 100%;
-      background-color: #f0f2f5;
-      padding: 40px 0;
-    }
-
-    .email-container {
-      max-width: 600px;
-      margin: 0 auto;
-      background-color: #ffffff;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 2px 16px rgba(0,0,0,0.10);
-    }
-
-    /* ── Header ───────────────────────────────────────────────────────── */
-    .email-header {
-      background: linear-gradient(160deg, #0f0f14 0%, #1c1c28 100%);
-      padding: 32px 48px;
-    }
-    .email-header .brand {
-      font-size: 21px;
-      font-weight: 700;
-      color: #ffffff;
-      letter-spacing: -0.3px;
-      text-decoration: none;
-    }
-    .email-header .brand-dot {
-      color: rgba(255,255,255,0.35);
-    }
-    .email-header .subtitle {
-      font-size: 11px;
-      font-weight: 500;
-      color: #ffffff;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      margin-top: 4px;
-    }
-
-    /* ── Body ─────────────────────────────────────────────────────────── */
-    .email-body {
-      padding: 40px 48px 36px;
-    }
-    .greeting {
-      font-size: 16px;
-      font-weight: 600;
-      color: #1a1d23;
-      margin: 0 0 6px;
-    }
-    .intro {
-      font-size: 14px;
-      color: #4b5563;
-      margin: 0 0 30px;
-      line-height: 1.7;
-    }
-    .intro strong {
-      color: #1a1d23;
-      font-weight: 600;
-    }
-
-    /* ── Paper group header ───────────────────────────────────────────── */
-    .paper-header {
-      background-color: #f8f9fb;
-      border: 1px solid #e2e5eb;
-      border-radius: 8px;
-      padding: 14px 18px;
-      margin-bottom: 10px;
-    }
-    .paper-header-label {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #6b7280;
-      margin-bottom: 5px;
-    }
-    .paper-header-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: #1a1d23;
-      line-height: 1.45;
-    }
-    .paper-header-title a {
-      color: #1a1d23;
-      text-decoration: none;
-    }
-    .paper-header-title a:hover { text-decoration: underline; }
-
-    /* ── Citation card ────────────────────────────────────────────────── */
-    .citation-card {
-      border: 1px solid #e8ecf2;
-      border-radius: 8px;
-      padding: 16px 18px;
-      margin-bottom: 8px;
-      background-color: #fdfdfe;
-    }
-    .citation-card-label {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #9ca3af;
-      margin-bottom: 6px;
-    }
-    .citation-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: #1a1d23;
-      line-height: 1.45;
-      margin-bottom: 8px;
-    }
-    .citation-title a {
-      color: #1a1d23;
-      text-decoration: none;
-    }
-    .citation-title a:hover { text-decoration: underline; }
-    .citation-meta {
-      font-size: 12px;
-      color: #6b7280;
-      margin-bottom: 3px;
-      line-height: 1.5;
-    }
-    .citation-meta strong {
-      color: #374151;
-      font-weight: 600;
-    }
-    .citation-doi {
-      font-size: 11px;
-      font-family: 'Courier New', Courier, monospace;
-      color: #6b7280;
-      text-decoration: none;
-    }
-    .citation-doi:hover { text-decoration: underline; color: #374151; }
-
-    /* ── Overflow link ────────────────────────────────────────────────── */
-    .overflow-row {
-      text-align: center;
-      padding: 10px 0 4px;
-      font-size: 12px;
-      color: #6b7280;
-    }
-    .overflow-row a {
-      color: #374151;
-      font-weight: 600;
-      text-decoration: none;
-    }
-    .overflow-row a:hover { text-decoration: underline; }
-
-    /* ── Divider ──────────────────────────────────────────────────────── */
-    .section-divider {
-      border: none;
-      border-top: 1px solid #edf0f5;
-      margin: 28px 0;
-    }
-
-    /* ── CTA button ───────────────────────────────────────────────────── */
-    .btn-wrap { margin: 32px 0 8px; }
-    .btn-primary {
-      display: inline-block;
-      background-color: #111111;
-      color: #ffffff !important;
-      text-decoration: none !important;
-      padding: 13px 30px;
-      border-radius: 7px;
-      font-weight: 600;
-      font-size: 14px;
-      letter-spacing: 0.01em;
-    }
-
-    /* ── Footer ───────────────────────────────────────────────────────── */
-    .email-footer {
-      background-color: #f8f9fb;
-      border-top: 1px solid #e8ecf2;
-      padding: 22px 48px;
-      text-align: center;
-      font-size: 11px;
-      color: #9ca3af;
-      line-height: 2;
-    }
-    .email-footer a {
-      color: #6b7280;
-      text-decoration: underline;
-    }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-collapse: collapse; }
+    img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+    a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; }
+    .logo-dark { display: none; }
 
     @media only screen and (max-width: 620px) {
-      .email-container { border-radius: 0 !important; }
-      .email-body { padding: 28px 24px 24px !important; }
-      .email-header { padding: 26px 24px !important; }
-      .email-footer { padding: 18px 24px !important; }
-      .citation-card, .paper-header { padding: 13px 15px !important; }
+      .sheet { padding: 28px 22px !important; }
+      .h1 { font-size: 24px !important; }
     }
+
+    @media (prefers-color-scheme: dark) {
+      .bg { background-color: #0F172A !important; }
+      .sheet { background-color: #16213A !important; border-color: #2A3A5E !important; }
+      .ink, .ink a { color: #EEF1F4 !important; }
+      .muted, .muted a { color: #A9B3C4 !important; }
+      .rule { border-color: #2A3A5E !important; }
+      .btn { background-color: #EEF1F4 !important; color: #14213D !important; }
+      .mark, .ink .mark, .h1 .mark { color: #14213D !important; background-color: #FFE45C !important; }
+      .logo-light { display: none !important; }
+      .logo-dark { display: inline-block !important; }
+    }
+    [data-ogsc] .ink, [data-ogsc] .ink a { color: #EEF1F4 !important; }
+    [data-ogsc] .muted { color: #A9B3C4 !important; }
   </style>
 </head>
-<body>
-  <div class="preheader">{% block preheader %}New citation activity on your publications from {{ app_name }}.{% endblock %}&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>
+<body class="bg" style="margin:0; padding:0; background-color:#EEF1F4;">
+  <div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all;">{% block preheader %}New citations of your work from {{ app_name }}.{% endblock %}&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>
 
-  <div class="email-wrapper">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-      <tr>
-        <td align="center" style="padding: 0 16px;">
-          <div class="email-container">
+  <table role="presentation" class="bg" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#EEF1F4;">
+    <tr>
+      <td align="center" style="padding:32px 16px 40px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;">
 
-            <div class="email-header">
-              <div class="brand">{{ app_name }}<span class="brand-dot">.</span></div>
-              <div class="subtitle">Citation Tracking</div>
-            </div>
+          <!-- Masthead: the mark and name, set like the site's header. -->
+          <tr>
+            <td style="padding:0 4px 18px;">
+              <a href="{{ app_url }}" style="text-decoration:none;">
+                <img class="logo-light" src="{{ app_url }}/email-logo.png" width="23" height="32" alt="" style="display:inline-block; vertical-align:middle; width:23px; height:32px;" />
+                <img class="logo-dark" src="{{ app_url }}/email-logo-light.png" width="23" height="32" alt="" style="vertical-align:middle; width:23px; height:32px;" />
+                <span class="ink" style="vertical-align:middle; padding-left:8px; font-family:{{ ui.SERIF }}; font-size:21px; font-weight:600; color:#14213D;">{{ app_name }}</span>
+              </a>
+            </td>
+          </tr>
 
-            <div class="email-body">
+          <!-- The sheet -->
+          <tr>
+            <td class="sheet" style="background-color:#FFFFFF; border:1px solid #C9D0DA; border-radius:6px; padding:36px 40px;">
               {% block body_content %}{% endblock %}
-            </div>
+            </td>
+          </tr>
 
-            <div class="email-footer">
-              {% block footer_extra %}{% endblock %}
-              &copy; {{ current_year | default('2025') }} {{ app_name }}&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="mailto:{{ support_email }}">{{ support_email }}</a><br />
-              <a href="{{ app_url }}/settings">Notification preferences</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="{{ app_url }}/dashboard">Dashboard</a><br />
-              {% if unsubscribe_url %}<a href="{{ unsubscribe_url }}">Unsubscribe from all emails</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;{% endif %}You are receiving this because you track citations on {{ app_name }}.
-            </div>
+          <!-- Footer: why this arrived and how to change it, in plain sentences. -->
+          <tr>
+            <td class="muted" style="padding:20px 4px 0; font-family:{{ ui.SANS }}; font-size:12px; line-height:1.65; color:#5B6577;">
+              {% block footer_reason %}You get these emails because you track citations on {{ app_name }}.{% endblock %}&#32;{% block footer_links %}
+              Choose what we send in <a href="{{ app_url }}/settings" style="color:#5B6577; text-decoration:underline;">Settings</a>{% if unsubscribe_url %}, or <a href="{{ unsubscribe_url }}" style="color:#5B6577; text-decoration:underline;">unsubscribe from all emails</a>{% endif %}.
+              {% endblock %}
+              <br />Questions? Write to <a href="mailto:{{ support_email }}" style="color:#5B6577; text-decoration:underline;">{{ support_email }}</a>.
+            </td>
+          </tr>
 
-          </div>
-        </td>
-      </tr>
-    </table>
-  </div>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>

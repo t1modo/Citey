@@ -1,0 +1,13 @@
+Your email alerts are on
+
+{% if recipient_name %}Hi {{ recipient_name }},
+
+{% endif %}
+This is a test. When a new paper cites one of yours, an email arrives here
+with the citing paper's title, authors, affiliations and a link, so you know
+what happened without opening the dashboard.
+
+Open your dashboard: {{ app_url }}/dashboard
+
+Choose what we send: {{ app_url }}/settings
+Questions? Write to {{ support_email }}.

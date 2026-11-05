@@ -1,103 +1,76 @@
 {% extends "base.html" %}
 
-{% block title %}{{ total_citations }} New Citation{% if total_citations != 1 %}s{% endif %} | {{ app_name }}{% endblock %}
+{% block title %}{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} of your work | {{ app_name }}{% endblock %}
 
 {% block preheader %}
-{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} across {{ total_papers }} of your paper{% if total_papers != 1 %}s{% endif %}.
+{%- set first = citation_groups[0].citations[0] if citation_groups and citation_groups[0].citations else None -%}
+{%- if first -%}
+"{{ first.citing_work_title | truncate(90) }}"{% if total_citations > 1 %} and {{ total_citations - 1 }} more{% endif %} cite{% if total_citations == 1 %}s{% endif %} your work.
+{%- else -%}
+New citations of your work.
+{%- endif -%}
 {% endblock %}
 
 {% block body_content %}
+{% import "_ui.html" as ui %}
 
-<p class="greeting">Dear {{ recipient_name }},</p>
-<p class="intro">
-  {% if total_citations == 1 %}
-    {{ app_name }} has detected <strong>1 new citation</strong> of your work.
-  {% else %}
-    {{ app_name }} has detected <strong>{{ total_citations }} new citations</strong>
-    across <strong>{{ total_papers }} of your publication{% if total_papers != 1 %}s{% endif %}</strong>.
-  {% endif %}
-  The details are summarised below.
-</p>
+{% if recipient_name %}{% call ui.p(tone="muted", size=14, bottom=8) %}Hi {{ recipient_name }},{% endcall %}{% endif %}
+
+{% call ui.h1() %}
+  {%- if total_citations == 1 -%}
+    A {{ ui.mark("new paper") }} cites your work
+  {%- else -%}
+    {{ ui.mark(total_citations ~ " new papers") }} cite your work
+  {%- endif -%}
+{% endcall %}
+
+{% call ui.p(tone="muted", size=15, bottom=0) %}
+  {{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} across
+  {{ total_papers }} of your paper{% if total_papers != 1 %}s{% endif %}, found in OpenAlex and
+  Semantic Scholar on {{ digest_date }}.
+{% endcall %}
 
 {% for group in citation_groups %}
-
-{# Cap displayed citations at 5 per paper to keep the email scannable. #}
+{# Five per paper keeps the email scannable; the rest are on the dashboard. #}
 {% set shown = group.citations[:5] %}
 {% set overflow = (group.citations | length) - 5 %}
 
-<div style="margin-bottom: 28px;">
+{{ ui.rule() }}
 
-  <!-- Your paper -->
-  <div class="paper-header">
-    <div class="paper-header-label">
-      Your paper &mdash; {{ group.citations | length }} new citation{% if group.citations | length != 1 %}s{% endif %}
-    </div>
-    <div class="paper-header-title">
-      {% if group.cited_work_doi %}
-        <a href="https://doi.org/{{ group.cited_work_doi }}" target="_blank" rel="noopener">{{ group.cited_work_title }}</a>
-      {% else %}
-        {{ group.cited_work_title }}
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- Citing papers (max 5) -->
-  {% for n in shown %}
-  <div class="citation-card">
-    <div class="citation-card-label">Cited by</div>
-
-    <div class="citation-title">
-      {% if n.citing_work_url %}
-        <a href="{{ n.citing_work_url | safe_url }}" target="_blank" rel="noopener">{{ n.citing_work_title }}</a>
-      {% elif n.citing_work_doi %}
-        <a href="https://doi.org/{{ n.citing_work_doi }}" target="_blank" rel="noopener">{{ n.citing_work_title }}</a>
-      {% else %}
-        {{ n.citing_work_title }}
-      {% endif %}
-    </div>
-
-    {% if n.citing_authors %}
-    <div class="citation-meta">
-      {{ n.citing_authors[:3] | join(', ') }}{% if n.citing_authors | length > 3 %}&nbsp;&middot;&nbsp;<em>+{{ n.citing_authors | length - 3 }} more</em>{% endif %}
-    </div>
-    {% endif %}
-
-    <div class="citation-meta" style="margin-top: 5px;">
-      {% if n.citing_publication_date %}
-        {{ n.citing_publication_date }}
-      {% elif n.citing_year %}
-        {{ n.citing_year }}
-      {% endif %}
-      {% if n.citing_work_doi %}
-        &nbsp;&middot;&nbsp;<a href="https://doi.org/{{ n.citing_work_doi }}" class="citation-doi" target="_blank" rel="noopener">doi:{{ n.citing_work_doi }}</a>
-      {% endif %}
-    </div>
-
-  </div>
-  {% endfor %}
-
-  <!-- Overflow link when > 5 citations for this paper -->
-  {% if overflow > 0 %}
-  <div class="overflow-row">
-    <a href="{{ app_url }}/dashboard">
-      +{{ overflow }} more citation{% if overflow != 1 %}s{% endif %} &mdash; view in dashboard &rarr;
-    </a>
-  </div>
-  {% endif %}
-
+{% call ui.p(tone="muted", size=13, bottom=4) %}New citation{% if group.citations | length != 1 %}s{% endif %} of{% endcall %}
+<div class="ink" style="margin:0 0 20px; font-family:{{ ui.SERIF }}; font-size:19px; line-height:1.35; font-weight:600; color:#14213D;">
+  {%- if group.cited_work_doi -%}
+  <a href="https://doi.org/{{ group.cited_work_doi }}" style="color:#14213D; text-decoration:none;">{{ group.cited_work_title }}</a>
+  {%- else -%}
+  {{ group.cited_work_title }}
+  {%- endif -%}
 </div>
 
-{% if not loop.last %}<hr class="section-divider" />{% endif %}
+{% for n in shown %}
+{% set href = (n.citing_work_url | safe_url) if n.citing_work_url else ('https://doi.org/' ~ n.citing_work_doi if n.citing_work_doi else None) %}
+{% set affiliations = n.citing_affiliations | author_line(3, "more") %}
+{% set when = (n.citing_publication_date | nice_date) if n.citing_publication_date else (n.citing_year or "") %}
+{% call ui.entry(n.citing_work_title, href, [n.citing_authors | author_line(3, "others"), affiliations]) %}
+  {%- if when or n.citing_work_doi %}
+  <div class="muted" style="margin-top:4px; font-family:{{ ui.SANS }}; font-size:13px; line-height:1.5; color:#5B6577;">
+    {%- if when %}{{ when }}.{% endif %}
+    {%- if n.citing_work_doi %} <a href="https://doi.org/{{ n.citing_work_doi }}" class="muted" style="font-family:{{ ui.MONO }}; font-size:12px; color:#5B6577; text-decoration:underline; text-decoration-color:#C9D0DA;">doi:{{ n.citing_work_doi }}</a>{% endif %}
+  </div>
+  {%- endif %}
+{% endcall %}
 {% endfor %}
 
-<div class="btn-wrap">
-  <a href="{{ app_url }}/dashboard" class="btn-primary">Open Dashboard</a>
-</div>
+{% if overflow > 0 %}
+{% call ui.p(tone="muted", size=14, top=0, bottom=0) %}
+  And {{ overflow }} more on <a href="{{ app_url }}/dashboard" class="muted" style="color:#5B6577; text-decoration:underline;">your dashboard</a>.
+{% endcall %}
+{% endif %}
+{% endfor %}
 
-<p style="font-size: 12px; color: #9ca3af; margin-top: 22px; line-height: 1.7;">
-  Citation data is provided by OpenAlex and Semantic Scholar. Coverage may
-  differ from Google Scholar. To update your notification preferences, visit
-  your <a href="{{ app_url }}/settings" style="color: #6b7280;">account settings</a>.
-</p>
+{{ ui.button(app_url ~ "/dashboard", "Open your dashboard") }}
 
+{% call ui.p(tone="muted", size=12, top=22, bottom=0) %}
+  Citation data comes from OpenAlex and Semantic Scholar. Lifetime counts can
+  differ from Google Scholar, which also counts theses, slides and duplicate versions.
+{% endcall %}
 {% endblock %}

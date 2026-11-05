@@ -154,28 +154,27 @@ class TestNewPublicationsTxt:
         assert "this paper is" in output
         assert "any of these papers are" not in output
 
-    def test_singular_subject_line(self) -> None:
+    def test_singular_heading(self) -> None:
         output = self._render(["Only Paper"])
-        assert "1 new publication" in output
-        assert "1 new publications" not in output
+        assert "1 new paper added" in output
+        assert "1 new papers" not in output
 
     # Plural grammar
     def test_plural_paper_wording(self) -> None:
         assert "2 new papers" in self._render(["Paper A", "Paper B"])
 
     def test_plural_pronoun_them(self) -> None:
-        # The txt template wraps long lines, so "added" and "them" may be on separate lines
         output = self._render(["Paper A", "Paper B"])
-        assert "them to your tracking list" in output
-        assert "it to your tracking list" not in output
+        assert "added them" in output
+        assert "added it" not in output
 
     def test_plural_citation_followup(self) -> None:
         output = self._render(["Paper A", "Paper B"])
         assert "any of these papers are" in output
         assert "this paper is" not in output
 
-    def test_plural_subject_line(self) -> None:
-        assert "2 new publications" in self._render(["Paper A", "Paper B"])
+    def test_plural_heading(self) -> None:
+        assert "2 new papers added" in self._render(["Paper A", "Paper B"])
 
     # Content
     def test_all_titles_listed(self) -> None:
@@ -183,8 +182,10 @@ class TestNewPublicationsTxt:
         assert "Alpha Study" in output
         assert "Beta Review" in output
 
-    def test_bullet_points_present(self) -> None:
-        assert "•" in self._render(["Alpha Study", "Beta Review"])
+    def test_titles_are_numbered(self) -> None:
+        output = self._render(["Alpha Study", "Beta Review"])
+        assert "1. Alpha Study" in output
+        assert "2. Beta Review" in output
 
     def test_contains_recipient_name(self) -> None:
         assert "Dr. Jane Smith" in self._render(["A Paper"])

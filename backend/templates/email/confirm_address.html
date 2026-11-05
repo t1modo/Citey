@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm your alert address | {{ app_name }}{% endblock %}
+{% block preheader %}Confirm that {{ app_name }} may send citation alerts here.{% endblock %}
+
+{% block body_content %}
+{% import "_ui.html" as ui %}
+
+{% call ui.h1() %}Confirm your alert address{% endcall %}
+
+{% call ui.p(bottom=0) %}
+  Someone asked {{ app_name }} to send citation alerts to this address. If that
+  was you, confirm it and alerts will start arriving here.
+{% endcall %}
+
+{{ ui.button(link, "Confirm address") }}
+
+{% call ui.p(tone="muted", size=13, top=26, bottom=6) %}Button not working? Paste this link into your browser:{% endcall %}
+{{ ui.raw_link(link) }}
+
+{% call ui.p(tone="muted", size=13, top=20, bottom=0) %}
+  If it wasn't you, ignore this email and nothing will be sent here.
+{% endcall %}
+{% endblock %}
+
+{% block footer_reason %}You're getting this because this address was entered in a {{ app_name }} account's settings.{% endblock %}
+{% block footer_links %}{% endblock %}

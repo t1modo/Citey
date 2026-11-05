@@ -273,3 +273,95 @@ class TestDigestTxt:
         notes = [_make_notification(1), _make_notification(2)]
         output = self._render([_make_digest_group(notes)], total=2)
         assert "2 New Citations" in output or "2 new citations" in output.lower()
+
+
+# ---------------------------------------------------------------------------
+# Redesign: shared layout, filters and the transactional templates
+# ---------------------------------------------------------------------------
+
+from app.services.email_service import (  # noqa: E402
+    _author_line,
+    _greeting_name,
+    _nice_date,
+    _render,
+    digest_subject,
+)
+
+
+def test_author_line_formats() -> None:
+    assert _author_line([]) == ""
+    assert _author_line(["Ada Lovelace"]) == "Ada Lovelace"
+    assert _author_line(["A", "B"]) == "A and B"
+    assert _author_line(["A", "B", "C"]) == "A, B and C"
+    assert _author_line(["A", "B", "C", "D"]) == "A, B, C and 1 other"
+    assert _author_line(["A", "B", "C", "D", "E"]) == "A, B, C and 2 others"
+    assert _author_line(["MIT", "CMU", "ETH", "EPFL"], 3, "more") == "MIT, CMU, ETH and 1 more"
+
+
+def test_nice_date() -> None:
+    assert _nice_date("2026-10-30") == "October 30, 2026"
+    assert _nice_date("2026") == "2026"
+
+
+def test_greeting_skips_email_addresses() -> None:
+    assert _greeting_name("tim@example.com") == ""
+    assert _greeting_name("Tim Do") == "Tim Do"
+
+
+def test_digest_subject() -> None:
+    assert digest_subject(1) == "A new paper cites your work"
+    assert digest_subject(4) == "4 new papers cite your work"
+
+
+class TestRedesignedDigest:
+    def _render(self, **overrides) -> str:
+        n = _make_notification(
+            citing_title="Graph <i>Methods</i>",
+            authors=["Ada Lovelace", "Grace Hopper", "Alan Turing", "Edsger Dijkstra"],
+            affiliations=["MIT", "Stanford"],
+        )
+        ctx = {**_BASE_CONTEXT, "recipient_name": "", "digest_date": "November 5, 2026",
+               "citation_groups": [_make_digest_group([n])],
+               "total_citations": 1, "total_papers": 1, **overrides}
+        return _make_env().get_template("digest.html").render(**ctx)
+
+    def test_no_dark_header_or_caps_labels(self) -> None:
+        out = self._render()
+        assert "#0f0f14" not in out.lower()
+        assert "Citation Tracking" not in out
+        assert "text-transform:uppercase" not in out.replace(" ", "")
+
+    def test_affiliations_shown(self) -> None:
+        assert "MIT and Stanford" in self._render()
+
+    def test_author_overflow(self) -> None:
+        assert "Ada Lovelace, Grace Hopper, Alan Turing and 1 other" in self._render()
+
+    def test_no_em_dashes(self) -> None:
+        out = self._render()
+        assert "—" not in out and "&mdash;" not in out
+
+    def test_logo_uses_app_url(self) -> None:
+        assert "http://localhost:3000/email-logo.png" in self._render()
+
+    def test_markup_in_title_is_cleaned(self) -> None:
+        out = self._render()
+        assert "Graph Methods" in out
+        assert "&lt;i&gt;" not in out
+
+
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize("name", ["verify", "confirm_address", "test"])
+def test_transactional_templates_render(name: str) -> None:
+    from app.config import Settings
+    from app.services.email_service import _base_context
+
+    ctx = {**_base_context(Settings()), "link": "https://citey.email/x?a=1&b=2", "recipient_name": "Ada"}
+    html_body, text_body = _render(name, ctx)
+    assert "#14213D" in html_body
+    assert "<" not in text_body and ">" not in text_body
+    if name != "test":
+        assert "https://citey.email/x?a=1&amp;b=2" in html_body
+        assert "https://citey.email/x?a=1&b=2" in text_body

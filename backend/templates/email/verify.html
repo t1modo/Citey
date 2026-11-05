@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm your email | {{ app_name }}{% endblock %}
+{% block preheader %}One click to finish setting up {{ app_name }}.{% endblock %}
+
+{% block body_content %}
+{% import "_ui.html" as ui %}
+
+{% call ui.h1() %}Confirm your email{% endcall %}
+
+{% call ui.p(bottom=0) %}
+  Confirm this address to finish setting up {{ app_name }}. After that, we'll
+  email you here whenever a new paper cites one of yours.
+{% endcall %}
+
+{{ ui.button(link, "Confirm email") }}
+
+{% call ui.p(tone="muted", size=13, top=26, bottom=6) %}Button not working? Paste this link into your browser:{% endcall %}
+{{ ui.raw_link(link) }}
+
+{% call ui.p(tone="muted", size=13, top=20, bottom=0) %}
+  Didn't sign up for {{ app_name }}? You can ignore this email; nothing else will be sent.
+{% endcall %}
+{% endblock %}
+
+{% block footer_reason %}You're getting this because someone signed up for {{ app_name }} with this address.{% endblock %}
+{% block footer_links %}{% endblock %}
