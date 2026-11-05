@@ -19,25 +19,31 @@ jobs:
 
     steps:
       # ── Step 0: DST guard ─────────────────────────────────────────────────
-      # Both cron entries fire every day; only one will land at midnight Pacific.
-      # Skip all subsequent steps if this isn't actually midnight Pacific time.
+      # Two crons fire daily; only the one that is midnight Pacific today should
+      # run. Decide by which cron fired, not by the clock: GitHub often starts
+      # scheduled runs 30 to 90 minutes late, and a late start used to fail an
+      # "is it 00:xx Pacific?" check and skip the night silently.
+      # PST (UTC-8): the 08:00 UTC cron is midnight. PDT (UTC-7): the 07:00 one.
       # Manual dispatches always proceed.
       - name: Check Pacific midnight
         id: time_check
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual dispatch — skipping DST check."
+            echo "Manual dispatch, skipping DST check."
+            echo "skip=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          OFFSET=$(TZ="America/Los_Angeles" date +%z)
+          echo "Cron: $SCHEDULE  Pacific offset: $OFFSET  Pacific time: $(TZ=America/Los_Angeles date +%H:%M)"
+          if { [ "$OFFSET" = "-0800" ] && [ "$SCHEDULE" = "0 8 * * *" ]; } || \
+             { [ "$OFFSET" = "-0700" ] && [ "$SCHEDULE" = "0 7 * * *" ]; }; then
+            echo "This cron is midnight Pacific today. Proceeding."
             echo "skip=false" >> $GITHUB_OUTPUT
           else
-            PACIFIC_HOUR=$(TZ="America/Los_Angeles" date +%H)
-            echo "Current Pacific hour: $PACIFIC_HOUR"
-            if [ "$PACIFIC_HOUR" = "00" ]; then
-              echo "Confirmed midnight Pacific. Proceeding."
-              echo "skip=false" >> $GITHUB_OUTPUT
-            else
-              echo "Not midnight Pacific (hour: $PACIFIC_HOUR). Skipping."
-              echo "skip=true" >> $GITHUB_OUTPUT
-            fi
+            echo "The other cron is midnight Pacific today. Skipping."
+            echo "skip=true" >> $GITHUB_OUTPUT
           fi
 
       # ── Step 1: Wake the Render instance ──────────────────────────────────
