@@ -20,6 +20,8 @@ from app.config import Settings
 from app.services import openalex as openalex_svc
 from app.services.openalex import extract_topics, extract_venue
 
+from app.services.email_service import resolve_recipient
+
 logger = logging.getLogger(__name__)
 
 
@@ -162,7 +164,7 @@ async def sync_new_publications_for_user(
     notify_pubs = user_data.get("notify_new_publications", True)
     notify_global = user_data.get("notify_enabled", True)
     if notify_pubs and notify_global:
-        to_email: str | None = user_data.get("notification_email") or user_data.get("email")
+        to_email: str | None = resolve_recipient(user_data)
         if to_email:
             recipient_name: str = user_data.get("display_name") or to_email
             try:

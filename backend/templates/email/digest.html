@@ -48,7 +48,7 @@
 
     <div class="citation-title">
       {% if n.citing_work_url %}
-        <a href="{{ n.citing_work_url }}" target="_blank" rel="noopener">{{ n.citing_work_title }}</a>
+        <a href="{{ n.citing_work_url | safe_url }}" target="_blank" rel="noopener">{{ n.citing_work_title }}</a>
       {% elif n.citing_work_doi %}
         <a href="https://doi.org/{{ n.citing_work_doi }}" target="_blank" rel="noopener">{{ n.citing_work_title }}</a>
       {% else %}

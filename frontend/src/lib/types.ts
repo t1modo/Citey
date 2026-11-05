@@ -8,6 +8,7 @@ export interface UserProfile {
   email: string;
   display_name: string | null;
   notification_email: string | null;
+  notification_email_pending?: boolean;
   notify_enabled: boolean;
   notify_new_publications: boolean;
   scholar_url: string | null;

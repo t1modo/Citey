@@ -18,6 +18,9 @@ class UserProfile(BaseModel):
     email: str
     display_name: Optional[str] = None
     notification_email: Optional[str] = None
+    # True while a custom notification_email awaits confirmation; mail goes
+    # to the account email until then.
+    notification_email_pending: bool = False
     notify_enabled: bool = True
     notify_new_publications: bool = True
     scholar_url: Optional[str] = None

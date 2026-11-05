@@ -20,6 +20,17 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
+if settings.cron_secret_is_default and not settings.is_local:
+    logger.error(
+        "CRON_SECRET is unset or 'changeme'. Scheduled job endpoints will refuse "
+        "requests until a strong secret is configured."
+    )
+if not settings.token_secret and not settings.is_local:
+    logger.warning(
+        "TOKEN_SECRET is unset; unsubscribe/RSS links are signed with CRON_SECRET. "
+        "Set a dedicated TOKEN_SECRET."
+    )
+
 
 # ---------------------------------------------------------------------------
 # Lifespan: start / stop the background scheduler
@@ -92,7 +103,9 @@ def create_app() -> FastAPI:
     application.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
-        allow_credentials=True,
+        # Auth uses a Bearer header, not cookies, so credentialed CORS is
+        # unnecessary (and unsafe combined with a wildcard origin).
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

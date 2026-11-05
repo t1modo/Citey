@@ -8,6 +8,7 @@ Templates are Jinja2 HTML and plain-text files located in
 import asyncio
 import hashlib
 import hmac
+import html
 import logging
 from datetime import datetime, timezone
 from functools import partial
@@ -28,24 +29,62 @@ _TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates" / "email"
 
 async def _send(params: resend.Emails.SendParams) -> dict:
     """Run the blocking resend.Emails.send() in a thread so it doesn't block the event loop."""
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, partial(resend.Emails.send, params))
-    return result
+    return await asyncio.to_thread(partial(resend.Emails.send, params))
 
 
-def _make_signed_token(purpose: str, uid: str, settings: Settings) -> str:
-    """Return an HMAC-SHA256 hex token for the given purpose + uid pair."""
+def _hmac_hex(secret: str, purpose: str, uid: str) -> str:
     return hmac.new(
-        key=settings.cron_secret.encode(),
+        key=secret.encode(),
         msg=f"{purpose}:{uid}".encode(),
         digestmod=hashlib.sha256,
     ).hexdigest()
 
 
+def _make_signed_token(purpose: str, uid: str, settings: Settings) -> str:
+    """Return an HMAC-SHA256 hex token for the given purpose + uid pair."""
+    return _hmac_hex(settings.token_secret or settings.cron_secret, purpose, uid)
+
+
 def verify_signed_token(purpose: str, uid: str, token: str, settings: Settings) -> bool:
-    """Return True if *token* is the valid HMAC for *purpose* + *uid*."""
-    expected = _make_signed_token(purpose, uid, settings)
-    return hmac.compare_digest(expected, token)
+    """Return True if *token* is the valid HMAC for *purpose* + *uid*.
+
+    Tokens signed with the legacy cron_secret are still accepted so links in
+    emails sent before token_secret was configured keep working. Nothing
+    signed with the insecure default secret is ever accepted outside local dev.
+    """
+    secrets = [settings.token_secret, settings.cron_secret]
+    for secret in secrets:
+        if not secret:
+            continue
+        if secret == "changeme" and not settings.is_local:
+            continue
+        if hmac.compare_digest(_hmac_hex(secret, purpose, uid), token):
+            return True
+    return False
+
+
+def resolve_recipient(user_data: dict) -> str | None:
+    """Return the address Citey may email for this user.
+
+    A custom notification_email is only used once its owner has confirmed it
+    (verified_notification_email matches). Until then mail goes to the account
+    email, so nobody can point Citey's mail at an address they don't control.
+    """
+    account = (user_data.get("email") or "").strip()
+    custom = (user_data.get("notification_email") or "").strip()
+    if not custom or custom.lower() == account.lower():
+        return account or custom or None
+    verified = (user_data.get("verified_notification_email") or "").strip().lower()
+    if verified == custom.lower():
+        return custom
+    return account or None
+
+
+def make_confirm_email_url(uid: str, email: str, api_base_url: str, settings: Settings) -> str:
+    """Signed link that confirms *email* as *uid*'s notification address."""
+    token = _make_signed_token(f"confirm_email:{email.lower()}", uid, settings)
+    qs = urlencode({"uid": uid, "email": email, "token": token})
+    return f"{api_base_url.rstrip('/')}/profile/confirm-notification-email?{qs}"
 
 
 def make_unsubscribe_url(uid: str, settings: Settings) -> str:
@@ -65,14 +104,22 @@ def make_rss_url(uid: str, api_base_url: str, settings: Settings) -> str:
     return f"{api_base_url.rstrip('/')}/rss/{uid}?token={token}"
 
 
+def _safe_url(value: object) -> str:
+    """Only allow http(s) links from upstream APIs into email hrefs."""
+    url = str(value or "").strip()
+    return url if url.lower().startswith(("https://", "http://")) else "#"
+
+
 def _get_jinja_env() -> Environment:
     """Return a configured Jinja2 environment pointing at the email templates."""
-    return Environment(
+    env = Environment(
         loader=FileSystemLoader(str(_TEMPLATES_DIR)),
         autoescape=select_autoescape(["html", "xml"]),
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    env.filters["safe_url"] = _safe_url
+    return env
 
 
 async def send_citation_email(
@@ -219,13 +266,17 @@ async def send_verification_email(
     from_address = f"{settings.email_from_name} <{settings.email_from_address}>"
     subject = f"Verify your email address — {settings.app_name}"
 
+    # Escape everything interpolated into HTML.
+    link_html = html.escape(verification_link, quote=True)
+    app_name_html = html.escape(settings.app_name)
+
     html_body = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /></head>
 <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
   <div style="padding:40px 16px;">
     <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
       <div style="background:linear-gradient(160deg,#0f0f14 0%,#1c1c28 100%);padding:36px 48px;">
-        <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">{settings.app_name}<span style="color:rgba(255,255,255,0.35);">.</span></div>
+        <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">{app_name_html}<span style="color:rgba(255,255,255,0.35);">.</span></div>
         <div style="font-size:12px;font-weight:500;color:#ffffff;text-transform:uppercase;letter-spacing:0.1em;margin-top:5px;">Citation Tracking</div>
       </div>
       <div style="padding:40px 48px 36px;">
@@ -233,18 +284,18 @@ async def send_verification_email(
         <p style="font-size:14px;color:#4b5563;margin:0 0 24px;line-height:1.7;">
           Thanks for signing up. Click the button below to verify your email address and activate your account.
         </p>
-        <a href="{verification_link}" style="display:inline-block;background-color:#111111;color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:7px;font-weight:600;font-size:14px;">Verify Email</a>
+        <a href="{link_html}" style="display:inline-block;background-color:#111111;color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:7px;font-weight:600;font-size:14px;">Verify Email</a>
         <p style="font-size:13px;color:#9ca3af;margin:28px 0 0;line-height:1.7;">
           If the button does not work, paste this link into your browser:<br />
-          <a href="{verification_link}" style="color:#374151;word-break:break-all;">{verification_link}</a>
+          <a href="{link_html}" style="color:#374151;word-break:break-all;">{link_html}</a>
         </p>
         <p style="font-size:13px;color:#9ca3af;margin:16px 0 0;line-height:1.7;">
-          If you did not create a {settings.app_name} account, you can safely ignore this email.
+          If you did not create a {app_name_html} account, you can safely ignore this email.
         </p>
       </div>
       <div style="background:#f8f9fb;border-top:1px solid #e8ecf2;padding:24px 48px;font-size:11px;color:#9ca3af;line-height:2;">
         Best regards,<br />
-        <strong style="color:#4b5563;">{settings.app_name} Team</strong><br />
+        <strong style="color:#4b5563;">{app_name_html} Team</strong><br />
         <a href="mailto:{settings.support_email}" style="color:#6b7280;">{settings.support_email}</a>
       </div>
     </div>
@@ -356,17 +407,21 @@ async def send_test_email(
 
     from_address = f"{settings.email_from_name} <{settings.email_from_address}>"
     subject = f"{settings.app_name} — Email Notifications Confirmed"
+    # recipient_name comes from the user editable display_name; escape it.
+    name_html = html.escape(recipient_name)
+    app_name_html = html.escape(settings.app_name)
+
     html_body = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /></head>
 <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
   <div style="padding:40px 16px;">
     <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
       <div style="background:linear-gradient(160deg,#0f0f14 0%,#1c1c28 100%);padding:36px 48px;">
-        <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">{settings.app_name}<span style="color:rgba(255,255,255,0.35);">.</span></div>
+        <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">{app_name_html}<span style="color:rgba(255,255,255,0.35);">.</span></div>
         <div style="font-size:12px;font-weight:500;color:#ffffff;text-transform:uppercase;letter-spacing:0.1em;margin-top:5px;">Citation Tracking</div>
       </div>
       <div style="padding:40px 48px 36px;">
-        <p style="font-size:17px;font-weight:600;color:#1a1d23;margin:0 0 8px;">Notifications are active, {recipient_name}</p>
+        <p style="font-size:17px;font-weight:600;color:#1a1d23;margin:0 0 8px;">Notifications are active, {name_html}</p>
         <p style="font-size:14px;color:#4b5563;margin:0 0 24px;line-height:1.7;">
           This is a confirmation that your email notification settings are working correctly.
           You will receive an alert like this whenever new citations are detected for your tracked publications.
@@ -377,7 +432,7 @@ async def send_test_email(
         <a href="{settings.app_url}/dashboard" style="display:inline-block;background-color:#111111;color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:7px;font-weight:600;font-size:14px;">Go to Dashboard</a>
       </div>
       <div style="background:#f8f9fb;border-top:1px solid #e8ecf2;padding:24px 48px;text-align:center;font-size:11px;color:#9ca3af;line-height:2;">
-        &copy; {settings.app_name} &middot; <a href="mailto:{settings.support_email}" style="color:#6b7280;">{settings.support_email}</a><br />
+        &copy; {app_name_html} &middot; <a href="mailto:{settings.support_email}" style="color:#6b7280;">{settings.support_email}</a><br />
         <a href="{settings.app_url}/settings" style="color:#6b7280;">Manage notification preferences</a>
       </div>
     </div>
@@ -410,3 +465,40 @@ async def send_test_email(
         to_email,
         result.get("id", "<unknown>"),
     )
+
+
+async def send_notification_email_confirmation(
+    to_email: str,
+    confirm_url: str,
+    settings: Settings,
+) -> None:
+    """Ask the owner of *to_email* to confirm it as a notification address."""
+    resend.api_key = settings.resend_api_key
+    app_name = html.escape(settings.app_name)
+    link = html.escape(confirm_url, quote=True)
+    html_body = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8" /></head>
+<body style="margin:0;padding:40px 16px;background:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:10px;padding:40px 48px;">
+    <p style="font-size:17px;font-weight:600;color:#1a1d23;margin:0 0 12px;">Confirm your notification email</p>
+    <p style="font-size:14px;color:#4b5563;line-height:1.7;margin:0 0 24px;">
+      Someone asked {app_name} to send citation alerts to this address. If that was you, confirm below.
+    </p>
+    <a href="{link}" style="display:inline-block;background:#111111;color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:7px;font-weight:600;font-size:14px;">Confirm address</a>
+    <p style="font-size:13px;color:#9ca3af;margin:28px 0 0;line-height:1.7;">
+      If you didn't request this, ignore this email and nothing will be sent here.
+    </p>
+  </div>
+</body></html>"""
+    text_body = (
+        f"Someone asked {settings.app_name} to send citation alerts to this address.\n\n"
+        f"Confirm it here: {confirm_url}\n\n"
+        "If you didn't request this, ignore this email."
+    )
+    await _send({
+        "from": f"{settings.email_from_name} <{settings.email_from_address}>",
+        "to": [to_email],
+        "subject": f"Confirm your notification email for {settings.app_name}",
+        "html": html_body,
+        "text": text_body,
+    })

@@ -310,6 +310,7 @@ async def test_sends_email_when_both_flags_enabled() -> None:
                 "linked_author_id": "A123",
                 "notify_new_publications": True,
                 "notify_enabled": True,
+                "email": "jane@example.com",
                 "notification_email": "jane@example.com",
                 "display_name": "Dr. Jane",
             },
@@ -431,6 +432,21 @@ async def test_no_email_when_no_address_on_profile() -> None:
 # ---------------------------------------------------------------------------
 
 
+class _AllUids(set):
+    """Pretends every uid has a Firebase Auth account."""
+
+    def __contains__(self, item: object) -> bool:  # noqa: D401
+        return True
+
+
+@pytest.fixture(autouse=True)
+def _no_firebase_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The all-users jobs look up Firebase Auth to skip orphans; stub it."""
+    monkeypatch.setattr(
+        "app.services.citation_service._get_auth_uids", lambda: _AllUids()
+    )
+
+
 async def test_all_users_skips_users_without_linked_author() -> None:
     u_linked = MagicMock()
     u_linked.id = "u_linked"
@@ -534,3 +550,26 @@ async def test_all_users_empty_db_returns_zero_summary() -> None:
 
     assert summary["users_processed"] == 0
     assert summary["works_added"] == 0
+
+
+@pytest.mark.asyncio
+async def test_all_users_skips_orphaned_firestore_users(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.services.citation_service._get_auth_uids", lambda: {"u_real"}
+    )
+    real, orphan = MagicMock(), MagicMock()
+    real.id, orphan.id = "u_real", "u_orphan"
+    real.to_dict.return_value = {"linked_author_id": "A1"}
+    orphan.to_dict.return_value = {"linked_author_id": "A2"}
+    db = MagicMock()
+    db.collection.return_value.stream.return_value = [real, orphan]
+
+    with patch(
+        "app.services.publication_sync.sync_new_publications_for_user",
+        new=AsyncMock(return_value=0),
+    ) as mock_per_user:
+        await sync_new_publications_for_all_users(
+            db=db, email_service=MagicMock(), dry_run=False, settings=_make_settings(),
+        )
+
+    assert [c.kwargs["uid"] for c in mock_per_user.call_args_list] == ["u_real"]

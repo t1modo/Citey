@@ -1,10 +1,9 @@
-import hashlib
-import hmac
 import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import RedirectResponse
 from firebase_admin import auth as firebase_auth
 from firebase_admin import firestore
 from pydantic import BaseModel
@@ -26,11 +25,17 @@ def _doc_to_profile(uid: str, data: dict) -> UserProfile:
         # Firestore DatetimeWithNanoseconds → Python datetime
         created_at = created_at.replace(tzinfo=timezone.utc) if created_at.tzinfo is None else created_at
 
+    from app.services.email_service import resolve_recipient
+
+    custom = (data.get("notification_email") or "").strip()
+    pending = bool(custom) and resolve_recipient(data) != custom
+
     return UserProfile(
         uid=uid,
         email=data.get("email", ""),
         display_name=data.get("display_name"),
         notification_email=data.get("notification_email"),
+        notification_email_pending=pending,
         notify_enabled=data.get("notify_enabled", True),
         notify_new_publications=data.get("notify_new_publications", True),
         scholar_url=data.get("scholar_url"),
@@ -80,14 +85,26 @@ async def get_profile(
     return _doc_to_profile(uid, default_data)
 
 
+# Saving settings resends the link while the address is unconfirmed; this
+# cooldown keeps repeated saves from spamming the inbox.
+_CONFIRM_EMAIL_COOLDOWN = 300
+
+
 @router.put("", response_model=UserProfile)
 async def update_profile(
     body: UpdateProfileRequest,
+    request: Request,
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> UserProfile:
-    """Update mutable fields of the current user's profile."""
+    """Update mutable fields of the current user's profile.
+
+    Changing notification_email to an address other than the account email
+    sends a confirmation link; alerts keep going to the account email until
+    the new address is confirmed.
+    """
     ref = db.collection("users").document(uid)
+    current = (ref.get().to_dict() or {})
 
     # Only include fields that were explicitly provided (not None).
     updates: dict = {}
@@ -105,13 +122,80 @@ async def update_profile(
     if body.name_aliases is not None:
         updates["name_aliases"] = body.name_aliases
 
+    new_email = (body.notification_email or "").strip()
+    needs_confirmation = (
+        body.notification_email is not None
+        and new_email
+        and new_email.lower() != (current.get("email") or "").lower()
+        and new_email.lower() != (current.get("verified_notification_email") or "").lower()
+    )
+
     if updates:
         ref.set(updates, merge=True)
         logger.info("Updated profile for uid=%s: fields=%s", uid, list(updates.keys()))
 
+    if needs_confirmation:
+        await _send_confirmation(uid, new_email, current, ref, request)
+
     snapshot = ref.get()
     data = snapshot.to_dict() or {}
     return _doc_to_profile(uid, data)
+
+
+async def _send_confirmation(
+    uid: str, email: str, current: dict, ref: Any, request: Request
+) -> None:
+    """Email a confirmation link for a new notification address (best effort)."""
+    from app.services.email_service import (
+        make_confirm_email_url,
+        send_notification_email_confirmation,
+    )
+
+    now = datetime.now(tz=timezone.utc)
+    last = current.get("last_confirm_email_at")
+    if isinstance(last, datetime):
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        if (now - last).total_seconds() < _CONFIRM_EMAIL_COOLDOWN:
+            logger.info("Confirmation email for uid=%s skipped (cooldown).", uid)
+            return
+
+    settings = get_settings()
+    api_base = settings.api_url or str(request.base_url)
+    try:
+        await send_notification_email_confirmation(
+            to_email=email,
+            confirm_url=make_confirm_email_url(uid, email, api_base, settings),
+            settings=settings,
+        )
+        ref.set({"last_confirm_email_at": now}, merge=True)
+        logger.info("Sent notification email confirmation for uid=%s", uid)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Could not send confirmation email for uid=%s: %s", uid, exc)
+
+
+@router.get("/confirm-notification-email", include_in_schema=False)
+def confirm_notification_email(
+    uid: str = Query(..., max_length=128),
+    email: str = Query(..., max_length=254),
+    token: str = Query(..., max_length=128),
+    db: Any = Depends(get_db),
+) -> RedirectResponse:
+    """Target of the link in the confirmation email; no login required."""
+    from app.services.email_service import verify_signed_token
+
+    settings = get_settings()
+    ok = verify_signed_token(f"confirm_email:{email.lower()}", uid, token, settings)
+    if ok:
+        ref = db.collection("users").document(uid)
+        snap = ref.get()
+        if snap.exists:
+            ref.set({"verified_notification_email": email}, merge=True)
+            logger.info("Confirmed notification email for uid=%s", uid)
+        else:
+            ok = False
+    status_param = "confirmed" if ok else "invalid"
+    return RedirectResponse(f"{settings.app_url}/settings?email={status_param}", status_code=303)
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
@@ -206,14 +290,10 @@ async def unsubscribe(
     Validates the HMAC token generated by email_service.make_unsubscribe_url(),
     then sets notify_enabled=False on the user's profile.
     """
-    settings = get_settings()
-    expected = hmac.new(
-        key=settings.cron_secret.encode(),
-        msg=f"unsubscribe:{body.uid}".encode(),
-        digestmod=hashlib.sha256,
-    ).hexdigest()
+    from app.services.email_service import verify_signed_token
 
-    if not hmac.compare_digest(body.token, expected):
+    settings = get_settings()
+    if not verify_signed_token("unsubscribe", body.uid, body.token, settings):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired unsubscribe link.",

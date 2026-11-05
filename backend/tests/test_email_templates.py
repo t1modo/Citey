@@ -19,12 +19,9 @@ _TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates" / "email"
 
 
 def _make_env() -> Environment:
-    return Environment(
-        loader=FileSystemLoader(str(_TEMPLATES_DIR)),
-        autoescape=select_autoescape(["html", "xml"]),
-        trim_blocks=True,
-        lstrip_blocks=True,
-    )
+    # Use the production environment so custom filters (safe_url) are present.
+    from app.services.email_service import _get_jinja_env
+    return _get_jinja_env()
 
 
 def _make_notification(

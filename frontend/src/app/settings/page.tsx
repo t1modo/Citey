@@ -61,6 +61,15 @@ export default function SettingsPage() {
   const [notifyEnabled, setNotifyEnabled] = useState(true);
   const [notifyNewPublications, setNotifyNewPublications] = useState(true);
   const [notificationEmail, setNotificationEmail] = useState("");
+  // Result of clicking the confirmation link (?email=confirmed|invalid).
+  const [emailLinkStatus, setEmailLinkStatus] = useState<string | null>(null);
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get("email");
+    if (status) {
+      setEmailLinkStatus(status);
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
   const [displayName, setDisplayName] = useState("");
   const [scholarUrl, setScholarUrl] = useState("");
 
@@ -148,7 +157,8 @@ export default function SettingsPage() {
       const updated = await updateProfile({
         notify_enabled: notifyEnabled,
         notify_new_publications: notifyNewPublications,
-        notification_email: notificationEmail.trim() || null,
+        // Empty string clears a custom address (null means "unchanged").
+        notification_email: notificationEmail.trim(),
         display_name: displayName.trim() || null,
         scholar_url: scholarUrl.trim(),
       });
@@ -330,6 +340,21 @@ export default function SettingsPage() {
                 <p className="mt-1.5 text-xs text-gray-500">
                   Leave blank to use your account email ({profile?.email}).
                 </p>
+                {profile?.notification_email_pending && (
+                  <p className="mt-2 rounded-md border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-200" role="status">
+                    We sent a confirmation link to {profile.notification_email}. Alerts go to {profile.email} until you confirm it.
+                  </p>
+                )}
+                {emailLinkStatus === "confirmed" && (
+                  <p className="mt-2 rounded-md border border-teal-400/20 bg-teal-400/10 px-3 py-2 text-xs text-teal-200" role="status">
+                    Notification email confirmed.
+                  </p>
+                )}
+                {emailLinkStatus === "invalid" && (
+                  <p className="mt-2 rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-200" role="alert">
+                    That confirmation link is invalid. Save your settings again to get a new link.
+                  </p>
+                )}
               </div>
 
               {/* Display name */}

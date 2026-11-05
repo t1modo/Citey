@@ -7,6 +7,7 @@ Two approaches to trigger the citation-check job:
   3. POST /jobs/email-test   — requires Firebase Bearer token
 """
 
+import hmac
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -47,7 +48,13 @@ async def _authorize_job_request(
     """
     # 1. Check cron secret first (cheap, no network call).
     if x_cron_secret is not None:
-        if x_cron_secret == settings.cron_secret:
+        if settings.cron_secret_is_default and not settings.is_local:
+            logger.error("Rejected cron call: CRON_SECRET is unset or still the default.")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Server misconfigured: CRON_SECRET must be set.",
+            )
+        if hmac.compare_digest(x_cron_secret, settings.cron_secret):
             return "cron"
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -72,6 +79,16 @@ async def _authorize_job_request(
         ),
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+async def _require_cron(caller_id: str = Depends(_authorize_job_request)) -> str:
+    """Allow only the scheduled cron caller (X-Cron-Secret), never end users."""
+    if caller_id != "cron":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This job can only be triggered by the scheduler.",
+        )
+    return caller_id
 
 
 @router.post("/run")
@@ -284,13 +301,14 @@ async def sync_publications(
 @router.post("/cleanup-orphan-users")
 async def cleanup_orphan_users(
     body: JobRunRequest,
-    caller_id: str = Depends(_authorize_job_request),
+    caller_id: str = Depends(_require_cron),
 ) -> dict:
     """
     Delete Firestore user documents (and their subcollections) that have no
     corresponding Firebase Auth account.
 
-    Authorization: X-Cron-Secret header **or** Firebase Bearer token.
+    Authorization: X-Cron-Secret header only. This touches every account, so
+    end users must never be able to trigger it.
     """
     from app.firebase_client import get_db as _get_db
     from app.services.citation_service import cleanup_orphan_users as _cleanup
@@ -338,7 +356,7 @@ async def email_test(
         )
 
     from app.firebase_client import get_db as _get_db
-    from app.services.email_service import send_test_email
+    from app.services.email_service import resolve_recipient, send_test_email
 
     db = _get_db()
     user_ref = db.collection("users").document(uid)
@@ -367,7 +385,7 @@ async def email_test(
                 },
             )
 
-    to_email: str | None = data.get("notification_email") or data.get("email")
+    to_email: str | None = resolve_recipient(data)
     if not to_email:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

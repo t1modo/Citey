@@ -23,6 +23,8 @@ from app.models import Notification, TrackedWork
 from app.services import openalex as openalex_svc
 from app.services import semantic_scholar as s2_svc
 
+from app.services.email_service import resolve_recipient
+
 logger = logging.getLogger(__name__)
 
 
@@ -389,7 +391,7 @@ async def run_job_for_user(
             logger.error("Failed to fetch OpenAlex citation counts for uid=%s: %s", uid, exc)
 
     # Send an immediate email when new citations are found.
-    to_email: str | None = user_data.get("notification_email") or user_data.get("email")
+    to_email: str | None = resolve_recipient(user_data)
     notify_enabled: bool = user_data.get("notify_enabled", True)
 
     email_verified = True
@@ -770,7 +772,7 @@ async def send_daily_digest_for_all_users(
         user_data: dict = user_doc.to_dict() or {}
 
         notify_enabled: bool = user_data.get("notify_enabled", True)
-        to_email: str | None = user_data.get("notification_email") or user_data.get("email")
+        to_email: str | None = resolve_recipient(user_data)
         if not notify_enabled or not to_email:
             continue
 
