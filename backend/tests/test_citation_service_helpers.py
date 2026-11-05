@@ -404,3 +404,90 @@ async def test_partial_async_failure_still_returns_surviving_source(
         )
     assert count == 1
     assert notifications[0].citing_work_title == "S2 Survivor"
+
+
+# ---------------------------------------------------------------------------
+# Source failures are recorded, not mistaken for "no citations"
+# ---------------------------------------------------------------------------
+
+_WORK_PATH = "users/uid1/trackedWorks/10.1038__nature12345"
+
+
+async def test_one_source_failing_is_recorded_and_other_source_still_counts(
+    fake_db: _FakeDB, tracked_work: TrackedWork
+) -> None:
+    from app.services.source_errors import SourceUnavailable
+
+    failures: list[str] = []
+    with patch(
+        "app.services.citation_service.openalex_svc.get_citing_works",
+        new_callable=AsyncMock, return_value=[_raw_citing_work(_RECENT)],
+    ), patch(
+        "app.services.citation_service.s2_svc.get_citing_papers",
+        new_callable=AsyncMock, side_effect=SourceUnavailable("semantic_scholar", "429"),
+    ):
+        count, _ = await process_tracked_work(
+            "uid1", tracked_work, fake_db, source_failures=failures,
+        )
+    assert count == 1
+    assert failures == ["semantic_scholar"]
+    stored = fake_db.dump()[_WORK_PATH]
+    assert stored["last_check_failed_sources"] == ["semantic_scholar"]
+    assert "last_checked_at" in stored
+
+
+async def test_all_sources_failing_leaves_last_checked_untouched(
+    fake_db: _FakeDB, tracked_work: TrackedWork
+) -> None:
+    from app.services.source_errors import SourceUnavailable
+
+    with patch(
+        "app.services.citation_service.openalex_svc.get_citing_works",
+        new_callable=AsyncMock, side_effect=SourceUnavailable("openalex", "503"),
+    ), patch(
+        "app.services.citation_service.s2_svc.get_citing_papers",
+        new_callable=AsyncMock, side_effect=SourceUnavailable("semantic_scholar", "429"),
+    ):
+        count, _ = await process_tracked_work("uid1", tracked_work, fake_db)
+    assert count == 0
+    stored = fake_db.dump()[_WORK_PATH]
+    assert sorted(stored["last_check_failed_sources"]) == ["openalex", "semantic_scholar"]
+    assert "last_checked_at" not in stored
+
+
+async def test_foreign_openalex_id_is_resolved_by_doi(fake_db: _FakeDB) -> None:
+    """A work imported with "S2:…" in openalex_id must be looked up by DOI,
+    not sent to OpenAlex as cites:S2:…"""
+    work = TrackedWork(
+        id="10.48550__arxiv.2506.02005",
+        doi="10.48550/arXiv.2506.02005",
+        openalex_id="S2:d33be425820b25e970b0c35d00eb9ef563a7b873",
+        title="A preprint",
+        last_checked_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+    )
+    assert work.openalex_id is None  # rejected by the model
+
+    citing = AsyncMock(return_value=[])
+    with patch(
+        "app.services.citation_service.openalex_svc.get_work_by_doi",
+        new_callable=AsyncMock, return_value={"id": "https://openalex.org/W42"},
+    ), patch(
+        "app.services.citation_service.openalex_svc.get_citing_works", citing,
+    ), patch(
+        "app.services.citation_service.s2_svc.get_citing_papers",
+        new_callable=AsyncMock, return_value=[],
+    ):
+        await process_tracked_work("uid1", work, fake_db)
+
+    assert citing.await_args.args[0] == "https://openalex.org/W42"
+    assert work.openalex_id == "https://openalex.org/W42"
+
+
+def test_titles_and_names_are_cleaned_on_the_model() -> None:
+    work = TrackedWork(
+        id="x", title="<i>E. coli</i> &amp; H<sub>2</sub>O",
+        authors=["Jane Smith 0001", "Erd\\H{o}s"], venue="arXiv &amp; more",
+    )
+    assert work.title == "E. coli & H₂O"
+    assert work.authors == ["Jane Smith", "Erdős"]
+    assert work.venue == "arXiv & more"

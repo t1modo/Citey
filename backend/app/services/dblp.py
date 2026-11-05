@@ -28,7 +28,7 @@ _works_by_author_cache: AsyncTTLCache = AsyncTTLCache(maxsize=100, ttl=3600)
 
 _BASE_URL = "https://dblp.org/search"
 _HEADERS = {
-    "User-Agent": "Citey/0.1 (mailto:support@citey.app)",
+    "User-Agent": "Citey/0.1 (mailto:support@citey.email)",
     "Accept": "application/json",
 }
 _PAGE_SIZE = 250   # DBLP allows up to 1000; 250 is safe and fast

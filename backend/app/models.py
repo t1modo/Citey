@@ -4,6 +4,21 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.services.text_clean import clean_names, clean_text
+
+_OPENALEX_WORK_RE = re.compile(r"^(?:https://openalex\.org/)?W\d+$")
+
+
+def is_openalex_work_id(value: Optional[str]) -> bool:
+    """True for a real OpenAlex work ID (``W123`` or ``https://openalex.org/W123``).
+
+    Imports from other sources used to store their own IDs (``S2:…``,
+    ``pubmed:…``, ``dblp:…``) in the ``openalex_id`` field; those must never
+    be sent to OpenAlex.
+    """
+    return bool(value) and bool(_OPENALEX_WORK_RE.match(value))
+
+
 _EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,255}\.[^@\s]{2,}$")
 _URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 
@@ -48,6 +63,26 @@ class TrackedWork(BaseModel):
     s2_citation_count: Optional[int] = None
     openalex_citation_count: Optional[int] = None
 
+    @field_validator("openalex_id")
+    @classmethod
+    def _real_openalex_id(cls, v: Optional[str]) -> Optional[str]:
+        return v if is_openalex_work_id(v) else None
+
+    @field_validator("title")
+    @classmethod
+    def _clean_title(cls, v: str) -> str:
+        return clean_text(v) or ""
+
+    @field_validator("venue")
+    @classmethod
+    def _clean_venue(cls, v: Optional[str]) -> Optional[str]:
+        return clean_text(v) or None
+
+    @field_validator("authors")
+    @classmethod
+    def _clean_authors(cls, v: list[str]) -> list[str]:
+        return clean_names(v)
+
 
 class Notification(BaseModel):
     id: str
@@ -63,6 +98,21 @@ class Notification(BaseModel):
     citing_publication_date: Optional[str] = None
     seen: bool = False
     created_at: Optional[datetime] = None
+
+    @field_validator("cited_work_title", "citing_work_title")
+    @classmethod
+    def _clean_titles(cls, v: str) -> str:
+        return clean_text(v) or ""
+
+    @field_validator("citing_authors")
+    @classmethod
+    def _clean_authors(cls, v: list[str]) -> list[str]:
+        return clean_names(v)
+
+    @field_validator("citing_affiliations")
+    @classmethod
+    def _clean_affiliations(cls, v: list[str]) -> list[str]:
+        return [a for a in (clean_text(x) for x in v) if a]
 
 
 class AddWorkRequest(BaseModel):

@@ -21,8 +21,12 @@ from app.services.semantic_scholar import (
     _match_canonical,
     _normalize_affiliation,
     _get_with_retry,
+    _resolve_s2_paper_id,
+    get_citation_counts,
+    get_citing_papers,
     normalize_citing_work,
 )
+from app.services.source_errors import SourceUnavailable
 
 _RECENT_DATE = "2026-03-01"
 _RE_S2 = re.compile(r"https://api\.semanticscholar\.org/.*")
@@ -275,13 +279,14 @@ async def test_get_with_retry_network_error_returns_none(respx_mock) -> None:
     assert resp is None
 
 
-async def test_get_with_retry_non_429_error_returned_immediately(respx_mock) -> None:
-    """A 500 is returned as-is without retrying (only 429 triggers retry)."""
-    respx_mock.get(_RE_S2).mock(return_value=Response(500))
+async def test_get_with_retry_persistent_500_returns_last_response(respx_mock) -> None:
+    """A 5xx is retried; if it never recovers the final response is returned."""
+    route = respx_mock.get(_RE_S2).mock(return_value=Response(500))
     async with httpx.AsyncClient() as client:
         resp = await _get_with_retry(client, "https://api.semanticscholar.org/test", {})
     assert resp is not None
     assert resp.status_code == 500
+    assert route.call_count == 4
 
 
 async def test_get_with_retry_404_returned_immediately(respx_mock) -> None:
@@ -291,3 +296,54 @@ async def test_get_with_retry_404_returned_immediately(respx_mock) -> None:
         resp = await _get_with_retry(client, "https://api.semanticscholar.org/test", {})
     assert resp is not None
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Rate limits are failures, not "not found"
+# ---------------------------------------------------------------------------
+
+
+async def test_resolve_rate_limited_raises_instead_of_not_found(respx_mock) -> None:
+    """Last night's logs showed 429s reported as "paper not found"; that hid
+    the paper's citations. Exhausted rate limits must raise."""
+    respx_mock.post(_RE_S2).mock(return_value=Response(429, headers={"Retry-After": "0"}))
+    with pytest.raises(SourceUnavailable):
+        await _resolve_s2_paper_id("10.1234/abc")
+
+
+async def test_resolve_rate_limit_then_success(respx_mock) -> None:
+    respx_mock.post(_RE_S2).mock(side_effect=[
+        Response(429, headers={"Retry-After": "0"}),
+        Response(200, json=[{"paperId": "p1"}]),
+    ])
+    assert await _resolve_s2_paper_id("10.1234/abc") == "p1"
+
+
+async def test_resolve_unknown_id_is_not_found(respx_mock) -> None:
+    """S2 answers 400 for identifiers it doesn't know: genuinely not found."""
+    respx_mock.post(_RE_S2).mock(return_value=Response(400))
+    assert await _resolve_s2_paper_id("10.18429/jacow-napac2025-tup099") is None
+
+
+async def test_citing_papers_failed_page_raises(respx_mock) -> None:
+    respx_mock.post(_RE_S2).mock(return_value=Response(200, json=[{"paperId": "p1"}]))
+    respx_mock.get(_RE_S2).mock(return_value=Response(503))
+    with pytest.raises(SourceUnavailable):
+        await get_citing_papers("10.1234/abc")
+
+
+async def test_citation_counts_match_by_position_not_returned_doi(respx_mock) -> None:
+    """For an arXiv paper S2 reports the journal DOI; the count must still be
+    filed under the DOI we asked about."""
+    respx_mock.post(_RE_S2).mock(return_value=Response(200, json=[
+        {"paperId": "a", "citationCount": 12, "externalIds": {"DOI": "10.1103/physrevd.1"}},  # ARXIV:2506.02005
+        {"paperId": "a", "citationCount": 12, "externalIds": {"DOI": "10.1103/physrevd.1"}},  # DOI:10.48550/…
+        None,                                                                                  # DOI:10.1/missing
+    ]))
+    counts = await get_citation_counts(["10.48550/arXiv.2506.02005", "10.1/missing"])
+    assert counts == {"10.48550/arxiv.2506.02005": 12}
+
+
+async def test_citation_counts_failed_batch_returns_empty(respx_mock) -> None:
+    respx_mock.post(_RE_S2).mock(return_value=Response(429, headers={"Retry-After": "0"}))
+    assert await get_citation_counts(["10.1/a"]) == {}

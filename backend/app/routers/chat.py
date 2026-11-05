@@ -134,7 +134,7 @@ _TOOLS = [
 ]
 
 _OA_BASE = "https://api.openalex.org"
-_OA_HEADERS = {"User-Agent": "Citey/0.1 (mailto:support@citey.app)"}
+_OA_HEADERS = {"User-Agent": "Citey/0.1 (mailto:support@citey.email)"}
 
 # ---------------------------------------------------------------------------
 # Rate limiting — 10 requests per minute per user, in-memory
@@ -180,7 +180,7 @@ async def _run_tool(name: str, tool_input: dict) -> str:
                     params={
                         "search": tool_input["query"],
                         "per_page": 5,
-                        "mailto": "support@citey.app",
+                        "mailto": "support@citey.email",
                     },
                 )
             if resp.status_code != 200:

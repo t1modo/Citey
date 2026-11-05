@@ -18,7 +18,7 @@ from typing import Any
 
 from firebase_admin import auth as firebase_auth
 
-from app.models import Notification, TrackedWork
+from app.models import Notification, TrackedWork, is_openalex_work_id
 from app.services import openalex as openalex_svc
 from app.services import semantic_scholar as s2_svc
 
@@ -38,6 +38,7 @@ async def process_tracked_work(
     db: Any,
     dry_run: bool = False,
     notified_ids: set[str] | None = None,
+    source_failures: list[str] | None = None,
 ) -> tuple[int, list[Notification]]:
     """
     Check for new citations of *work* and write Notification documents.
@@ -61,6 +62,8 @@ async def process_tracked_work(
         raw = await openalex_svc.get_work_by_doi(work.doi)
         if raw:
             openalex_id = raw.get("id")
+            # Let the caller's count refresh use the resolved ID this run.
+            work.openalex_id = openalex_id
             logger.info("Resolved OpenAlex ID: %s for work %s", openalex_id, work.id)
             if not dry_run and openalex_id:
                 (
@@ -119,12 +122,20 @@ async def process_tracked_work(
 
     oa_results, s2_results = await asyncio.gather(oa_task, s2_task, return_exceptions=True)
 
-    if isinstance(oa_results, Exception):
+    # A source that failed is recorded as failed, never as "no citations".
+    attempted = (["openalex"] if openalex_id else []) + (["semantic_scholar"] if work.doi else [])
+    failed: list[str] = []
+    if isinstance(oa_results, BaseException):
         logger.warning("OpenAlex citation fetch failed for work %s: %s", work.id, oa_results)
+        failed.append("openalex")
         oa_results = []
-    if isinstance(s2_results, Exception):
+    if isinstance(s2_results, BaseException):
         logger.warning("S2 citation fetch failed for work %s: %s", work.id, s2_results)
+        failed.append("semantic_scholar")
         s2_results = []
+    if source_failures is not None:
+        source_failures.extend(failed)
+    all_sources_failed = bool(attempted) and len(failed) == len(attempted)
 
     logger.info(
         "OpenAlex: %d citing work(s) | S2: %d citing work(s) for %s (uid=%s)",
@@ -296,8 +307,12 @@ async def process_tracked_work(
     )
 
     # 7. Update last_checked_at and the permanent notified record.
+    #    When every source failed nothing was actually checked, so the
+    #    timestamp stays as it was (a freshly added work stays "fresh").
     if not dry_run:
-        update: dict[str, Any] = {"last_checked_at": datetime.now(tz=timezone.utc)}
+        update: dict[str, Any] = {"last_check_failed_sources": failed}
+        if not all_sources_failed:
+            update["last_checked_at"] = datetime.now(tz=timezone.utc)
         if existing_ids:
             update["notified_ids"] = sorted(existing_ids)
         (
@@ -323,11 +338,13 @@ async def run_job_for_user(
     email_service: ModuleType,
     dry_run: bool = False,
     settings: Any = None,
+    stats: dict[str, int] | None = None,
 ) -> tuple[int, int]:
     """
     Run citation checks for all tracked works belonging to a single user.
 
-    Returns (works_processed, new_notifications).
+    Returns (works_processed, new_notifications). When *stats* is given it is
+    filled with per-source failure counts for the run's health summary.
     """
     if settings is None:
         from app.config import get_settings
@@ -340,13 +357,23 @@ async def run_job_for_user(
     )
     works: list[TrackedWork] = []
     notified_by_work: dict[str, set[str]] = {}
+    works_ref = db.collection("users").document(uid).collection("trackedWorks")
     for wdoc in works_docs:
         wdata = wdoc.to_dict() or {}
+        stored_oa_id = wdata.get("openalex_id")
+        if stored_oa_id and not is_openalex_work_id(stored_oa_id):
+            # Older cross-source imports stored "S2:…"/"pubmed:…" here and
+            # seeded openalex_citation_count with that source's number.
+            # Clear both; the check below resolves the real ID by DOI.
+            logger.info("Clearing non-OpenAlex id %s on work %s (uid=%s)", stored_oa_id, wdoc.id, uid)
+            if not dry_run:
+                works_ref.document(wdoc.id).update({"openalex_id": None, "openalex_citation_count": None})
         works.append(_doc_to_tracked_work(wdoc.id, wdata))
         notified_by_work[wdoc.id] = set(wdata.get("notified_ids") or [])
 
     user_new_notifications: list[Notification] = []
     works_processed = 0
+    source_failures: list[str] = []
 
     for work in works:
         works_processed += 1
@@ -354,6 +381,7 @@ async def run_job_for_user(
             count, notifications = await process_tracked_work(
                 uid=uid, work=work, db=db, dry_run=dry_run,
                 notified_ids=notified_by_work.get(work.id),
+                source_failures=source_failures,
             )
             user_new_notifications.extend(notifications)
         except Exception as exc:  # noqa: BLE001
@@ -367,14 +395,15 @@ async def run_job_for_user(
         try:
             from app.services.semantic_scholar import get_citation_counts
 
+            from app.services.semantic_scholar import _clean_doi
+
             dois = [w.doi for w in works if w.doi]
             if dois:
                 s2_counts = await get_citation_counts(dois)
-                works_ref = db.collection("users").document(uid).collection("trackedWorks")
                 for work in works:
                     if not work.doi:
                         continue
-                    s2_count = s2_counts.get(work.doi.lower())
+                    s2_count = s2_counts.get(_clean_doi(work.doi).lower())
                     if s2_count is not None:
                         works_ref.document(work.id).update({"s2_citation_count": s2_count})
                 logger.info(
@@ -387,10 +416,9 @@ async def run_job_for_user(
     # Fetch OpenAlex citation counts (cited_by_count) for all works in one batch.
     if not dry_run:
         try:
-            oa_ids = [w.openalex_id for w in works if w.openalex_id]
+            oa_ids = [w.openalex_id for w in works if is_openalex_work_id(w.openalex_id)]
             if oa_ids:
                 oa_counts = await openalex_svc.get_citation_counts(oa_ids)
-                works_ref = db.collection("users").document(uid).collection("trackedWorks")
                 for work in works:
                     if not work.openalex_id:
                         continue
@@ -408,6 +436,16 @@ async def run_job_for_user(
                 )
         except Exception as exc:  # noqa: BLE001
             logger.error("Failed to fetch OpenAlex citation counts for uid=%s: %s", uid, exc)
+
+    oa_failed = source_failures.count("openalex")
+    s2_failed = source_failures.count("semantic_scholar")
+    logger.info(
+        "Check health uid=%s: %d work(s), OpenAlex failed on %d, Semantic Scholar failed on %d",
+        uid, works_processed, oa_failed, s2_failed,
+    )
+    if stats is not None:
+        stats["openalex_failures"] = stats.get("openalex_failures", 0) + oa_failed
+        stats["semantic_scholar_failures"] = stats.get("semantic_scholar_failures", 0) + s2_failed
 
     # Send an immediate email when new citations are found.
     to_email: str | None = resolve_recipient(user_data)
@@ -475,6 +513,7 @@ async def run_job_for_all_users(
     users_processed = 0
     works_processed = 0
     total_new_notifications = 0
+    stats: dict[str, int] = {"openalex_failures": 0, "semantic_scholar_failures": 0}
 
     auth_uids = _get_auth_uids()
     for user_doc in db.collection("users").stream():
@@ -492,6 +531,7 @@ async def run_job_for_all_users(
             email_service=email_service,
             dry_run=dry_run,
             settings=settings,
+            stats=stats,
         )
         works_processed += wp
         total_new_notifications += nn
@@ -500,6 +540,7 @@ async def run_job_for_all_users(
         "users_processed": users_processed,
         "works_processed": works_processed,
         "new_notifications": total_new_notifications,
+        **stats,
     }
     logger.info("Job complete: %s", summary)
     return summary

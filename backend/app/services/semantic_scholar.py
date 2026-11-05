@@ -9,12 +9,17 @@ import asyncio
 import io
 import logging
 import re
+import time
+import weakref
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
 import pypdf
 
 from app.services.cache import AsyncTTLCache
+from app.services.source_errors import SourceUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +33,107 @@ _paper_authors_cache: AsyncTTLCache = AsyncTTLCache(maxsize=500, ttl=3600)
 _works_by_author_cache: AsyncTTLCache = AsyncTTLCache(maxsize=100, ttl=3600)
 
 _BASE_URL = "https://api.semanticscholar.org/graph/v1"
-_HEADERS = {"User-Agent": "Citey/0.1 (mailto:support@citey.app)"}
+# Sent to non-S2 hosts (arxiv.org); must never carry the S2 API key.
+_PLAIN_HEADERS = {"User-Agent": "Citey/0.1 (mailto:support@citey.email)"}
+
+
+def _build_headers() -> dict[str, str]:
+    from app.config import get_settings
+
+    headers = dict(_PLAIN_HEADERS)
+    key = get_settings().s2_api_key
+    if key:
+        headers["x-api-key"] = key
+    return headers
+
+
+_HEADERS = _build_headers()
 _CITATION_FIELDS = "paperId,title,year,authors,externalIds,publicationDate,url"
 _PAGE_LIMIT = 1000
 _MAX_RETRIES = 4
+# The S2 batch endpoint accepts at most 500 IDs per request.
+_BATCH_MAX = 500
+# Keyed and unkeyed S2 access are both limited to roughly one request per
+# second; the nightly check paces itself instead of bursting into 429s.
+_MIN_INTERVAL = 1.05
+# Indirection so tests can skip real waiting.
+_sleep = asyncio.sleep
+_throttle_state: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, list]" = weakref.WeakKeyDictionary()
+
+
+async def _throttle() -> None:
+    """Space S2 requests at least _MIN_INTERVAL apart within this process."""
+    loop = asyncio.get_running_loop()
+    state = _throttle_state.get(loop)
+    if state is None:
+        state = [asyncio.Lock(), 0.0]
+        _throttle_state[loop] = state
+    lock, _ = state
+    async with lock:
+        wait = state[1] + _MIN_INTERVAL - time.monotonic()
+        if wait > 0:
+            await _sleep(wait)
+        state[1] = time.monotonic()
+
+
+def _retry_after(response: httpx.Response, attempt: int) -> float:
+    """Seconds to wait: Retry-After (seconds or HTTP date) or exponential backoff."""
+    header = response.headers.get("Retry-After")
+    if header:
+        try:
+            return max(0.0, float(header))
+        except ValueError:
+            try:
+                when = parsedate_to_datetime(header)
+                return max(0.0, (when - datetime.now(tz=timezone.utc)).total_seconds())
+            except (TypeError, ValueError):
+                pass
+    return float(2 ** attempt)
+
+
+async def _request_with_retry(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    context: str,
+    throttle: bool,
+    **kwargs: Any,
+) -> httpx.Response | None:
+    """Send a request, retrying 429, 5xx and network errors with backoff.
+
+    Returns the response for any other status, the last 5xx response if the
+    server never recovers, or ``None`` if every attempt was rate limited or
+    failed at the network level.
+    """
+    response: httpx.Response | None = None
+    for attempt in range(_MAX_RETRIES):
+        if throttle:
+            await _throttle()
+        try:
+            response = await client.request(method, url, **kwargs)
+        except httpx.RequestError as exc:
+            logger.warning("S2 request error [%s] (attempt %d/%d): %s",
+                           context, attempt + 1, _MAX_RETRIES, exc)
+            response = None
+            await _sleep(float(2 ** attempt))
+            continue
+        if response.status_code == 429:
+            wait = _retry_after(response, attempt)
+            logger.warning(
+                "S2 rate limited (429) [%s]; waiting %.0fs (attempt %d/%d)",
+                context, wait, attempt + 1, _MAX_RETRIES,
+            )
+            response = None
+            await _sleep(wait)
+            continue
+        if response.status_code >= 500:
+            logger.warning("S2 server error %s [%s] (attempt %d/%d)",
+                           response.status_code, context, attempt + 1, _MAX_RETRIES)
+            await _sleep(float(2 ** attempt))
+            continue
+        return response
+    logger.error("S2 did not recover after %d attempts [%s]", _MAX_RETRIES, context)
+    return response
 
 
 async def _get_with_retry(
@@ -39,31 +141,22 @@ async def _get_with_retry(
     url: str,
     params: dict,
     context: str = "",
+    throttle: bool = False,
 ) -> httpx.Response | None:
-    """
-    GET *url* with automatic retry on HTTP 429 (rate-limit) responses.
+    """GET with retry; see _request_with_retry."""
+    return await _request_with_retry(client, "GET", url, context, throttle, params=params)
 
-    Waits for the duration given in the ``Retry-After`` header, falling back
-    to exponential back-off (2^attempt seconds) when the header is absent.
-    Returns ``None`` on network errors or when all retries are exhausted.
-    All other status codes are returned immediately so the caller can decide.
-    """
-    for attempt in range(_MAX_RETRIES):
-        try:
-            response = await client.get(url, params=params)
-        except httpx.RequestError as exc:
-            logger.error("S2 request error [%s]: %s", context, exc)
-            return None
-        if response.status_code != 429:
-            return response
-        wait = int(response.headers.get("Retry-After", 2 ** attempt))
-        logger.warning(
-            "S2 rate limited (429) [%s]; waiting %ds (attempt %d/%d)",
-            context, wait, attempt + 1, _MAX_RETRIES,
-        )
-        await asyncio.sleep(wait)
-    logger.error("S2 rate limit not resolved after %d attempts [%s]", _MAX_RETRIES, context)
-    return None
+
+async def _post_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    params: dict,
+    json: Any,
+    context: str = "",
+    throttle: bool = False,
+) -> httpx.Response | None:
+    """POST with retry; see _request_with_retry."""
+    return await _request_with_retry(client, "POST", url, context, throttle, params=params, json=json)
 
 
 def _clean_doi(doi: str) -> str:
@@ -108,22 +201,29 @@ async def _resolve_s2_paper_id(doi: str) -> str | None:
     Resolve a DOI to a native S2 paperId using the batch POST endpoint.
 
     Returns the paperId string (e.g. "649def34f8be52c8b66281af98ae884c09aef38b")
-    or None if the paper is not in S2.
+    or None if the paper is not in S2. Raises SourceUnavailable when S2 could
+    not answer (rate limit, outage): that is not the same as "not found", and
+    treating it as such silently skipped the paper's citations.
     """
     candidates = _candidate_ids(doi)
     async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
-        try:
-            response = await client.post(
-                f"{_BASE_URL}/paper/batch",
-                params={"fields": "paperId"},
-                json={"ids": candidates},
-            )
-        except httpx.RequestError as exc:
-            logger.error("S2 batch resolve request error for DOI %s: %s", doi, exc)
-            return None
+        response = await _post_with_retry(
+            client,
+            f"{_BASE_URL}/paper/batch",
+            params={"fields": "paperId"},
+            json={"ids": candidates},
+            context=f"resolve:{doi}",
+            throttle=True,
+        )
 
+    if response is None or response.status_code >= 500:
+        status = response.status_code if response is not None else "no response"
+        raise SourceUnavailable("semantic_scholar", f"resolve {doi}: {status}")
+
+    # 400/404: S2 rejects identifiers it doesn't know (some DOI forms), which
+    # is a genuine "not in S2".
     if response.status_code != 200:
-        logger.warning("S2 batch resolve returned %s for DOI %s", response.status_code, doi)
+        logger.info("S2 batch resolve returned %s for DOI %s (not in S2)", response.status_code, doi)
         return None
 
     for item in response.json():
@@ -178,15 +278,15 @@ async def get_citing_papers(doi: str, since_date: str | None = None) -> list[dic
                 f"{_BASE_URL}/paper/{s2_id}/citations",
                 params,
                 context=f"citations:{s2_id}",
+                throttle=True,
             )
-            if response is None:
-                break
-            if response.status_code != 200:
+            if response is None or response.status_code != 200:
+                status = response.status_code if response is not None else "no response"
                 logger.warning(
-                    "S2 citations returned %s for paperId=%s (DOI %s)",
-                    response.status_code, s2_id, doi,
+                    "S2 citations fetch failed (%s) for paperId=%s (DOI %s) after %d result(s)",
+                    status, s2_id, doi, len(results),
                 )
-                break
+                raise SourceUnavailable("semantic_scholar", f"citations for {doi}: {status}")
 
             data = response.json()
             page = data.get("data", [])
@@ -1257,7 +1357,7 @@ async def _extract_affiliations_from_arxiv_pdf(arxiv_id: str) -> list[str]:
     """
     pdf_url = f"https://arxiv.org/pdf/{arxiv_id}"
     async with httpx.AsyncClient(
-        headers=_HEADERS, timeout=30.0, follow_redirects=True
+        headers=_PLAIN_HEADERS, timeout=30.0, follow_redirects=True
     ) as client:
         try:
             response = await client.get(pdf_url)
@@ -1653,45 +1753,46 @@ async def get_works_by_author(author_id: str) -> list[dict]:
 
 async def get_citation_counts(dois: list[str]) -> dict[str, int]:
     """
-    Batch-fetch citation counts from Semantic Scholar for a list of DOIs.
+    Batch-fetch lifetime citation counts from Semantic Scholar.
 
-    Returns a dict mapping each DOI (lowercased) to its citation count.
-    DOIs not found in S2 are omitted from the result.
+    Returns a dict mapping each requested DOI (cleaned, lowercased) to its
+    count. DOIs not found in S2 are omitted.
+
+    Results are matched to requests by position (the batch endpoint returns
+    one entry per requested ID, in order). Keying by the DOI S2 sends back
+    missed arXiv papers, for which S2 often reports the journal DOI instead.
     """
     if not dois:
         return {}
 
-    # Build candidate IDs (arXiv DOIs get ARXIV: prefix for better hit rate).
-    ids = []
+    pairs: list[tuple[str, str]] = []  # (requested doi, S2 candidate id)
     for doi in dois:
-        ids.extend(_candidate_ids(doi))
-
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=30.0) as client:
-        try:
-            response = await client.post(
-                f"{_BASE_URL}/paper/batch",
-                params={"fields": "citationCount,externalIds"},
-                json={"ids": ids},
-            )
-        except httpx.RequestError as exc:
-            logger.error("Semantic Scholar batch request error: %s", exc)
-            return {}
-
-    if response.status_code != 200:
-        logger.warning("Semantic Scholar batch returned status %s", response.status_code)
-        return {}
+        key = _clean_doi(doi).lower()
+        for candidate in _candidate_ids(doi):
+            pairs.append((key, candidate))
 
     results: dict[str, int] = {}
-    for item in response.json():
-        if not item:
-            continue
-        count = item.get("citationCount")
-        if count is None:
-            continue
-        external = item.get("externalIds") or {}
-        doi = external.get("DOI")
-        if doi:
-            results[_clean_doi(doi).lower()] = count
+    async with httpx.AsyncClient(headers=_HEADERS, timeout=30.0) as client:
+        for start in range(0, len(pairs), _BATCH_MAX):
+            chunk = pairs[start : start + _BATCH_MAX]
+            response = await _post_with_retry(
+                client,
+                f"{_BASE_URL}/paper/batch",
+                params={"fields": "citationCount"},
+                json={"ids": [candidate for _, candidate in chunk]},
+                context="citation_counts_batch",
+                throttle=True,
+            )
+            if response is None or response.status_code != 200:
+                status = response.status_code if response is not None else "no response"
+                logger.warning("Semantic Scholar count batch failed (%s); %d id(s) left stale",
+                               status, len(chunk))
+                continue
+            for (key, _), item in zip(chunk, response.json()):
+                if not item or item.get("citationCount") is None:
+                    continue
+                # An arXiv paper is tried as ARXIV:… and DOI:…; keep the larger.
+                results[key] = max(results.get(key, 0), item["citationCount"])
 
     logger.info(
         "Semantic Scholar: fetched citation counts for %d/%d DOIs",

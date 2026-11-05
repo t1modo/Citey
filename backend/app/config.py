@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,7 +20,7 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
 
     # Email
-    email_from_address: str = "notifications@citey.app"
+    email_from_address: str = "hello@citey.email"
     email_from_name: str = "Citey"
 
     # App
@@ -28,7 +29,7 @@ class Settings(BaseSettings):
     # Public base URL of this API, used in links inside emails. Falls back to
     # the incoming request's base URL when unset.
     api_url: str = ""
-    support_email: str = "support@citey.app"
+    support_email: str = "support@citey.email"
     cron_secret: str = "changeme"
     # Secret for signing unsubscribe / RSS links. Kept separate from
     # cron_secret so rotating one never invalidates or exposes the other.
@@ -46,6 +47,11 @@ class Settings(BaseSettings):
     # Free token: https://ui.adsabs.harvard.edu/user/settings/token
     ads_api_key: str = ""
 
+    # Semantic Scholar. Without a key, requests share an anonymous pool that
+    # is rate limited heavily at night. Free key:
+    # https://www.semanticscholar.org/product/api#api-key-form
+    s2_api_key: str = ""
+
     # CORS
     allowed_origins: str = "*"
 
@@ -53,6 +59,13 @@ class Settings(BaseSettings):
     # calls the HTTP endpoints instead; APScheduler only runs locally)
     disable_scheduler: bool = False
 
+
+    @field_validator("app_url", "api_url")
+    @classmethod
+    def _strip_trailing_slash(cls, v: str) -> str:
+        # "https://www.citey.email/" + "/dashboard" produced "//dashboard"
+        # in every emailed link.
+        return v.rstrip("/")
 
     @property
     def is_local(self) -> bool:

@@ -27,9 +27,9 @@ _author_search_cache: AsyncTTLCache = AsyncTTLCache(maxsize=500, ttl=300)
 _works_by_author_cache: AsyncTTLCache = AsyncTTLCache(maxsize=100, ttl=3600)
 
 _BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
-_HEADERS = {"User-Agent": "Citey/0.1 (mailto:support@citey.app)"}
+_HEADERS = {"User-Agent": "Citey/0.1 (mailto:support@citey.email)"}
 _TOOL = "citey"
-_EMAIL = "support@citey.app"
+_EMAIL = "support@citey.email"
 _MAX_RESULTS = 1000   # Maximum PMIDs fetched in one esearch call
 _BATCH_SIZE = 200     # PMIDs per esummary request (NCBI recommended max)
 _MAX_RETRIES = 4

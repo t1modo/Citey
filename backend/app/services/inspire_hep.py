@@ -29,7 +29,7 @@ _works_by_author_cache: AsyncTTLCache = AsyncTTLCache(maxsize=100, ttl=3600)
 
 _BASE_URL = "https://inspirehep.net/api"
 _HEADERS = {
-    "User-Agent": "Citey/0.1 (mailto:support@citey.app)",
+    "User-Agent": "Citey/0.1 (mailto:support@citey.email)",
     "Accept": "application/json",
 }
 _PAGE_SIZE = 25    # INSPIRE's default; safe for all accounts

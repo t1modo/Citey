@@ -10,9 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.deps import enforce_cooldown, get_current_user
 from app.firebase_client import get_db
-from app.models import AddWorkRequest, ImportByAuthorRequest, TrackedWork
+from app.models import AddWorkRequest, ImportByAuthorRequest, TrackedWork, is_openalex_work_id
 from app.services.crossref import resolve_doi
 from app.services.normalize import dedupe_works_by_title, doi_to_work_id, normalize_doi
+from app.services.text_clean import clean_names, clean_text
 from app.services.openalex import extract_topics, extract_venue
 
 logger = logging.getLogger(__name__)
@@ -183,7 +184,7 @@ async def add_work(
     # If Crossref didn't return an OpenAlex ID (the normal case), resolve it
     # eagerly now so that the first citation check can proceed immediately
     # without a separate lookup step.  Also extract topics/venue/type here.
-    if not work_info.get("openalex_id"):
+    if not is_openalex_work_id(work_info.get("openalex_id")):
         from app.services.openalex import get_work_by_doi as _oa_lookup
         oa_raw = await _oa_lookup(work_info["doi"])
         if oa_raw:
@@ -192,11 +193,13 @@ async def add_work(
             work_info["topics"] = extract_topics(oa_raw)
             work_info["venue"] = extract_venue(oa_raw)
             work_info["work_type"] = oa_raw.get("type")
-            # OpenAlex author names come from entity resolution and are more
-            # reliable than raw publisher-submitted names from Crossref.
+            # Use the name as printed on the paper (raw_author_name) so
+            # diacritics and the byline form survive; OpenAlex's profile
+            # display_name is only a fallback because it can differ from what
+            # the author published under.
             oa_authors = [
                 s for s in (
-                    (a.get("author") or {}).get("display_name", "").strip()
+                    (a.get("raw_author_name") or (a.get("author") or {}).get("display_name") or "").strip()
                     for a in (oa_raw.get("authorships") or [])
                 )
                 if s
@@ -228,9 +231,9 @@ async def add_work(
     now = datetime.now(tz=timezone.utc)
     doc_data: dict = {
         "doi": work_info["doi"],
-        "openalex_id": work_info.get("openalex_id"),
-        "title": work_info["title"],
-        "authors": work_info.get("authors", []),
+        "openalex_id": work_info.get("openalex_id") if is_openalex_work_id(work_info.get("openalex_id")) else None,
+        "title": clean_text(work_info["title"]) or "Untitled",
+        "authors": clean_names(work_info.get("authors", [])),
         "year": work_info.get("year"),
         "venue": work_info.get("venue"),
         "work_type": work_info.get("work_type"),
@@ -546,22 +549,30 @@ async def import_works_by_author(
             skipped += 1
             continue
 
+        # Records merged in from other sources carry their own IDs ("S2:…",
+        # "pubmed:…"); only a real OpenAlex ID may be stored as openalex_id,
+        # otherwise the nightly check queries OpenAlex with a foreign ID and
+        # finds nothing. The citation check resolves the rest by DOI.
+        source_id = raw.get("id") or ""
+        oa_id = source_id if is_openalex_work_id(source_id) else None
+        source_count = raw.get("cited_by_count")
         batch.set(works_ref.document(work_id), {
             "doi": doi,
-            "openalex_id": raw.get("id"),
-            "title": raw.get("title") or "Untitled",
-            "authors": [
-                a.get("author", {}).get("display_name", "").strip()
+            "openalex_id": oa_id,
+            "title": clean_text(raw.get("title")) or "Untitled",
+            "authors": clean_names([
+                a.get("author", {}).get("display_name", "")
                 for a in raw.get("authorships", [])
                 if a.get("author", {}).get("display_name")
-            ],
+            ]),
             "year": raw.get("publication_year"),
             "venue": extract_venue(raw),
             "work_type": raw.get("type"),
             "topics": extract_topics(raw),
             "added_at": now,
             "last_checked_at": None,
-            "openalex_citation_count": raw.get("cited_by_count"),
+            "openalex_citation_count": source_count if oa_id else None,
+            "s2_citation_count": source_count if source_id.startswith("S2:") else None,
         })
         pending += 1
         if pending == 500:  # Firestore batch limit

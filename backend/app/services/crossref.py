@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 _BASE_URL = "https://api.crossref.org/works/"
 _DATACITE_URL = "https://api.datacite.org/dois/"
 _HEADERS = {
-    "User-Agent": "Citey/0.1 (mailto:support@citey.app)",
+    "User-Agent": "Citey/0.1 (mailto:support@citey.email)",
 }
 
 

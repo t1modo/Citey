@@ -6,11 +6,14 @@ Docs: https://docs.openalex.org/
 
 import asyncio
 import logging
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
 
 from app.services.cache import AsyncTTLCache
+from app.services.source_errors import SourceUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +27,32 @@ _works_by_author_cache: AsyncTTLCache = AsyncTTLCache(maxsize=100, ttl=3600)
 
 _BASE_URL = "https://api.openalex.org"
 _HEADERS = {
-    "User-Agent": "Citey/0.1 (mailto:support@citey.app)",
+    "User-Agent": "Citey/0.1 (mailto:support@citey.email)",
 }
 _PER_PAGE = 200  # Maximum allowed by the API
-_MAILTO = "support@citey.app"
+_MAILTO = "support@citey.email"
 _MAX_RETRIES = 4
+# Indirection so tests can skip real waiting.
+_sleep = asyncio.sleep
+
+
+def _retry_after(response: httpx.Response, attempt: int) -> float:
+    """Seconds to wait before retrying, from Retry-After or exponential backoff.
+
+    Retry-After may be seconds or an HTTP date; ``int()`` on a date used to
+    raise and throw away everything fetched so far.
+    """
+    header = response.headers.get("Retry-After")
+    if header:
+        try:
+            return max(0.0, float(header))
+        except ValueError:
+            try:
+                when = parsedate_to_datetime(header)
+                return max(0.0, (when - datetime.now(tz=timezone.utc)).total_seconds())
+            except (TypeError, ValueError):
+                pass
+    return float(2 ** attempt)
 
 
 async def _get_with_retry(
@@ -38,29 +62,40 @@ async def _get_with_retry(
     context: str = "",
 ) -> httpx.Response | None:
     """
-    GET *url* with automatic retry on HTTP 429 (rate-limit) responses.
+    GET *url*, retrying rate limits (429), server errors (5xx) and network
+    errors with backoff.
 
-    Waits for the duration given in the ``Retry-After`` header, falling back
-    to exponential back-off (2^attempt seconds) when the header is absent.
-    Returns ``None`` on network errors or when all retries are exhausted.
-    All other status codes are returned immediately so the caller can decide.
+    Returns the response for any other status (the caller decides), the last
+    5xx response if the server never recovers, or ``None`` when every attempt
+    was rate limited or failed at the network level.
     """
+    response: httpx.Response | None = None
     for attempt in range(_MAX_RETRIES):
         try:
             response = await client.get(url, params=params)
         except httpx.RequestError as exc:
-            logger.error("OpenAlex request error [%s]: %s", context, exc)
-            return None
-        if response.status_code != 429:
-            return response
-        wait = int(response.headers.get("Retry-After", 2 ** attempt))
-        logger.warning(
-            "OpenAlex rate limited (429) [%s]; waiting %ds (attempt %d/%d)",
-            context, wait, attempt + 1, _MAX_RETRIES,
-        )
-        await asyncio.sleep(wait)
-    logger.error("OpenAlex rate limit not resolved after %d attempts [%s]", _MAX_RETRIES, context)
-    return None
+            logger.warning("OpenAlex request error [%s] (attempt %d/%d): %s",
+                           context, attempt + 1, _MAX_RETRIES, exc)
+            response = None
+            await _sleep(float(2 ** attempt))
+            continue
+        if response.status_code == 429:
+            wait = _retry_after(response, attempt)
+            logger.warning(
+                "OpenAlex rate limited (429) [%s]; waiting %.0fs (attempt %d/%d)",
+                context, wait, attempt + 1, _MAX_RETRIES,
+            )
+            response = None
+            await _sleep(wait)
+            continue
+        if response.status_code >= 500:
+            logger.warning("OpenAlex server error %s [%s] (attempt %d/%d)",
+                           response.status_code, context, attempt + 1, _MAX_RETRIES)
+            await _sleep(float(2 ** attempt))
+            continue
+        return response
+    logger.error("OpenAlex did not recover after %d attempts [%s]", _MAX_RETRIES, context)
+    return response
 
 
 async def get_work_by_doi(doi: str) -> dict | None:
@@ -152,15 +187,16 @@ async def get_citing_works(
             response = await _get_with_retry(
                 client, f"{_BASE_URL}/works", params, context=f"citing:{openalex_work_id}"
             )
-            if response is None:
-                break
-            if response.status_code != 200:
+            # A failed page must not look like "no more citations": the caller
+            # would record the work as checked and the missing citations
+            # would never be looked for again.
+            if response is None or response.status_code != 200:
+                status = response.status_code if response is not None else "no response"
                 logger.warning(
-                    "OpenAlex unexpected status %s for citing works of %s",
-                    response.status_code,
-                    openalex_work_id,
+                    "OpenAlex citing works fetch failed (%s) for %s after %d result(s)",
+                    status, openalex_work_id, len(results),
                 )
-                break
+                raise SourceUnavailable("openalex", f"citing works for {openalex_work_id}: {status}")
 
             payload = response.json()
             page_results: list[dict] = payload.get("results", [])
@@ -184,6 +220,11 @@ async def get_citing_works(
     return results
 
 
+def _is_work_id(value: str) -> bool:
+    from app.models import is_openalex_work_id
+    return is_openalex_work_id(value)
+
+
 async def get_citation_counts(openalex_ids: list[str]) -> dict[str, int]:
     """
     Fetch cited_by_count for a list of OpenAlex work IDs in batches.
@@ -197,12 +238,14 @@ async def get_citation_counts(openalex_ids: list[str]) -> dict[str, int]:
     def _short(oid: str) -> str:
         return oid[len("https://openalex.org/"):] if oid.startswith("https://openalex.org/") else oid
 
-    short_ids = [_short(oid) for oid in openalex_ids]
+    # One foreign ID ("S2:…") makes OpenAlex reject the whole batch, which
+    # used to leave every count for that user stale.
+    short_ids = [_short(oid) for oid in openalex_ids if _is_work_id(oid)]
     counts: dict[str, int] = {}
 
     async with httpx.AsyncClient(headers=_HEADERS, timeout=30.0) as client:
-        # OpenAlex supports up to 200 per_page; batch 200 IDs at a time.
-        batch_size = 200
+        # OpenAlex allows at most 100 values in one OR filter; stay under it.
+        batch_size = 50
         for i in range(0, len(short_ids), batch_size):
             batch = short_ids[i : i + batch_size]
             filter_str = "ids.openalex:" + "|".join(batch)

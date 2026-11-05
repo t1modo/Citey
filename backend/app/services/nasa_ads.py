@@ -29,7 +29,7 @@ _author_search_cache: AsyncTTLCache = AsyncTTLCache(maxsize=500, ttl=300)
 _works_by_author_cache: AsyncTTLCache = AsyncTTLCache(maxsize=100, ttl=3600)
 
 _BASE_URL = "https://api.adsabs.harvard.edu/v1"
-_HEADERS = {"User-Agent": "Citey/0.1 (mailto:support@citey.app)"}
+_HEADERS = {"User-Agent": "Citey/0.1 (mailto:support@citey.email)"}
 _FIELDS = "bibcode,title,year,author,doi,pubdate,doctype"
 _MAX_RESULTS = 2000   # ADS allows up to 2000 rows per query
 _BATCH_SIZE = 200     # rows per paginated request

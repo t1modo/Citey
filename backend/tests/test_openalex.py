@@ -13,10 +13,12 @@ from app.services.openalex import (
     _get_with_retry,
     extract_topics,
     extract_venue,
+    get_citation_counts,
     get_citing_works,
     get_work_by_doi,
     normalize_citing_work,
 )
+from app.services.source_errors import SourceUnavailable
 
 _DOI = "10.1038/nature12345"
 _RE_OA_WORKS = re.compile(r"https://api\.openalex\.org/works")
@@ -300,13 +302,43 @@ async def test_get_with_retry_network_error_returns_none(respx_mock) -> None:
     assert resp is None
 
 
-async def test_get_with_retry_500_returned_immediately(respx_mock) -> None:
-    """Non-429 errors (500) are returned as-is without retry."""
-    respx_mock.get(_RE_ANY_OA).mock(return_value=Response(500))
+async def test_get_with_retry_retries_500_then_succeeds(respx_mock) -> None:
+    """A transient 5xx is retried rather than treated as a final answer."""
+    respx_mock.get(_RE_ANY_OA).mock(side_effect=[Response(503), Response(200, json={})])
+    async with httpx.AsyncClient() as client:
+        resp = await _get_with_retry(client, "https://api.openalex.org/works", {})
+    assert resp is not None
+    assert resp.status_code == 200
+
+
+async def test_get_with_retry_persistent_500_returns_last_response(respx_mock) -> None:
+    """When the server never recovers, the final 5xx is returned for the caller."""
+    route = respx_mock.get(_RE_ANY_OA).mock(return_value=Response(500))
     async with httpx.AsyncClient() as client:
         resp = await _get_with_retry(client, "https://api.openalex.org/works", {})
     assert resp is not None
     assert resp.status_code == 500
+    assert route.call_count == 4
+
+
+async def test_get_with_retry_404_not_retried(respx_mock) -> None:
+    """Client errors are answers, not outages: no retry."""
+    route = respx_mock.get(_RE_ANY_OA).mock(return_value=Response(404))
+    async with httpx.AsyncClient() as client:
+        resp = await _get_with_retry(client, "https://api.openalex.org/works", {})
+    assert resp.status_code == 404
+    assert route.call_count == 1
+
+
+async def test_get_with_retry_http_date_retry_after(respx_mock) -> None:
+    """Retry-After given as an HTTP date must not crash the fetch."""
+    respx_mock.get(_RE_ANY_OA).mock(side_effect=[
+        Response(429, headers={"Retry-After": "Wed, 21 Oct 2015 07:28:00 GMT"}),
+        Response(200, json={}),
+    ])
+    async with httpx.AsyncClient() as client:
+        resp = await _get_with_retry(client, "https://api.openalex.org/works", {})
+    assert resp.status_code == 200
 
 
 # ---------------------------------------------------------------------------
@@ -380,21 +412,32 @@ async def test_get_citing_works_429_mid_pagination_retries(respx_mock) -> None:
     assert len(results) == 2
 
 
-async def test_get_citing_works_error_returns_partial(respx_mock) -> None:
-    """A non-retryable error mid-pagination returns whatever was collected so far."""
+async def test_get_citing_works_error_raises(respx_mock) -> None:
+    """A page that keeps failing raises instead of returning a partial list.
+
+    Returning page 1 alone used to look like a complete answer, so the work
+    was marked checked and the rest of its citations were never fetched.
+    """
     page1 = {
         "results": [_citing_work_stub(1)],
         "meta": {"next_cursor": "cursor_page2"},
     }
-    respx_mock.get(_RE_OA_WORKS).mock(side_effect=[
-        Response(200, json=page1),
-        Response(500),  # hard error on page 2 — no retry
-    ])
+    respx_mock.get(_RE_OA_WORKS).mock(side_effect=[Response(200, json=page1)] + [Response(500)] * 4)
 
-    results = await get_citing_works("W2741809807")
-    # Only page 1 was collected before the error
-    assert len(results) == 1
-    assert results[0]["title"] == "Citing Work 1"
+    with pytest.raises(SourceUnavailable):
+        await get_citing_works("W2741809807")
+
+
+async def test_get_citation_counts_skips_foreign_ids(respx_mock) -> None:
+    """IDs from other sources are never sent to OpenAlex, so one bad ID can't
+    fail the whole batch."""
+    route = respx_mock.get(_RE_OA_WORKS).mock(return_value=Response(200, json={
+        "results": [{"id": "https://openalex.org/W1", "cited_by_count": 7}],
+    }))
+    counts = await get_citation_counts(["https://openalex.org/W1", "S2:abc", "pubmed:123"])
+    assert counts == {"W1": 7}
+    sent_filter = route.calls.last.request.url.params["filter"]
+    assert sent_filter == "ids.openalex:W1"
 
 
 async def test_get_citing_works_empty_results(respx_mock) -> None:

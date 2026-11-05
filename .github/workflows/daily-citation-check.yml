@@ -78,7 +78,7 @@ jobs:
         run: |
           echo "POSTing to https://api.citey.email/jobs/run ..."
           RESPONSE=$(curl -s -w "\n%{http_code}" \
-            --max-time 900 \
+            --max-time 1800 \
             -X POST \
             -H "Content-Type: application/json" \
             -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
