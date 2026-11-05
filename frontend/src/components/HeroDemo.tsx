@@ -665,9 +665,6 @@ export default function HeroDemo() {
         {/* Title bar */}
         <div className="flex items-center justify-between border-b border-rule px-4 py-3">
           <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-ink/10" />
-            <span className="h-2.5 w-2.5 rounded-full bg-ink/10" />
-            <span className="h-2.5 w-2.5 rounded-full bg-ink/10" />
           </div>
           <span
             className="text-xs font-semibold text-muted"

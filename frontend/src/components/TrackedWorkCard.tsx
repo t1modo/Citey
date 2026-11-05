@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { TrackedWork } from "@/lib/types";
 
 interface TrackedWorkCardProps {
@@ -27,6 +28,8 @@ export default function TrackedWorkCard({ work, onRemove, removing = false }: Tr
   const hasCounts = work.s2_citation_count != null || work.openalex_citation_count != null;
   const lifetime = Math.max(work.s2_citation_count ?? 0, work.openalex_citation_count ?? 0);
   const source = [work.venue, work.year].filter(Boolean).join(", ");
+  // Stopping removes the paper and its citation history, so confirm first.
+  const [confirming, setConfirming] = useState(false);
 
   return (
     <article className="py-5">
@@ -69,13 +72,28 @@ export default function TrackedWorkCard({ work, onRemove, removing = false }: Tr
         <span className="text-muted">
           {work.last_checked_at ? `Checked ${formatDate(work.last_checked_at)}` : "Not checked yet"}
         </span>
-        <button
-          onClick={() => onRemove(work.id)}
-          disabled={removing}
-          className="ml-auto text-sm text-muted underline decoration-rule underline-offset-2 hover:text-danger hover:decoration-danger disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {removing ? "Removing…" : "Stop tracking"}
-        </button>
+        {confirming ? (
+          <span className="ml-auto flex items-center gap-3" role="group" aria-label="Confirm stop tracking">
+            <span className="text-muted">Remove it and its citations?</span>
+            <button
+              onClick={() => onRemove(work.id)}
+              disabled={removing}
+              className="font-bold text-danger underline underline-offset-2 disabled:opacity-40"
+            >
+              {removing ? "Removing…" : "Stop tracking"}
+            </button>
+            <button onClick={() => setConfirming(false)} className="text-ink underline decoration-rule underline-offset-2">
+              Keep
+            </button>
+          </span>
+        ) : (
+          <button
+            onClick={() => setConfirming(true)}
+            className="ml-auto text-sm text-muted underline decoration-rule underline-offset-2 hover:text-danger hover:decoration-danger"
+          >
+            Stop tracking
+          </button>
+        )}
       </div>
     </article>
   );

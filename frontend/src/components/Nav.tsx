@@ -58,10 +58,11 @@ export default function Nav() {
               <Link
                 key={link.href}
                 href={link.href}
+                aria-current={isActive(link.href) ? "page" : undefined}
                 className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                   isActive(link.href)
-                    ? "bg-ink/10 text-ink"
-                    : "text-ink hover:bg-ink/5 hover:text-ink"
+                    ? "font-bold text-ink underline decoration-2 underline-offset-8"
+                    : "text-ink hover:underline hover:decoration-rule hover:decoration-2 hover:underline-offset-8"
                 }`}
               >
                 {link.label}
@@ -123,11 +124,12 @@ export default function Nav() {
               <Link
                 key={link.href}
                 href={link.href}
+                aria-current={isActive(link.href) ? "page" : undefined}
                 onClick={() => setMenuOpen(false)}
                 className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                   isActive(link.href)
-                    ? "bg-ink/10 text-ink"
-                    : "text-ink hover:bg-ink/5 hover:text-ink"
+                    ? "font-bold text-ink underline decoration-2 underline-offset-8"
+                    : "text-ink hover:underline hover:decoration-rule hover:decoration-2 hover:underline-offset-8"
                 }`}
               >
                 {link.label}

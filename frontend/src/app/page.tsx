@@ -145,7 +145,7 @@ export default function HomePage() {
           </h2>
           <Link
             href={ctaHref}
-            className="shrink-0 self-start rounded-md bg-mark px-6 py-3 text-base font-bold text-ink transition-colors hover:bg-mark-soft md:self-auto"
+            className="shrink-0 self-start rounded-md bg-paper px-6 py-3 text-base font-bold text-ink transition-colors hover:bg-sheet focus-visible:outline-paper md:self-auto"
           >
             {ctaLabel}
           </Link>
