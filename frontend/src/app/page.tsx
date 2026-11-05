@@ -20,7 +20,7 @@ const SOURCES: [string, string][] = [
 const questions = [
   {
     q: "Where does Citey look?",
-    a: "OpenAlex, Semantic Scholar, Crossref, PubMed, INSPIRE-HEP, DBLP and NASA ADS, every night. A citing paper often appears in one index weeks before the others; Citey merges them so you hear about it once.",
+    a: "OpenAlex and Semantic Scholar, every night, the two largest open citation indexes. A citing paper often appears in one weeks before the other; Citey merges them so you hear about it once. Crossref, PubMed, NASA ADS, INSPIRE and DBLP help find your papers when you import them.",
   },
   {
     q: "What's in the email?",
@@ -59,8 +59,8 @@ export default function HomePage() {
               Know when your work is cited.
             </h1>
             <p className="mb-9 max-w-md text-lg leading-relaxed text-muted">
-              Citey checks seven citation indexes every night and emails you when a new paper
-              references yours.
+              Citey checks OpenAlex and Semantic Scholar every night and emails you when a new
+              paper references yours.
             </p>
             <div className="flex flex-wrap items-center gap-x-7 gap-y-4">
               <Link

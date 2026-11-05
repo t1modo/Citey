@@ -120,7 +120,7 @@ export default function HelpPage() {
               n: 3,
               title: "Receive citation alerts",
               body:
-                "Citey scans seven citation databases every day and emails you as soon as a new paper cites your work.",
+                "Every night Citey checks OpenAlex and Semantic Scholar and emails you as soon as a new paper cites your work.",
             },
           ].map(({ n, title, body }, i) => (
             <div key={n}>
@@ -205,15 +205,15 @@ export default function HelpPage() {
       {/* ── Data sources ── */}
       <section id="sources" className="scroll-mt-6 mb-20">
         <div>
-          <h2 className="font-serif mb-2 text-2xl font-semibold text-ink">Seven databases. One search.</h2>
+          <h2 className="font-serif mb-2 text-2xl font-semibold text-ink">Where the data comes from</h2>
           <p className="mb-6 text-sm text-muted">
-            Citey queries all of these automatically when checking for new citations.
+            OpenAlex and Semantic Scholar are checked for new citations every night. The others help find your papers when you import them.
           </p>
         </div>
 
         {/* Primary sources */}
         <div>
-          <p className="mb-2 text-xs font-medium text-muted">Primary sources</p>
+          <p className="mb-2 text-xs font-medium text-muted">Checked every night</p>
         </div>
         <div className="mb-4 grid gap-3 sm:grid-cols-2">
           {[

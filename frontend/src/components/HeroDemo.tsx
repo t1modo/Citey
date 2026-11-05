@@ -202,12 +202,12 @@ const DEMO_POOL: DemoEntry[] = [
 ];
 
 
-// Seven indexes, in the order Citey reports them.
-const SOURCES = ["OpenAlex", "Semantic Scholar", "Crossref", "PubMed", "NASA ADS", "INSPIRE-HEP", "DBLP"];
+// The indexes the nightly check reads.
+const SOURCES = ["OpenAlex", "Semantic Scholar"];
 
 const STEPS = [
   { title: "Add a paper", body: "Paste a DOI or arXiv link. Citey fills in the rest." },
-  { title: "Citey checks overnight", body: "Every tracked paper is looked up in seven citation indexes." },
+  { title: "Citey checks overnight", body: "Every tracked paper is looked up in OpenAlex and Semantic Scholar." },
   { title: "The email arrives", body: "New citing papers, with authors, affiliations and a link." },
 ] as const;
 
@@ -310,7 +310,7 @@ function CheckScene({ entry, animate, hitIndex }: { entry: DemoEntry; animate: b
       </ul>
       <p className={`text-sm transition-opacity duration-500 ${finished ? "opacity-100" : "opacity-0"}`}>
         <span className="text-ink">Found 1 new citation.</span>{" "}
-        <span className="text-muted">Duplicates across indexes are merged, so you hear about it once.</span>
+        <span className="text-muted">A paper found in both is reported once.</span>
       </p>
     </div>
   );
@@ -375,7 +375,7 @@ export default function HeroDemo() {
   }, [playing, step]);
 
   const entry = DEMO_POOL[entryIndex];
-  const hitIndex = (entryIndex % 3) + 1; // which index finds the citation
+  const hitIndex = entryIndex % SOURCES.length; // which index finds the citation
   const animateScenes = !reduceMotion;
 
   const choose = (i: number) => {

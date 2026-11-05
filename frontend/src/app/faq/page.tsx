@@ -14,10 +14,10 @@ const faqItems: FaqItem[] = [
     answer: (
       <>
         <p>
-          Citey draws from seven scholarly databases across two roles:
+          Citey uses seven scholarly databases in two roles:
         </p>
         <p className="mt-3 text-xs font-semibold text-muted">
-          Primary citation sources
+          Checked for new citations every night
         </p>
         <ul className="mt-2 list-disc space-y-2 pl-5">
           <li>
@@ -33,21 +33,17 @@ const faqItems: FaqItem[] = [
             literature. Learn more at{" "}
             <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">semanticscholar.org</a>.
           </li>
+        </ul>
+        <p className="mt-4 text-xs font-semibold text-muted">
+          Used when you add or import papers
+        </p>
+        <ul className="mt-2 list-disc space-y-2 pl-5">
           <li>
             <strong className="text-ink">Crossref</strong>: the canonical DOI
             registration agency, aggregating reference lists from thousands of publishers.
-            Used both for DOI resolution and as a citation source. Learn more at{" "}
+            Used to look up DOIs when you add a paper. Learn more at{" "}
             <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">crossref.org</a>.
           </li>
-        </ul>
-        <p className="mt-4 text-xs font-semibold text-muted">
-          Author import sources
-        </p>
-        <p className="mt-1">
-          When you import papers via an author profile, Citey can additionally draw
-          from four specialist databases:
-        </p>
-        <ul className="mt-2 list-disc space-y-2 pl-5">
           <li>
             <strong className="text-ink">PubMed</strong>: 35 million biomedical and
             life science records from the NCBI. Learn more at{" "}
@@ -83,14 +79,13 @@ const faqItems: FaqItem[] = [
       <>
         <p>
           Citey runs a citation scan job <strong className="text-ink">once per day</strong>.
-          The job iterates over every tracked work in the database, queries OpenAlex,
-          Crossref, and Semantic Scholar for new citing papers, and records any newly
-          discovered citations.
+          It looks up every tracked paper in OpenAlex and Semantic Scholar and records
+          any citing papers it hasn't seen before.
         </p>
         <p className="mt-3">
           Email notifications are dispatched immediately after new citations are found, so
-          you should receive an alert within 24 hours of a paper being indexed by OpenAlex,
-          Crossref, or Semantic Scholar. New citations appear automatically on your{" "}
+          you should receive an alert within a day of a citing paper appearing in OpenAlex
+          or Semantic Scholar. New citations appear automatically on your{" "}
           <Link href="/dashboard" className="text-muted underline hover:text-ink">
             Dashboard
           </Link>
