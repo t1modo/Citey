@@ -37,6 +37,17 @@ _JUNK_FILTER = "is_paratext:false,is_retracted:false,type:!erratum,type:!retract
 _sleep = asyncio.sleep
 
 
+def _oa_client(timeout: float) -> httpx.AsyncClient:
+    """An httpx client for OpenAlex that sends the API key, when one is set,
+    as the ``api_key`` query parameter on every request."""
+    from app.config import get_settings
+
+    key = get_settings().openalex_api_key
+    return httpx.AsyncClient(
+        headers=_HEADERS, timeout=timeout, params={"api_key": key} if key else None
+    )
+
+
 def _retry_after(response: httpx.Response, attempt: int) -> float:
     """Seconds to wait before retrying, from Retry-After or exponential backoff.
 
@@ -122,7 +133,7 @@ async def get_work_by_doi(doi: str) -> dict | None:
     }
     logger.debug("OpenAlex work lookup by DOI filter: %s", clean_doi)
 
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
+    async with _oa_client(timeout=15.0) as client:
         try:
             response = await client.get(url, params=params)
         except httpx.RequestError as exc:
@@ -177,7 +188,7 @@ async def get_citing_works(
     results: list[dict] = []
     cursor = "*"
 
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=30.0) as client:
+    async with _oa_client(timeout=30.0) as client:
         while True:
             params: dict[str, Any] = {
                 "filter": filter_str,
@@ -259,7 +270,7 @@ async def get_citation_counts(openalex_ids: list[str]) -> dict[str, int]:
     short_ids = [_short(oid) for oid in openalex_ids if _is_work_id(oid)]
     counts: dict[str, int] = {}
 
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=30.0) as client:
+    async with _oa_client(timeout=30.0) as client:
         # OpenAlex allows at most 100 values in one OR filter; stay under it.
         batch_size = 50
         for i in range(0, len(short_ids), batch_size):
@@ -313,7 +324,7 @@ async def get_authors_by_ids(author_ids: list[str]) -> list[dict]:
     }
     logger.debug("OpenAlex batch author lookup: %d ids", len(short_ids))
 
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
+    async with _oa_client(timeout=15.0) as client:
         try:
             response = await client.get(url, params=params)
         except httpx.RequestError as exc:
@@ -338,7 +349,7 @@ async def search_authors(query: str) -> list[dict]:
     params: dict[str, Any] = {"search": query, "per_page": 10, "mailto": _MAILTO}
     logger.debug("OpenAlex author search: %s", query)
 
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
+    async with _oa_client(timeout=15.0) as client:
         try:
             response = await client.get(url, params=params)
         except httpx.RequestError as exc:
@@ -370,7 +381,7 @@ async def get_works_by_author(author_id: str) -> list[dict]:
     results: list[dict] = []
     cursor = "*"
 
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=30.0) as client:
+    async with _oa_client(timeout=30.0) as client:
         while True:
             params: dict[str, Any] = {
                 "filter": f"author.id:{author_id}",

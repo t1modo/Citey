@@ -50,12 +50,13 @@ def _build_headers() -> dict[str, str]:
 _HEADERS = _build_headers()
 _CITATION_FIELDS = "paperId,title,year,authors,externalIds,publicationDate,url"
 _PAGE_LIMIT = 1000
-_MAX_RETRIES = 4
+_MAX_RETRIES = 5
 # The S2 batch endpoint accepts at most 500 IDs per request.
 _BATCH_MAX = 500
 # Keyed and unkeyed S2 access are both limited to roughly one request per
-# second; the nightly check paces itself instead of bursting into 429s.
-_MIN_INTERVAL = 1.05
+# second. At 1.05s a few requests still came back 429 (the server measures
+# arrival, not departure, so network jitter bunches them); 1.2s leaves room.
+_MIN_INTERVAL = 1.2
 # Indirection so tests can skip real waiting.
 _sleep = asyncio.sleep
 _throttle_state: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, list]" = weakref.WeakKeyDictionary()

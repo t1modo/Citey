@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     # https://www.semanticscholar.org/product/api#api-key-form
     s2_api_key: str = ""
 
+    # OpenAlex. Works without a key, but keyless use has a small daily
+    # allowance and later requests get 401. Free key: https://openalex.org/settings/api
+    openalex_api_key: str = ""
+
     # CORS
     allowed_origins: str = "*"
 

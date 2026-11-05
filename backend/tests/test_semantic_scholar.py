@@ -286,7 +286,8 @@ async def test_get_with_retry_persistent_500_returns_last_response(respx_mock) -
         resp = await _get_with_retry(client, "https://api.semanticscholar.org/test", {})
     assert resp is not None
     assert resp.status_code == 500
-    assert route.call_count == 4
+    from app.services.semantic_scholar import _MAX_RETRIES
+    assert route.call_count == _MAX_RETRIES
 
 
 async def test_get_with_retry_404_returned_immediately(respx_mock) -> None:

@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from app.config import get_settings
 from app.deps import get_current_user
 from app.services.openalex import get_work_by_doi, search_authors
+from app.services.openalex import _oa_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -174,7 +175,7 @@ async def _run_tool(name: str, tool_input: dict) -> str:
             })
 
         if name == "search_papers":
-            async with httpx.AsyncClient(headers=_OA_HEADERS, timeout=15.0) as client:
+            async with _oa_client(timeout=15.0) as client:
                 resp = await client.get(
                     f"{_OA_BASE}/works",
                     params={

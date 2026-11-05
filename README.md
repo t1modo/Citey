@@ -40,4 +40,5 @@ Required in production:
 Optional:
 
 * `S2_API_KEY`: Semantic Scholar key. Avoids night time rate limits. [Request one free](https://www.semanticscholar.org/product/api).
+* `OPENALEX_API_KEY`: OpenAlex key. Keyless use has a small daily allowance. [Get one free](https://openalex.org/settings/api).
 * `ADS_API_KEY`: NASA ADS token for astronomy imports. [Get one free](https://ui.adsabs.harvard.edu/user/settings/token).

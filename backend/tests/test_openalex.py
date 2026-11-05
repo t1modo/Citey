@@ -447,3 +447,24 @@ async def test_get_citing_works_empty_results(respx_mock) -> None:
     )
     results = await get_citing_works("W2741809807")
     assert results == []
+
+
+async def test_api_key_sent_when_configured(monkeypatch, respx_mock) -> None:
+    """OPENALEX_API_KEY goes out as the api_key query parameter on every call."""
+    from app.config import get_settings
+
+    monkeypatch.setenv("OPENALEX_API_KEY", "oa-test-key")
+    get_settings.cache_clear()
+    try:
+        route = respx_mock.get(_RE_OA_WORKS).mock(return_value=Response(200, json={"results": [], "meta": {}}))
+        await get_citing_works("W1")
+        assert route.calls.last.request.url.params["api_key"] == "oa-test-key"
+    finally:
+        monkeypatch.delenv("OPENALEX_API_KEY")
+        get_settings.cache_clear()
+
+
+async def test_no_api_key_param_without_key(respx_mock) -> None:
+    route = respx_mock.get(_RE_OA_WORKS).mock(return_value=Response(200, json={"results": [], "meta": {}}))
+    await get_citing_works("W1")
+    assert "api_key" not in route.calls.last.request.url.params
