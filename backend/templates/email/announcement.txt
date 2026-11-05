@@ -1,0 +1,29 @@
+Citey has been rebuilt
+
+{% if recipient_name %}Hi {{ recipient_name }},
+
+{% endif %}
+We've spent the last few weeks reworking Citey from the ground up. Your account
+and tracked papers are just as you left them. Here is what's new:
+
+* A new look. A calmer design that reads like a reference list, on desktop
+  and phone.
+* More accurate alerts. Citations an index lists weeks late are now caught,
+  and the same paper is no longer reported twice.
+* Better emails. Each alert shows the citing paper's authors, affiliations,
+  date and DOI.
+* Correct citation counts. "Cited by" now shows each paper's lifetime total
+  and refreshes every night.
+
+If you signed up recently and never got a verification email, sign in and press
+"Resend" on the yellow banner. Some of those emails failed to send in October and
+that's now fixed.
+
+Take a look: {{ app_url }}
+
+Questions or ideas? Just write to {{ support_email }}.
+
+You get this because you have a {{ app_name }} account. We send updates like
+this rarely.
+{% if unsubscribe_url %}Unsubscribe from all emails: {{ unsubscribe_url }}
+{% endif %}
