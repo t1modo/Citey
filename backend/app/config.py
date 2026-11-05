@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     s2_api_key: str = ""
 
     # OpenAlex. Works without a key, but keyless use has a small daily
-    # allowance and later requests get 401. Free key: https://openalex.org/settings/api
+    # allowance and later requests get 401. Free key from openalex.org (sign in, then API settings)
     openalex_api_key: str = ""
 
     # CORS
