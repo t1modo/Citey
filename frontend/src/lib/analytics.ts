@@ -15,7 +15,8 @@ export type AnalyticsEvent =
   | "test_email_requested"
   | "author_unlinked"
   | "account_deleted"
-  | "unsubscribed";
+  | "unsubscribed"
+  | "support_message_sent";
 
 export function track(event: AnalyticsEvent, properties?: Record<string, unknown>): void {
   if (typeof window === "undefined" || !posthog.__loaded) return;

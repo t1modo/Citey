@@ -8,4 +8,4 @@ Confirm email: {{ link }}
 Didn't sign up for {{ app_name }}? You can ignore this email; nothing else
 will be sent.
 
-Questions? Write to {{ support_email }}.
+Questions? Contact us: {{ app_url }}/contact

@@ -10,4 +10,4 @@ what happened without opening the dashboard.
 Open your dashboard: {{ app_url }}/dashboard
 
 Choose what we send: {{ app_url }}/settings
-Questions? Write to {{ support_email }}.
+Questions? Contact us: {{ app_url }}/contact

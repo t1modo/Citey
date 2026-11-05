@@ -285,3 +285,38 @@ async def send_notification_email_confirmation(
         settings, to_email, f"Confirm your alert address for {settings.app_name}", html_body, text_body,
         "Address confirmation",
     )
+
+
+async def send_support_message(
+    sender_email: str,
+    sender_name: str,
+    subject: str,
+    message: str,
+    uid: str | None,
+    settings: Settings,
+) -> None:
+    """Deliver a contact form message to the support inbox.
+
+    Plain text only, so nothing the sender typed is ever rendered as HTML.
+    Reply-To is the sender, so replying in Gmail answers them directly.
+    """
+    who = f"{sender_name} <{sender_email}>" if sender_name else sender_email
+    topic = subject or (message.strip().splitlines() or [""])[0][:60]
+    lines = [
+        f"From: {who}",
+        f"Account: {uid}" if uid else "Account: not signed in",
+        "",
+        message.strip(),
+        "",
+        "Sent with the contact form at " + f"{settings.app_url}/contact. Reply to answer.",
+    ]
+    resend.api_key = settings.resend_api_key
+    params: resend.Emails.SendParams = {
+        "from": f"{settings.app_name} contact form <{settings.email_from_address}>",
+        "to": [settings.support_email],
+        "reply_to": [sender_email],
+        "subject": f"[{settings.app_name} support] {topic}",
+        "text": "\n".join(lines),
+    }
+    result = await _send(params)
+    logger.info("Support message delivered, Resend ID: %s", result.get("id", "<unknown>"))

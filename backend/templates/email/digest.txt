@@ -44,4 +44,4 @@ You get these emails because you track citations on {{ app_name }}.
 Choose what we send: {{ app_url }}/settings
 {% if unsubscribe_url %}Unsubscribe from all emails: {{ unsubscribe_url }}
 {% endif %}
-Questions? Write to {{ support_email }}.
+Questions? Contact us: {{ app_url }}/contact

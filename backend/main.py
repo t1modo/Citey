@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import auth, chat, health, jobs, notifications, profile, works
+from app.routers import auth, chat, health, jobs, notifications, profile, support, works
 
 logging.basicConfig(
     level=logging.INFO,
@@ -118,6 +118,7 @@ def create_app() -> FastAPI:
     application.include_router(notifications.router)
     application.include_router(jobs.router)
     application.include_router(chat.router)
+    application.include_router(support.router)
 
     # ---- Root (Render health check hits "/" by default) ----------------------
     @application.get("/", include_in_schema=False)

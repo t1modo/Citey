@@ -378,3 +378,37 @@ export async function unsubscribe(uid: string, token: string): Promise<{ message
 // Re-export type for consumers
 export type { AuthorCandidate };
 
+
+export interface SupportMessageInput {
+  name?: string;
+  email: string;
+  subject?: string;
+  message: string;
+  website?: string; // hidden trap field; people leave it empty
+  elapsed_ms: number;
+}
+
+/** Send a contact form message. Works signed in or out; rate limited server side. */
+export async function sendSupportMessage(input: SupportMessageInput): Promise<string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = await auth.currentUser?.getIdToken().catch(() => undefined);
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetchWithRetry(`${BASE_URL}/support`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(input),
+  });
+  let data: Record<string, unknown> = {};
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) {
+    const detail = data?.detail;
+    if (Array.isArray(detail)) {
+      const first = detail[0] as { msg?: string } | undefined;
+      throw new Error(first?.msg?.replace(/^Value error, /, "") ?? "Please check the form and try again.");
+    }
+    throw new Error(typeof detail === "string" ? detail : "We couldn't send your message. Please try again.");
+  }
+  track("support_message_sent");
+  return String(data.message ?? "Thanks. We'll reply to your email.");
+}

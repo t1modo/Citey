@@ -391,13 +391,10 @@ export default function HelpPage() {
               Common questions about accuracy, privacy, and how it all works.
             </p>
             <p className="mb-5 text-sm text-muted">
-              Or email us at{" "}
-              <a
-                href="mailto:support@citey.email"
-                className="text-ink underline hover:text-ink"
-              >
-                support@citey.email
-              </a>
+              Or{" "}
+              <Link href="/contact" className="text-ink underline hover:text-ink">
+                send us a message
+              </Link>
               .
             </p>
             <Link

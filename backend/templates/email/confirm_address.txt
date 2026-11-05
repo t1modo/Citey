@@ -7,4 +7,4 @@ Confirm address: {{ link }}
 
 If it wasn't you, ignore this email and nothing will be sent here.
 
-Questions? Write to {{ support_email }}.
+Questions? Contact us: {{ app_url }}/contact

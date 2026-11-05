@@ -160,8 +160,10 @@ class TestDigestHtml:
     def test_contains_settings_link(self) -> None:
         assert "http://localhost:3000/settings" in self._render()
 
-    def test_contains_support_email(self) -> None:
-        assert "support@citey.app" in self._render()
+    def test_links_to_contact_form_not_a_raw_address(self) -> None:
+        output = self._render()
+        assert "http://localhost:3000/contact" in output
+        assert "mailto:" not in output
 
     def test_multiple_groups_all_present(self) -> None:
         groups = [

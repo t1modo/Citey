@@ -107,8 +107,8 @@ class TestNewPublicationsHtml:
     def test_contains_settings_link(self) -> None:
         assert "http://localhost:3000/settings" in self._render(["A Paper"])
 
-    def test_contains_support_email(self) -> None:
-        assert "support@citey.app" in self._render(["A Paper"])
+    def test_links_to_contact_form(self) -> None:
+        assert "/contact" in self._render(["A Paper"])
 
     # Security
     def test_xss_title_escaped(self) -> None:

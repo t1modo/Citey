@@ -132,6 +132,7 @@ export default function HomePage() {
               {user && <Link href="/settings" className="hover:text-ink">Settings</Link>}
               <Link href="/faq" className="hover:text-ink">FAQ</Link>
               <Link href="/help" className="hover:text-ink">Help</Link>
+              <Link href="/contact" className="hover:text-ink">Contact</Link>
             </nav>
           </div>
           <p className="mt-8 border-t border-rule pt-8 text-sm leading-relaxed text-muted">

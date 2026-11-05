@@ -357,13 +357,10 @@ export default function FaqPage() {
           Check the dashboard or update your preferences in Settings.
         </p>
         <p className="mb-6 text-sm text-muted">
-          For anything else, email us at{" "}
-          <a
-            href="mailto:support@citey.email"
-            className="text-ink underline hover:text-ink"
-          >
-            support@citey.email
-          </a>
+          For anything else,{" "}
+          <Link href="/contact" className="text-ink underline hover:text-ink">
+            send us a message
+          </Link>
           .
         </p>
         <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">

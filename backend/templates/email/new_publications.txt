@@ -18,4 +18,4 @@ You get this because new publication alerts are on for your {{ app_name }} accou
 Turn them off in Settings: {{ app_url }}/settings
 {% if unsubscribe_url %}Unsubscribe from all emails: {{ unsubscribe_url }}
 {% endif %}
-Questions? Write to {{ support_email }}.
+Questions? Contact us: {{ app_url }}/contact
