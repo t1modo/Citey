@@ -285,34 +285,3 @@ async def send_notification_email_confirmation(
         settings, to_email, f"Confirm your alert address for {settings.app_name}", html_body, text_body,
         "Address confirmation",
     )
-
-
-ANNOUNCEMENT_SUBJECT = "Citey has been rebuilt"
-
-
-async def send_announcement_email(
-    to_email: str,
-    recipient_name: str,
-    settings: Settings,
-    uid: str = "",
-) -> None:
-    """Send the one off "Citey has been rebuilt" update to a user."""
-    unsubscribe_url = make_unsubscribe_url(uid, settings) if uid else ""
-    context = {
-        **_base_context(settings),
-        "recipient_name": _greeting_name(recipient_name),
-        "unsubscribe_url": unsubscribe_url,
-    }
-    html_body, text_body = _render("announcement", context)
-    resend.api_key = settings.resend_api_key
-    params: resend.Emails.SendParams = {
-        "from": f"{settings.email_from_name} <{settings.email_from_address}>",
-        "to": [to_email],
-        "subject": ANNOUNCEMENT_SUBJECT,
-        "html": html_body,
-        "text": text_body,
-    }
-    if unsubscribe_url:
-        params["headers"] = {"List-Unsubscribe": f"<{unsubscribe_url}>"}
-    result = await _send(params)
-    logger.info("Announcement email sent to %s, Resend ID: %s", to_email, result.get("id", "<unknown>"))
