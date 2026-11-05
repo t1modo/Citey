@@ -1,18 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence, useInView } from "framer-motion";
-import Logo from "@/components/Logo";
+import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
 
-// The card is authored at this width. On narrower viewports we apply a
-// CSS scale transform so the layout never reflows and cursor hotspots
-// (which are % of the card) stay perfectly aligned at every screen size.
-const DESIGN_WIDTH = 576;
-
-type Phase = 0 | 1 | 2 | 3;
-
-const PHASE_LABELS = ["Dashboard", "Add papers", "Citey scans", "You're cited"];
-const PHASE_MS = [6400, 8500, 4000, 6500];
+/**
+ * "From a DOI to your inbox": the landing page's product demo.
+ *
+ * Three steps of what Citey actually does, each shown with the app's own
+ * styling. It advances on its own while visible, pauses offscreen, and
+ * stops auto-advancing as soon as the visitor picks a step. With reduced
+ * motion it shows each step's finished state and never auto-advances.
+ */
 
 // ─── Demo data pool ──────────────────────────────────────────────────────────
 
@@ -203,521 +201,262 @@ const DEMO_POOL: DemoEntry[] = [
   },
 ];
 
-// ─── Windows arrow cursor ─────────────────────────────────────────────────────
-interface CursorPos { lp: string; tp: string }
 
-function DemoCursor({ pos, clicking }: { pos: CursorPos; clicking: boolean }) {
-  return (
-    <motion.div
-      className="pointer-events-none absolute z-50"
-      animate={{ left: pos.lp, top: pos.tp }}
-      transition={{ type: "spring", stiffness: 90, damping: 22 }}
-      style={{ marginLeft: "-1px", marginTop: "-1px" }}
-    >
-      <motion.svg
-        width="16"
-        height="25"
-        viewBox="0 0 16 25"
-        animate={clicking ? { scale: [1, 0.48, 1.42, 1] } : {}}
-        transition={{ duration: 0.44 }}
-        style={{
-          transformOrigin: "1px 0.5px",
-          filter: "drop-shadow(1px 2px 2px rgba(0,0,0,0.55))",
-        }}
-      >
-        <path
-          d="M 1 0.5 L 1 18.5 L 4.8 15 L 7.4 22 L 10 20.8 L 7.4 13.8 L 13 13.8 Z"
-          fill="white"
-          stroke="#1c1c1c"
-          strokeWidth="1.3"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      </motion.svg>
-      {clicking && (
-        <>
-          <motion.div
-            key="ripple-a"
-            className="absolute rounded-full border-2 border-rule"
-            style={{ width: 14, height: 14, top: -7, left: -6 }}
-            initial={{ scale: 0.25, opacity: 1 }}
-            animate={{ scale: 2.8, opacity: 0 }}
-            transition={{ duration: 0.38, ease: "easeOut" }}
-          />
-          <motion.div
-            key="ripple-b"
-            className="absolute rounded-full border border-rule"
-            style={{ width: 22, height: 22, top: -11, left: -10 }}
-            initial={{ scale: 0.2, opacity: 0.85 }}
-            animate={{ scale: 3.4, opacity: 0 }}
-            transition={{ duration: 0.62, ease: "easeOut" }}
-          />
-        </>
-      )}
-    </motion.div>
-  );
-}
+// Seven indexes, in the order Citey reports them.
+const SOURCES = ["OpenAlex", "Semantic Scholar", "Crossref", "PubMed", "NASA ADS", "INSPIRE-HEP", "DBLP"];
 
-// ─── Phase 0: Tracked papers ───────────────────────────────────────────────────
-function PhaseDashboard({ papers }: { papers: DemoEntry["trackedPapers"] }) {
-  const [btnPressed, setBtnPressed] = useState(false);
+const STEPS = [
+  { title: "Add a paper", body: "Paste a DOI or arXiv link. Citey fills in the rest." },
+  { title: "Citey checks overnight", body: "Every tracked paper is looked up in seven citation indexes." },
+  { title: "The email arrives", body: "New citing papers, with authors, affiliations and a link." },
+] as const;
+
+const STEP_MS = [6200, 5200, 6800];
+
+// ─── Step 1: add a paper ──────────────────────────────────────────────────────
+function AddScene({ entry, animate }: { entry: DemoEntry; animate: boolean }) {
+  const paper = entry.trackedPapers[0];
+  const [typed, setTyped] = useState(animate ? "" : entry.doi);
+  const done = typed.length === entry.doi.length;
 
   useEffect(() => {
-    setBtnPressed(false);
-    const t = setTimeout(() => setBtnPressed(true), 4100);
-    return () => clearTimeout(t);
-  }, []);
+    if (!animate) return;
+    let i = 0;
+    const start = setTimeout(function tick() {
+      i += 1;
+      setTyped(entry.doi.slice(0, i));
+      if (i < entry.doi.length) timer = setTimeout(tick, 55);
+    }, 500);
+    let timer = start;
+    return () => clearTimeout(timer);
+  }, [animate, entry.doi]);
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h2 className="font-serif text-lg font-semibold text-ink">Your papers</h2>
-          <div className="flex rounded-md border border-rule bg-sheet p-0.5">
-            {["Newest", "Most cited"].map((s, i) => (
-              <span
-                key={s}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                  i === 0 ? "bg-ink text-paper" : "text-muted"
-                }`}
-              >
-                {s}
-              </span>
-            ))}
-          </div>
-        </div>
-        <motion.button
-          className="flex shrink-0 items-center gap-1.5 rounded-md bg-ink px-3 py-2 text-xs font-bold text-paper"
-          animate={btnPressed ? { scale: [1, 0.84, 1.08, 1] } : {}}
-          transition={{ duration: 0.42, ease: "easeInOut" }}
-        >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
-          Add papers
-        </motion.button>
-      </div>
-
-      <p className="text-xs text-muted">2 papers</p>
-
-      <div className="divide-y divide-rule border-y border-rule">
-        {papers.map((p, i) => (
-          <motion.article
-            key={p.title}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.13 }}
-            className="py-4"
-          >
-            <h3 className="mb-1 line-clamp-2 font-serif text-[15px] font-semibold leading-snug text-ink">{p.title}</h3>
-            <p className="text-xs text-muted">
-              {p.authors}. <i>{p.year}</i>.
-            </p>
-            <div className="mt-2 flex items-center gap-3 text-xs">
-              <span className="text-ink">Cited by {p.citedBy}</span>
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 + i * 0.1 }}
-                className="highlight font-bold text-ink"
-              >
-                {p.newCitations} new this month
-              </motion.span>
-              <span className="ml-auto text-muted">Checked Apr 15</span>
-            </div>
-          </motion.article>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Phase 1: Import modal ────────────────────────────────────────────────────
-function PhaseAddPaper({ doi }: { doi: string }) {
-  const [focused, setFocused] = useState(false);
-  const [typed, setTyped] = useState("");
-  const [detected, setDetected] = useState(false);
-  const [btnClicked, setBtnClicked] = useState(false);
-
-  useEffect(() => {
-    let idx = 0;
-    setFocused(false);
-    setTyped("");
-    setDetected(false);
-    setBtnClicked(false);
-
-    const focusTimer = setTimeout(() => setFocused(true), 2200);
-    const clickTimer = setTimeout(() => setBtnClicked(true), 7360);
-
-    const start = setTimeout(() => {
-      const iv = setInterval(() => {
-        idx++;
-        setTyped(doi.slice(0, idx));
-        if (idx >= doi.length) {
-          clearInterval(iv);
-          setTimeout(() => setDetected(true), 300);
-        }
-      }, 48);
-      return () => clearInterval(iv);
-    }, 3780);
-
-    return () => {
-      clearTimeout(focusTimer);
-      clearTimeout(clickTimer);
-      clearTimeout(start);
-    };
-  }, [doi]);
-
-  const chips = [
-    { label: "DOI",             cls: "border-sky-300 bg-sky-100 text-sky-800" },
-    { label: "arXiv URL",       cls: "border-ok/40 bg-ok/10 text-ok" },
-    { label: "INSPIRE profile", cls: "border-purple-300 bg-purple-100 text-purple-800" },
-    { label: "DBLP profile",    cls: "border-orange-300 bg-orange-100 text-orange-800" },
-    { label: "author name",     cls: "border-rule bg-ink/5 text-muted" },
-  ];
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-ink">Add papers</h2>
-        <button className="rounded-md p-1.5 text-muted hover:bg-ink/5 hover:text-ink">
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
+    <div className="flex flex-col gap-5">
       <div>
-        <div className="flex items-center rounded-lg border border-rule bg-sheet px-4 py-2.5">
-          <span className="flex-1 text-left font-mono text-sm">
-            {focused ? (
-              <>
-                {typed && <span className="text-ink">{typed}</span>}
-                {!detected && (
-                  <motion.span
-                    className="inline-block w-px bg-ink"
-                    style={{ height: "1em", verticalAlign: "text-bottom", marginLeft: "1px" }}
-                    animate={{ opacity: [1, 1, 0, 0] }}
-                    transition={{ duration: 1, times: [0, 0.47, 0.5, 0.97], repeat: Infinity, ease: "linear" }}
-                  />
-                )}
-              </>
-            ) : (
-              <span className="text-muted">DOI, arXiv URL, author URL, or name…</span>
-            )}
+        <p className="mb-1.5 text-sm font-bold text-ink">DOI or arXiv link</p>
+        <div className="flex gap-2">
+          <div
+            className="flex min-w-0 flex-1 items-center rounded-md border border-control bg-paper px-3 py-2 font-mono text-sm text-ink"
+          >
+            <span className="truncate">{typed}</span>
+            {!done && <span className="ml-px inline-block h-4 w-px animate-pulse bg-ink" aria-hidden="true" />}
+          </div>
+          <span
+            className={`shrink-0 rounded-md px-4 py-2 text-sm font-bold transition-colors ${
+              done ? "bg-ink text-paper" : "bg-ink/10 text-muted"
+            }`}
+          >
+            Add paper
           </span>
         </div>
+      </div>
 
-        {detected && (
-          <motion.p
-            initial={{ opacity: 0, y: -3 }}
+      <AnimatePresence>
+        {done && (
+          <motion.article
+            initial={animate ? { opacity: 0, y: 8 } : false}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-1.5 text-xs text-ok"
+            transition={{ delay: animate ? 0.5 : 0, duration: 0.4 }}
+            className="border-y border-rule py-4"
           >
-            Detected: DOI
-          </motion.p>
+            <h4 className="mb-1 font-serif text-[17px] font-semibold leading-snug text-ink">{paper.title}</h4>
+            <p className="text-sm text-muted">
+              {paper.authors}. <i>{paper.year}</i>.
+            </p>
+            <p className="mt-2 text-sm text-ink">Added. Citey will check it tonight.</p>
+          </motion.article>
         )}
-
-        {!typed && (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] font-medium text-muted">Accepts</span>
-            {chips.map((c) => (
-              <span
-                key={c.label}
-                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${c.cls}`}
-              >
-                {c.label}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex justify-end gap-3">
-        <button className="rounded-lg border border-rule px-4 py-2 text-sm font-medium text-ink hover:bg-ink/5">
-          Cancel
-        </button>
-        <motion.button
-          className="rounded-lg bg-ink px-5 py-2 text-sm font-semibold text-paper shadow-lg"
-          animate={btnClicked ? { scale: [1, 0.84, 1.06, 1], opacity: [1, 0.65, 1, 1] } : {}}
-          transition={{ duration: 0.38, ease: "easeInOut" }}
-        >
-          {btnClicked ? "Looking up…" : "Look up"}
-        </motion.button>
-      </div>
+      </AnimatePresence>
     </div>
   );
 }
 
-// ─── Phase 2: Scanning ────────────────────────────────────────────────────────
-function PhaseScanning() {
-  const [progress, setProgress] = useState(0);
-  const rafRef = useRef<number | null>(null);
+// ─── Step 2: the overnight check ──────────────────────────────────────────────
+function CheckScene({ entry, animate, hitIndex }: { entry: DemoEntry; animate: boolean; hitIndex: number }) {
+  const [shown, setShown] = useState(animate ? 0 : SOURCES.length);
 
   useEffect(() => {
-    setProgress(0);
-    const start = performance.now();
-    const tick = (now: number) => {
-      const t = Math.min((now - start) / 2600, 1);
-      setProgress(Math.round(t * 100));
-      if (t < 1) rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); };
-  }, []);
+    if (!animate) return;
+    const t = setInterval(() => setShown((n) => (n >= SOURCES.length ? n : n + 1)), 480);
+    return () => clearInterval(t);
+  }, [animate]);
 
+  const finished = shown >= SOURCES.length;
   return (
-    <div className="flex flex-col items-center gap-6">
-      <p className="text-center text-xs font-semibold text-muted">
-        Daily citation scan
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted">
+        Checking <i className="font-serif text-ink">{entry.trackedPapers[0].title}</i> at midnight
       </p>
-
-      <div className="relative flex h-28 w-28 items-center justify-center">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ink/10" />
-        <span className="absolute inline-flex h-20 w-20 animate-ping rounded-full bg-ink/5 [animation-delay:0.3s]" />
-        <div className="relative flex h-16 w-16 items-center justify-center rounded-full border border-rule bg-sheet text-ink">
-          <Logo className="h-8 w-8" />
-        </div>
-      </div>
-
-      <div className="w-full">
-        <div className="mb-2 flex justify-between gap-2 text-xs text-muted">
-          <span className="truncate">Checking all seven indexes</span>
-          <span className="shrink-0 font-medium text-ink">{progress}%</span>
-        </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-ink/10">
-          <motion.div
-            className="h-full rounded-full bg-ink"
-            animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.1 }}
-          />
-        </div>
-      </div>
-
-      <p className="text-center text-sm text-muted">OpenAlex, Crossref, Semantic Scholar, PubMed, NASA ADS, INSPIRE and DBLP</p>
+      <ul className="divide-y divide-rule border-y border-rule">
+        {SOURCES.map((s, i) => {
+          const visible = i < shown;
+          const hit = i === hitIndex;
+          return (
+            <li key={s} className="flex items-center justify-between py-2 text-sm">
+              <span className={visible ? "text-ink" : "text-muted"}>{s}</span>
+              {visible ? (
+                hit ? (
+                  <span className="highlight font-bold text-ink">1 new citation</span>
+                ) : (
+                  <span className="text-muted">Nothing new</span>
+                )
+              ) : (
+                <span className="text-muted/60" aria-hidden="true">…</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className={`text-sm transition-opacity duration-500 ${finished ? "opacity-100" : "opacity-0"}`}>
+        <span className="text-ink">Found 1 new citation.</span>{" "}
+        <span className="text-muted">Duplicates across indexes are merged, so you hear about it once.</span>
+      </p>
     </div>
   );
 }
 
-// ─── Phase 3: Citations panel ─────────────────────────────────────────────────
-function PhaseCited({ citation }: { citation: DemoEntry["citation"] }) {
+// ─── Step 3: the email ────────────────────────────────────────────────────────
+function EmailScene({ entry }: { entry: DemoEntry }) {
+  const c = entry.citation;
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="font-serif text-lg font-semibold text-ink">Recent citations</h2>
-          <p className="mt-0.5 text-xs text-muted">Papers that cited you in the last 30 days</p>
+    <div className="flex flex-col gap-4">
+      <div className="border-b border-rule pb-3 text-sm">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="font-bold text-ink">Citey</p>
+          <p className="shrink-0 text-muted">7:02 am</p>
         </div>
-        <button className="text-xs font-medium text-muted hover:text-ink">Mark all as read</button>
+        <p className="text-ink">New citation of <i className="font-serif">{c.yourPaper}</i></p>
+        <p className="text-muted">to you@university.edu</p>
       </div>
-
-      <motion.article
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-        className="border-y border-rule py-4"
-      >
-        <div className="mb-1 flex items-baseline justify-between gap-3">
-          <h3 className="font-serif text-[15px] font-semibold leading-snug text-ink">
-            <span className="highlight mr-1.5 font-sans text-[11px] font-bold">New</span>
-            <span className="underline decoration-rule underline-offset-4">{citation.citingTitle}</span>
-          </h3>
-          <span className="shrink-0 text-xs text-muted">{citation.citingDate}</span>
-        </div>
-        <p className="text-xs leading-relaxed text-muted">{citation.citingAuthors}</p>
-        <p className="text-xs leading-relaxed text-muted">{citation.affiliations.join("; ")}</p>
-        <p className="mt-2 text-xs text-ink">
-          Cites <i className="font-serif">{citation.yourPaper}</i>
+      <div className="flex flex-col gap-1.5">
+        <p className="text-sm">
+          <span className="highlight font-bold text-ink">New citation</span>
+          <span className="ml-2 text-muted">{c.citingDate}</span>
         </p>
-      </motion.article>
+        <h4 className="font-serif text-[17px] font-semibold leading-snug text-ink">{c.citingTitle}</h4>
+        <p className="text-sm text-muted">{c.citingAuthors}</p>
+        <p className="text-sm text-muted">{c.affiliations.join("; ")}</p>
+        <p className="mt-1 text-sm text-ink">
+          Cites <i className="font-serif">{c.yourPaper}</i>
+        </p>
+        <p className="mt-2 text-sm text-ink underline decoration-rule underline-offset-4">Read the citing paper</p>
+      </div>
     </div>
   );
 }
-
-// ─── Cursor waypoints per phase ───────────────────────────────────────────────
-type Waypoint = { lp: string; tp: string; afterMs: number; click?: true };
-
-const CURSOR_SEQUENCES: Waypoint[][] = [
-  // Phase 0: Dashboard — notice "+new" badges, hover Add papers, then click
-  [
-    { lp: "72%", tp: "38%", afterMs: 1000 },
-    { lp: "66%", tp: "66%", afterMs: 1100 },
-    { lp: "86%", tp: "17%", afterMs: 1620 },
-    { lp: "86%", tp: "17%", afterMs: 600, click: true },
-  ],
-  // Phase 1: Add papers modal — hover over input, click, 2 s delay, type DOI, click Look up
-  [
-    { lp: "50%", tp: "29%", afterMs: 2100 },
-    { lp: "50%", tp: "29%", afterMs: 700,  click: true },
-    { lp: "50%", tp: "29%", afterMs: 3600 },
-    { lp: "85%", tp: "47%", afterMs: 900  },
-    { lp: "85%", tp: "47%", afterMs: 300,  click: true },
-  ],
-  // Phase 2: Scanning — watch search icon, then follow progress bar
-  [
-    { lp: "50%", tp: "34%", afterMs: 1000 },
-    { lp: "14%", tp: "62%", afterMs: 1100 },
-    { lp: "88%", tp: "62%", afterMs: 1500 },
-  ],
-  // Phase 3: Citations panel — unread dot → title → divider → affiliation pills
-  [
-    { lp: "10%", tp: "25%", afterMs: 900 },
-    { lp: "45%", tp: "35%", afterMs: 1000 },
-    { lp: "50%", tp: "54%", afterMs: 1000 },
-    { lp: "38%", tp: "72%", afterMs: 1200 },
-  ],
-];
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function HeroDemo() {
-  const [entry] = useState<DemoEntry>(
-    () => DEMO_POOL[Math.floor(Math.random() * DEMO_POOL.length)]
-  );
-  const [phase, setPhase] = useState<Phase>(0);
-  const [cursorPos, setCursorPos] = useState<CursorPos>({ lp: "50%", tp: "50%" });
-  const [clicking, setClicking] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const visible = useInView(rootRef, { margin: "-80px 0px" });
+  const [entryIndex, setEntryIndex] = useState(0);
+  const [step, setStep] = useState(0);
+  const [autoplay, setAutoplay] = useState(true);
+  const [runId, setRunId] = useState(0); // remounts scenes so animations replay
 
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  const [cardH, setCardH] = useState(490);
+  // Pick a sample after mount (avoids a server/client mismatch).
+  useEffect(() => setEntryIndex(Math.floor(Math.random() * DEMO_POOL.length)), []);
 
-  useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-    const update = () => setScale(Math.min(1, wrapper.offsetWidth / DESIGN_WIDTH));
-    const ro = new ResizeObserver(update);
-    ro.observe(wrapper);
-    update();
-    return () => ro.disconnect();
-  }, []);
+  const playing = autoplay && !reduceMotion && visible;
 
   useEffect(() => {
-    const card = cardRef.current;
-    if (card && card.offsetHeight > 0) setCardH(card.offsetHeight);
-  }, [phase, scale]);
-
-  // Stop cycling scenes while the demo is scrolled out of view, so its
-  // animations (and the frame loop driving them) go idle.
-  const visible = useInView(wrapperRef, { margin: "100px 0px" });
-
-  useEffect(() => {
-    if (!visible) return;
-    const t = setTimeout(
-      () => setPhase((p) => (((p + 1) % 4) as Phase)),
-      PHASE_MS[phase],
-    );
+    if (!playing) return;
+    const t = setTimeout(() => {
+      setStep((s) => {
+        const next = (s + 1) % STEPS.length;
+        if (next === 0) setEntryIndex((e) => (e + 1) % DEMO_POOL.length);
+        return next;
+      });
+      setRunId((r) => r + 1);
+    }, STEP_MS[step]);
     return () => clearTimeout(t);
-  }, [phase, visible]);
+  }, [playing, step]);
 
-  useEffect(() => {
-    const waypoints = CURSOR_SEQUENCES[phase];
-    let active = true;
-    const timeouts: ReturnType<typeof setTimeout>[] = [];
-    let elapsed = 0;
+  const entry = DEMO_POOL[entryIndex];
+  const hitIndex = (entryIndex % 3) + 1; // which index finds the citation
+  const animateScenes = !reduceMotion;
 
-    for (const wp of waypoints) {
-      const delay = elapsed;
-      const t = setTimeout(() => {
-        if (!active) return;
-        setCursorPos({ lp: wp.lp, tp: wp.tp });
-        if (wp.click) {
-          const ct = setTimeout(() => {
-            if (!active) return;
-            setClicking(true);
-            const rt = setTimeout(() => setClicking(false), 340);
-            timeouts.push(rt);
-          }, 380);
-          timeouts.push(ct);
-        }
-      }, delay);
-      timeouts.push(t);
-      elapsed += wp.afterMs;
-    }
-
-    return () => {
-      active = false;
-      timeouts.forEach(clearTimeout);
-    };
-  }, [phase]);
-
-  const isScaled = scale < 1;
+  const choose = (i: number) => {
+    setAutoplay(false);
+    setStep(i);
+    setRunId((r) => r + 1);
+  };
 
   return (
-    <div
-      ref={wrapperRef}
-      className="relative z-10 mx-auto w-full max-w-xl text-left lg:max-w-2xl"
-      style={isScaled ? { height: cardH * scale } : undefined}
-    >
-      <div
-        ref={cardRef}
-        className="relative overflow-hidden rounded-2xl border border-rule bg-paper/90 shadow-2xl shadow-ink/10 backdrop-blur-xl"
-        style={isScaled ? {
-          width: DESIGN_WIDTH,
-          position: "absolute",
-          left: "50%",
-          transform: `translateX(-50%) scale(${scale})`,
-          transformOrigin: "top center",
-        } : undefined}
-      >
-        <DemoCursor pos={cursorPos} clicking={clicking} />
-
-        {/* Title bar */}
-        <div className="flex items-center justify-between border-b border-rule px-4 py-3">
-          <div className="flex items-center gap-1.5">
-          </div>
-          <span
-            className="text-xs font-semibold text-muted"
-            style={{ fontFamily: "var(--font-serif)", fontWeight: 400 }}
-          >
-            Citey
-          </span>
-          <div className="w-14" />
-        </div>
-
-        {/* Phase content */}
-        <div className="relative min-h-[360px] px-6 py-5 [@media(max-height:820px)]:min-h-[240px] [@media(max-height:820px)]:px-4 [@media(max-height:820px)]:py-4">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={phase}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            >
-              {phase === 0 && <PhaseDashboard papers={entry.trackedPapers} />}
-              {phase === 1 && <PhaseAddPaper doi={entry.doi} />}
-              {phase === 2 && <PhaseScanning />}
-              {phase === 3 && <PhaseCited citation={entry.citation} />}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* Step indicators */}
-        <div className="border-t border-rule px-5 py-3">
-          <div className="flex items-center justify-center gap-3">
-            {PHASE_LABELS.map((label, i) => (
+    <div ref={rootRef} className="grid gap-10 lg:grid-cols-[5fr_7fr] lg:items-start">
+      <ol className="flex flex-col" aria-label="How Citey works">
+        {STEPS.map((s, i) => {
+          const active = i === step;
+          return (
+            <li key={s.title} className="border-t border-rule last:border-b">
               <button
-                key={i}
-                onClick={() => setPhase(i as Phase)}
-                className="group flex items-center gap-1.5"
+                type="button"
+                onClick={() => choose(i)}
+                aria-current={active ? "step" : undefined}
+                className="group relative flex w-full gap-4 py-5 text-left"
               >
                 <span
-                  className={`h-1.5 w-6 rounded-full transition-all duration-300 ${
-                    phase === i ? "bg-ink" : "bg-ink/10"
-                  }`}
-                />
-                <span
-                  className={`text-[10px] font-medium transition-colors ${
-                    phase === i ? "text-ink" : "text-muted"
-                  }`}
+                  className={`font-serif text-3xl font-light leading-none tabular-nums ${active ? "text-ink" : "text-rule group-hover:text-muted"}`}
+                  aria-hidden="true"
                 >
-                  {label}
+                  {i + 1}
                 </span>
+                <span>
+                  <span className={`block text-lg ${active ? "font-bold text-ink" : "text-muted group-hover:text-ink"}`}>
+                    {s.title}
+                  </span>
+                  <span className={`mt-1 block text-sm leading-relaxed text-muted`}>
+                    {s.body}
+                  </span>
+                </span>
+                {/* progress of the current step while autoplaying */}
+                {active && playing && (
+                  <motion.span
+                    key={`${runId}-bar`}
+                    className="absolute -top-px left-0 h-0.5 bg-ink"
+                    initial={{ width: "0%" }}
+                    animate={{ width: "100%" }}
+                    transition={{ duration: STEP_MS[i] / 1000, ease: "linear" }}
+                    aria-hidden="true"
+                  />
+                )}
               </button>
-            ))}
-          </div>
-        </div>
+            </li>
+          );
+        })}
+        {!autoplay && !reduceMotion && (
+          <li className="pt-3">
+            <button
+              type="button"
+              onClick={() => { setAutoplay(true); setRunId((r) => r + 1); }}
+              className="text-sm text-muted underline decoration-rule underline-offset-4 hover:text-ink hover:decoration-ink"
+            >
+              Play the steps automatically
+            </button>
+          </li>
+        )}
+      </ol>
+
+      <div
+        className="relative min-h-[27rem] rounded-lg border border-rule bg-sheet p-6 shadow-[0_1px_0_rgba(20,33,61,0.04),0_12px_32px_-12px_rgba(20,33,61,0.18)] sm:p-8"
+        role="region"
+        aria-label={`Step ${step + 1}: ${STEPS[step].title}`}
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={`${step}-${runId}-${entryIndex}`}
+            initial={animateScenes ? { opacity: 0, y: 6 } : false}
+            animate={{ opacity: 1, y: 0 }}
+            exit={animateScenes ? { opacity: 0, y: -6 } : { opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            {step === 0 && <AddScene entry={entry} animate={animateScenes} />}
+            {step === 1 && <CheckScene entry={entry} animate={animateScenes} hitIndex={hitIndex} />}
+            {step === 2 && <EmailScene entry={entry} />}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

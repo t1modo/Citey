@@ -40,12 +40,6 @@ const questions = [
   },
 ];
 
-const steps = [
-  { title: "Create an account", body: "Email and password. No card." },
-  { title: "Add your papers", body: "Paste a DOI or arXiv link, or link an author profile to import everything." },
-  { title: "Citey checks every night", body: "Each tracked paper is looked up in all seven indexes." },
-  { title: "You get an email", body: "When something new cites you, it's in your inbox the next morning." },
-];
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -87,16 +81,10 @@ export default function HomePage() {
       </section>
 
       {/* The product, shown rather than described. */}
-      <section className="mx-auto grid w-full max-w-6xl gap-12 px-4 py-24 sm:px-6 lg:grid-cols-[5fr_7fr] lg:items-center lg:px-8">
-        <div className="max-w-md">
-          <h2 className="mb-4 font-serif text-4xl font-semibold leading-tight text-ink">
-            Every paper you&apos;ve written, and who has cited it since.
-          </h2>
-          <p className="text-lg leading-relaxed text-muted">
-            New citations are marked until you&apos;ve seen them. Sort by year or by how often
-            each paper is cited, and remove anything you don&apos;t want tracked.
-          </p>
-        </div>
+      <section id="how" className="mx-auto w-full max-w-6xl scroll-mt-16 px-4 py-24 sm:px-6 lg:px-8">
+        <h2 className="mb-12 max-w-xl font-serif text-4xl font-semibold leading-tight text-ink">
+          From a DOI to your inbox
+        </h2>
         <HeroDemo />
       </section>
 
@@ -114,26 +102,6 @@ export default function HomePage() {
               </div>
             ))}
           </dl>
-        </div>
-      </section>
-
-      {/* How it works: a real sequence, so numbered. */}
-      <section id="how" className="scroll-mt-16 border-t border-rule">
-        <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:px-8">
-          <h2 className="mb-14 max-w-xl font-serif text-4xl font-semibold leading-tight text-ink">
-            Set it up once
-          </h2>
-          <ol className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
-            {steps.map(({ title, body }, i) => (
-              <li key={title} className="relative">
-                <span className="mb-4 block font-serif text-5xl font-light leading-none text-rule" aria-hidden="true">
-                  {i + 1}
-                </span>
-                <h3 className="mb-2 text-lg font-bold text-ink">{title}</h3>
-                <p className="leading-relaxed text-muted">{body}</p>
-              </li>
-            ))}
-          </ol>
         </div>
       </section>
 
