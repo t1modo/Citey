@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ total_citations }} New Citation{% if total_citations != 1 %}s{% endif %} — {{ app_name }}{% endblock %}
+{% block title %}{{ total_citations }} New Citation{% if total_citations != 1 %}s{% endif %} | {{ app_name }}{% endblock %}
 
 {% block preheader %}
 {{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} across {{ total_papers }} of your paper{% if total_papers != 1 %}s{% endif %}.

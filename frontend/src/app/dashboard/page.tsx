@@ -167,7 +167,7 @@ function VerificationBanner({ onToast }: { onToast: (msg: string, type: ToastTyp
       setSent(true);
       onToast("Verification email resent. Check your inbox.", "info");
     } catch {
-      onToast("Could not resend — please try again later.", "error");
+      onToast("Couldn't resend. Try again later.", "error");
     } finally {
       setLoading(false);
     }

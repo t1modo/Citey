@@ -195,7 +195,7 @@ async def run_job(
     if n > 0:
         summary["message"] = f"Found {n} new citation(s) across {w} paper(s)."
     else:
-        summary["message"] = f"Checked {w} paper(s) — all citations already up to date."
+        summary["message"] = f"Checked {w} paper(s). All citations are already up to date."
     return summary
 
 

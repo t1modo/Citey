@@ -21,20 +21,20 @@ const faqItems: FaqItem[] = [
         </p>
         <ul className="mt-2 list-disc space-y-2 pl-5">
           <li>
-            <strong className="text-ink">OpenAlex</strong> — a free, open index of
+            <strong className="text-ink">OpenAlex</strong>: a free, open index of
             over 250 million scholarly works updated daily. The main source for citation
             tracking across all disciplines. Learn more at{" "}
             <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">openalex.org</a>.
           </li>
           <li>
-            <strong className="text-ink">Semantic Scholar</strong> — an AI-powered
+            <strong className="text-ink">Semantic Scholar</strong>: an AI powered
             index of over 200 million papers from the Allen Institute for AI. Provides
             strong additional coverage for computer science, AI/ML, and biomedical
             literature. Learn more at{" "}
             <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">semanticscholar.org</a>.
           </li>
           <li>
-            <strong className="text-ink">Crossref</strong> — the canonical DOI
+            <strong className="text-ink">Crossref</strong>: the canonical DOI
             registration agency, aggregating reference lists from thousands of publishers.
             Used both for DOI resolution and as a citation source. Learn more at{" "}
             <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">crossref.org</a>.
@@ -49,22 +49,22 @@ const faqItems: FaqItem[] = [
         </p>
         <ul className="mt-2 list-disc space-y-2 pl-5">
           <li>
-            <strong className="text-ink">PubMed</strong> — 35 million biomedical and
-            life-science records from the NCBI. Learn more at{" "}
+            <strong className="text-ink">PubMed</strong>: 35 million biomedical and
+            life science records from the NCBI. Learn more at{" "}
             <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">pubmed.ncbi.nlm.nih.gov</a>.
           </li>
           <li>
-            <strong className="text-ink">NASA ADS</strong> — astronomy, astrophysics,
-            and space-science literature. Learn more at{" "}
+            <strong className="text-ink">NASA ADS</strong>: astronomy, astrophysics,
+            and space science literature. Learn more at{" "}
             <a href="https://ui.adsabs.harvard.edu" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">ui.adsabs.harvard.edu</a>.
           </li>
           <li>
-            <strong className="text-ink">INSPIRE-HEP</strong> — the canonical database
+            <strong className="text-ink">INSPIRE-HEP</strong>: the canonical database
             for high-energy physics, including JACoW conference proceedings. Learn more at{" "}
             <a href="https://inspirehep.net" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">inspirehep.net</a>.
           </li>
           <li>
-            <strong className="text-ink">DBLP</strong> — near-complete ACM and IEEE
+            <strong className="text-ink">DBLP</strong>: nearly complete ACM and IEEE
             conference and journal coverage for computer science. Learn more at{" "}
             <a href="https://dblp.org" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">dblp.org</a>.
           </li>
@@ -93,8 +93,8 @@ const faqItems: FaqItem[] = [
           Crossref, or Semantic Scholar. New citations appear automatically on your{" "}
           <Link href="/dashboard" className="text-muted underline hover:text-ink">
             Dashboard
-          </Link>{" "}
-          — no manual action needed.
+          </Link>
+          , with nothing for you to do.
         </p>
       </>
     ),
@@ -245,7 +245,7 @@ const faqItems: FaqItem[] = [
           All valid DOIs begin with{" "}
           <code className="rounded bg-sheet px-1 py-0.5 font-mono text-xs text-muted">10.</code>{" "}
           followed by a registrant code and suffix. Citey resolves DOIs through a
-          fallback chain —{" "}
+          fallback chain of{" "}
           <a
             href="https://www.crossref.org"
             target="_blank"
@@ -271,8 +271,8 @@ const faqItems: FaqItem[] = [
             className="text-muted underline hover:text-ink"
           >
             OpenAlex
-          </a>{" "}
-          — so publisher DOIs, arXiv preprints, and institutional repository records
+          </a>
+          , so publisher DOIs, arXiv preprints, and institutional repository records
           are all supported. If your DOI is not recognised, double-check it at{" "}
           <a
             href="https://search.crossref.org"

@@ -127,7 +127,7 @@ export default function SignUpPage() {
       if (msg.includes("already verified")) {
         setResendError("Your email is already verified. Try signing in.");
       } else {
-        setResendError("Failed to send — please try again in a moment.");
+        setResendError("Couldn't send it. Try again in a moment.");
       }
     } finally {
       setResendLoading(false);

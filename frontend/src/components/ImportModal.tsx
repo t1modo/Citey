@@ -709,7 +709,7 @@ export default function ImportModal({
                   <p className="mb-2 text-xs font-medium text-muted">
                     Also search additional databases
                     <span className="ml-1.5 font-normal text-muted">
-                      (off by default — enable only if your papers are missing)
+                      (off by default; turn on only if your papers are missing)
                     </span>
                   </p>
                   <div className="flex flex-wrap gap-2">

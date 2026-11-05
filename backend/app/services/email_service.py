@@ -170,7 +170,7 @@ async def send_digest_email(
     text_body = text_template.render(**context)
 
     subject = (
-        f"[{settings.app_name}] Your Citation Digest — {date_str} "
+        f"[{settings.app_name}] Your Citation Digest, {date_str} "
         f"({total_citations} new citation{'s' if total_citations != 1 else ''})"
     )
 
@@ -201,7 +201,7 @@ async def send_verification_email(
     resend.api_key = settings.resend_api_key
 
     from_address = f"{settings.email_from_name} <{settings.email_from_address}>"
-    subject = f"Verify your email address — {settings.app_name}"
+    subject = f"Verify your email address for {settings.app_name}"
 
     # Escape everything interpolated into HTML.
     link_html = html.escape(verification_link, quote=True)
@@ -240,7 +240,7 @@ async def send_verification_email(
 </body></html>"""
 
     text_body = (
-        f"Verify your email address — {settings.app_name}\n"
+        f"Verify your email address for {settings.app_name}\n"
         f"{'=' * 60}\n\n"
         f"Thanks for signing up. Please verify your email address by visiting the link below:\n\n"
         f"{verification_link}\n\n"
@@ -343,7 +343,7 @@ async def send_test_email(
     resend.api_key = settings.resend_api_key
 
     from_address = f"{settings.email_from_name} <{settings.email_from_address}>"
-    subject = f"{settings.app_name} — Email Notifications Confirmed"
+    subject = f"{settings.app_name}: Email Notifications Confirmed"
     # recipient_name comes from the user editable display_name; escape it.
     name_html = html.escape(recipient_name)
     app_name_html = html.escape(settings.app_name)
@@ -376,7 +376,7 @@ async def send_test_email(
   </div>
 </body></html>"""
     text_body = (
-        f"{settings.app_name} — Email Notifications Confirmed\n"
+        f"{settings.app_name}: Email Notifications Confirmed\n"
         f"{'=' * 60}\n\n"
         f"Dear {recipient_name},\n\n"
         f"This is a confirmation that your email notification settings are\n"
@@ -384,7 +384,7 @@ async def send_test_email(
         f"are detected for your tracked publications.\n\n"
         f"Dashboard: {settings.app_url}/dashboard\n"
         f"Settings:  {settings.app_url}/settings\n\n"
-        f"— {settings.app_name}\n"
+        f"{settings.app_name}\n"
         f"{settings.support_email}"
     )
 

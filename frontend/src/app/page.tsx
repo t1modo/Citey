@@ -32,11 +32,11 @@ const questions = [
   },
   {
     q: "What about my preprint and the published version?",
-    a: "They're recognised as the same work, so it's tracked once and you aren't alerted twice.",
+    a: "They're recognised as one paper, so it's tracked once and you only hear about it once.",
   },
   {
     q: "Can I get the list out?",
-    a: "Yes. Export every citing paper as BibTeX for a grant report, a tenure file or your CV.",
+    a: "Yes. Export every citing paper as BibTeX for your CV, a tenure file or a grant report.",
   },
 ];
 
@@ -92,7 +92,7 @@ export default function HomePage() {
       <section id="features" className="border-t border-rule bg-sheet">
         <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:px-8">
           <h2 className="mb-14 max-w-xl font-serif text-4xl font-semibold leading-tight text-ink">
-            What researchers ask before signing up
+            Questions researchers ask
           </h2>
           <dl className="grid gap-x-16 gap-y-12 md:grid-cols-2">
             {questions.map(({ q, a }) => (
@@ -107,13 +107,13 @@ export default function HomePage() {
 
       {/* Closing */}
       <section className="border-t border-rule bg-ink text-paper">
-        <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-20 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
-          <h2 className="max-w-xl font-serif text-4xl font-semibold leading-tight">
+        <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-20 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <h2 className="font-serif text-3xl font-semibold leading-tight sm:text-4xl lg:whitespace-nowrap">
             Your next citation is being written now.
           </h2>
           <Link
             href={ctaHref}
-            className="shrink-0 self-start rounded-md bg-paper px-6 py-3 text-base font-bold text-ink transition-colors hover:bg-sheet focus-visible:outline-paper md:self-auto"
+            className="shrink-0 self-start rounded-md bg-paper px-6 py-3 text-base font-bold text-ink transition-colors hover:bg-sheet focus-visible:outline-paper lg:self-auto"
           >
             {ctaLabel}
           </Link>

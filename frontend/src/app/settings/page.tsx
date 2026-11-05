@@ -709,7 +709,7 @@ export default function SettingsPage() {
                       <li>All {works.length} tracked paper{works.length !== 1 ? "s" : ""} and their citation history</li>
                       <li>All notifications and alerts</li>
                       <li>Your profile, settings, and linked author</li>
-                      <li>Your login — you will not be able to sign in again</li>
+                      <li>Your login. You will not be able to sign in again.</li>
                     </ul>
                     <p className="mt-2 font-medium text-danger">
                       This action cannot be undone.

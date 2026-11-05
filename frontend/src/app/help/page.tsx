@@ -44,7 +44,7 @@ export default function HelpPage() {
       <div className="mb-14 text-center">
         <h1 className="font-serif text-4xl font-semibold text-ink sm:text-5xl">How Citey works</h1>
         <p className="mt-3 text-base text-muted">
-          Everything you need to track your research impact — in one place.
+          Everything you need to track your research impact, in one place.
         </p>
         {/* Jump links */}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
@@ -76,9 +76,9 @@ export default function HelpPage() {
                 <h2 className="font-serif mb-1 text-lg font-semibold text-ink">
                   Automated citation monitoring
                 </h2>
-                <p className="text-sm leading-relaxed text-muted">
+                <p className="text-sm leading-relaxed text-muted text-balance">
                   Citey monitors your research papers across multiple academic databases and emails
-                  you the moment a new paper cites your work — so you never miss an impact.
+                  you the moment a new paper cites your work, so you never miss a citation.
                 </p>
               </div>
             </div>
@@ -112,7 +112,7 @@ export default function HelpPage() {
               body: (
                 <>
                   Click <Pill>Add papers</Pill> on the Dashboard. Paste a DOI, arXiv URL,
-                  author profile URL, or your name — Citey resolves everything automatically.
+                  author profile URL, or your name. Citey works out the rest.
                 </>
               ),
             },
@@ -132,7 +132,7 @@ export default function HelpPage() {
                   <div className="mb-1 flex items-center gap-2">
                     <h3 className="font-serif text-sm font-semibold text-ink">{title}</h3>
                   </div>
-                  <p className="text-sm leading-relaxed text-muted">{body}</p>
+                  <p className="text-sm leading-relaxed text-muted text-balance">{body}</p>
                 </div>
               </div>
             </div>
@@ -173,7 +173,7 @@ export default function HelpPage() {
             {
               title: "Author name",
               example: "Jane Smith",
-              body: "Searches OpenAlex and Semantic Scholar in parallel, showing matching profiles with affiliation and h-index. One click to import all.",
+              body: "Searches OpenAlex and Semantic Scholar in parallel, showing matching profiles with affiliation and h-index. Import everything in one click.",
               colClass: "sm:col-span-2",
             },
             {
@@ -185,7 +185,7 @@ export default function HelpPage() {
             {
               title: "DBLP profile URL",
               example: "dblp.org/pid/12/3456",
-              body: "Imports all papers from that DBLP author entry — near-complete ACM and IEEE conference coverage.",
+              body: "Imports all papers from that DBLP author entry, with nearly complete ACM and IEEE conference coverage.",
               colClass: "sm:col-span-3",
             },
           ].map(({ title, example, body, colClass }, i) => (
@@ -195,7 +195,7 @@ export default function HelpPage() {
                   <h3 className="font-serif text-sm font-semibold text-ink">{title}</h3>
                 </div>
                 <Pill>{example}</Pill>
-                <p className="text-xs leading-relaxed text-muted">{body}</p>
+                <p className="text-xs leading-relaxed text-muted text-balance">{body}</p>
               </div>
             </div>
           ))}
@@ -239,7 +239,7 @@ export default function HelpPage() {
                 <div className="flex flex-wrap gap-1">
                   {tags.map((t) => <Badge key={t}>{t}</Badge>)}
                 </div>
-                <p className="text-xs leading-relaxed text-muted">{body}</p>
+                <p className="text-xs leading-relaxed text-muted text-balance">{body}</p>
               </div>
             </div>
           ))}
@@ -249,7 +249,7 @@ export default function HelpPage() {
         <div>
           <p className="mb-2 mt-4 text-xs font-medium text-muted">
             Cross-source boosts{" "}
-            <span className="normal-case tracking-normal text-muted">— opt-in per import</span>
+            <span className="normal-case tracking-normal text-muted">(optional, chosen per import)</span>
           </p>
         </div>
         <div className="flex flex-wrap justify-center gap-3">
@@ -257,12 +257,12 @@ export default function HelpPage() {
             {
               name: "PubMed",
               tags: ["Biomedical"],
-              body: "35M NCBI records. Fills in clinical and life-science papers.",
+              body: "35M NCBI records. Fills in clinical and life science papers.",
             },
             {
               name: "NASA ADS",
               tags: ["Astrophysics"],
-              body: "Covers astronomy, astrophysics, and space-science literature.",
+              body: "Covers astronomy, astrophysics, and space science literature.",
             },
             {
               name: "INSPIRE-HEP",
@@ -272,7 +272,7 @@ export default function HelpPage() {
             {
               name: "DBLP",
               tags: ["Computer science"],
-              body: "Near-complete ACM and IEEE conference and journal coverage.",
+              body: "Nearly complete ACM and IEEE conference and journal coverage.",
             },
             {
               name: "Crossref",
@@ -288,7 +288,7 @@ export default function HelpPage() {
                 <div className="flex flex-wrap gap-1">
                   {tags.map((t) => <Badge key={t} dim>{t}</Badge>)}
                 </div>
-                <p className="text-xs leading-relaxed text-muted">{body}</p>
+                <p className="text-xs leading-relaxed text-muted text-balance">{body}</p>
               </div>
             </div>
           ))}
@@ -324,7 +324,7 @@ export default function HelpPage() {
           {[
             {
               title: "Email alerts",
-              body: "Rich emails with title, authors, affiliations, and a direct link — toggle in Settings.",
+              body: "Emails with the title, authors, affiliations and a direct link. Turn them on or off in Settings.",
             },
             {
               title: "New publication alerts",
@@ -332,13 +332,13 @@ export default function HelpPage() {
             },
             {
               title: "Custom email address",
-              body: "Send alerts to any address. Defaults to your account email — override in Settings.",
+              body: "Send alerts to any address. Uses your account email unless you change it in Settings.",
             },
           ].map(({ title, body }) => (
             <div key={title}>
               <div className="surface flex h-full flex-col gap-2 p-5">
                 <p className="text-sm font-semibold text-ink">{title}</p>
-                <p className="text-xs leading-relaxed text-muted">{body}</p>
+                <p className="text-xs leading-relaxed text-muted text-balance">{body}</p>
               </div>
             </div>
           ))}
@@ -359,7 +359,7 @@ export default function HelpPage() {
             },
             {
               title: "Google Scholar URL",
-              body: "Store a link to your Scholar profile for reference — never scraped or used for data.",
+              body: "Store a link to your Scholar profile for reference. It is never scraped or used for data.",
             },
             {
               title: "Tracked papers",
@@ -374,7 +374,7 @@ export default function HelpPage() {
               <div className="surface flex gap-4 p-5">
                 <div>
                   <p className="text-sm font-semibold text-ink">{title}</p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-muted">{body}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted text-balance">{body}</p>
                 </div>
               </div>
             </div>

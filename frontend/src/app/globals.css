@@ -23,6 +23,15 @@
     color: #14213d;
   }
 
+  /* Even out headings and avoid one-word last lines in running text. */
+  h1, h2, h3, h4, dt, dd {
+    text-wrap: balance;
+  }
+
+  p, li, figcaption {
+    text-wrap: pretty;
+  }
+
   :focus-visible {
     outline: 2px solid #14213d;
     outline-offset: 2px;

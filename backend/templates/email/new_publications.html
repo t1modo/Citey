@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ count }} new publication{% if count != 1 %}s{% endif %} added — {{ app_name }}{% endblock %}
+{% block title %}{{ count }} new publication{% if count != 1 %}s{% endif %} added | {{ app_name }}{% endblock %}
 
 {% block preheader %}
 {{ count }} new publication{% if count != 1 %}s{% endif %} from your author profile {% if count == 1 %}has{% else %}have{% endif %} been added to your tracking list.
