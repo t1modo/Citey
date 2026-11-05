@@ -18,7 +18,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variab
 
 export const metadata: Metadata = {
   title: {
-    default: "Citey: citation alerts for researchers",
+    default: "Citey",
     template: "%s · Citey",
   },
   description:
