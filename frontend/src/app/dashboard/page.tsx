@@ -480,9 +480,9 @@ export default function DashboardPage() {
     await loadNotifications(newPage);
   };
 
-  // Best citation count per work: max of S2 and OpenAlex, fallback to local count.
+  // Lifetime citation count per work: the higher of S2 and OpenAlex.
   const bestCount = (w: TrackedWork) =>
-    Math.max(w.s2_citation_count ?? 0, w.openalex_citation_count ?? 0) || w.citation_count;
+    Math.max(w.s2_citation_count ?? 0, w.openalex_citation_count ?? 0);
 
   // Sort all works client-side, then slice to the current page.
   const sortedWorks = [...works].sort((a, b) => {

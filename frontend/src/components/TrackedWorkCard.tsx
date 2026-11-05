@@ -57,13 +57,16 @@ export default function TrackedWorkCard({ work, onRemove, removing = false }: Tr
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-        {hasCounts ? (
-          <span className="text-ink">Cited by {lifetime.toLocaleString()}</span>
-        ) : work.citation_count > 0 ? (
-          <span className="text-ink">
-            {work.citation_count} {work.citation_count === 1 ? "citation" : "citations"} found
+        {/* Lifetime total from the indexes. The 30 day alert count is a
+            different number and is shown separately as "new this month". */}
+        {hasCounts && (
+          <span
+            className="text-ink"
+            title="Lifetime citations, the higher of OpenAlex and Semantic Scholar. Google Scholar often shows more because it also counts theses, slides and duplicate versions."
+          >
+            Cited by {lifetime.toLocaleString()}
           </span>
-        ) : null}
+        )}
         {work.new_citations_30d > 0 && (
           <span className="highlight font-bold text-ink">
             {work.new_citations_30d} new this month
