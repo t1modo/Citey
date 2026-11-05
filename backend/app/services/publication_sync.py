@@ -165,7 +165,9 @@ async def sync_new_publications_for_all_users(
 
     from app.services.citation_service import _get_auth_uids
     auth_uids = _get_auth_uids()
-    for user_doc in db.collection("users").stream():
+    # Read the whole list first: a Firestore stream left open while each
+    # user is processed (minutes) times out with "Deadline Exceeded".
+    for user_doc in list(db.collection("users").stream()):
         uid: str = user_doc.id
         if uid not in auth_uids:
             logger.warning("Skipping orphaned Firestore user uid=%s in publication sync", uid)

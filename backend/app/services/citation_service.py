@@ -577,12 +577,15 @@ async def run_job_for_all_users(
         settings = get_settings()
 
     users_processed = 0
+    users_failed = 0
     works_processed = 0
     total_new_notifications = 0
     stats: dict[str, int] = {"openalex_failures": 0, "semantic_scholar_failures": 0}
 
     auth_uids = _get_auth_uids()
-    for user_doc in db.collection("users").stream():
+    # Read the whole list first: a Firestore stream left open while each
+    # user is processed (minutes) times out with "Deadline Exceeded".
+    for user_doc in list(db.collection("users").stream()):
         uid: str = user_doc.id
         if uid not in auth_uids:
             logger.warning("Skipping orphaned Firestore user uid=%s in citation job", uid)
@@ -590,20 +593,28 @@ async def run_job_for_all_users(
         user_data: dict = user_doc.to_dict() or {}
         users_processed += 1
 
-        wp, nn = await run_job_for_user(
-            uid=uid,
-            user_data=user_data,
-            db=db,
-            email_service=email_service,
-            dry_run=dry_run,
-            settings=settings,
-            stats=stats,
-        )
+        try:
+            wp, nn = await run_job_for_user(
+                uid=uid,
+                user_data=user_data,
+                db=db,
+                email_service=email_service,
+                dry_run=dry_run,
+                settings=settings,
+                stats=stats,
+            )
+        except Exception as exc:  # noqa: BLE001
+            # One user's failure (a Firestore timeout, a bad document) must
+            # not cost everyone else their check.
+            users_failed += 1
+            logger.error("Citation check failed for uid=%s: %s", uid, exc, exc_info=True)
+            continue
         works_processed += wp
         total_new_notifications += nn
 
     summary = {
         "users_processed": users_processed,
+        "users_failed": users_failed,
         "works_processed": works_processed,
         "new_notifications": total_new_notifications,
         **stats,
@@ -670,7 +681,9 @@ async def cleanup_old_notifications(db: Any, dry_run: bool = False) -> dict:
     total_deleted = 0
 
     auth_uids = _get_auth_uids()
-    for user_doc in db.collection("users").stream():
+    # Read the whole list first: a Firestore stream left open while each
+    # user is processed (minutes) times out with "Deadline Exceeded".
+    for user_doc in list(db.collection("users").stream()):
         uid: str = user_doc.id
         if uid not in auth_uids:
             logger.warning("Skipping orphaned Firestore user uid=%s in notification cleanup", uid)
@@ -730,7 +743,9 @@ async def cleanup_orphan_users(db: Any, dry_run: bool = False) -> dict:
     orphans_found = 0
     orphans_deleted = 0
 
-    for user_doc in db.collection("users").stream():
+    # Read the whole list first: a Firestore stream left open while each
+    # user is processed (minutes) times out with "Deadline Exceeded".
+    for user_doc in list(db.collection("users").stream()):
         uid: str = user_doc.id
         if uid in auth_uids:
             continue
