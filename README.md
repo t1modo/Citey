@@ -42,7 +42,7 @@ Citey also automatically discovers new publications from your linked author prof
 
 **[Resend](https://resend.com)** — Transactional email provider used to deliver citation notification emails and digest summaries. Emails are rendered from Jinja2 HTML templates and sent via the Resend Python SDK.
 
-**[Render](https://render.com)** — Hosts the FastAPI backend as a web service. A separate Render Cron job hits the `/jobs/run` endpoint on a schedule to trigger citation checks.
+**[Render](https://render.com)** — Hosts the FastAPI backend as a web service. A GitHub Actions workflow (`.github/workflows/daily-citation-check.yml`) calls the `/jobs/run` endpoint every night to trigger citation checks.
 
 ---
 
@@ -50,7 +50,7 @@ Citey also automatically discovers new publications from your linked author prof
 
 **[OpenAlex](https://openalex.org)** — Primary citation data source. An open, comprehensive index of scholarly works used to resolve DOIs to paper metadata and fetch lists of citing papers. Also the primary source for author profile lookup and publication auto-sync.
 
-**[Semantic Scholar](https://www.semanticscholar.org)** — Secondary citation source queried in parallel with OpenAlex to broaden coverage. Also powers paper-DOI author lookup and is included in parallel author name searches during bulk import.
+**[Semantic Scholar](https://www.semanticscholar.org)** — Secondary citation source queried in parallel with OpenAlex to broaden coverage. Also powers paper-DOI author lookup and is included in parallel author name searches during bulk import. Works without a key, but the shared anonymous pool is heavily rate limited at night; set `S2_API_KEY` for a dedicated limit.
 
 **[Crossref](https://www.crossref.org)** — Used for DOI resolution and metadata enrichment. Serves as the first step in the DOI resolution fallback chain (Crossref → OpenAlex → DataCite).
 
@@ -73,3 +73,10 @@ Security related environment variables for the API:
 | `TOKEN_SECRET` | Signs unsubscribe and email confirmation links. Set it to a value different from `CRON_SECRET`. Links signed with the old `CRON_SECRET` keep working. |
 | `API_URL` | Public base URL of the API (e.g. `https://api.citey.email`), used for links inside emails. Falls back to the request URL. |
 | `ALLOWED_ORIGINS` | Comma separated frontend origins for CORS. |
+
+Data source keys (all optional; the app runs without them):
+
+| Variable | Purpose |
+| --- | --- |
+| `S2_API_KEY` | Semantic Scholar API key, sent as `x-api-key`. Without it, nightly checks share an anonymous pool that often answers 429. Request one free at https://www.semanticscholar.org/product/api#api-key-form. Requests are paced at about one per second either way. |
+| `ADS_API_KEY` | NASA ADS token for astronomy imports. Free at https://ui.adsabs.harvard.edu/user/settings/token. |

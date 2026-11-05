@@ -347,3 +347,20 @@ async def test_citation_counts_match_by_position_not_returned_doi(respx_mock) ->
 async def test_citation_counts_failed_batch_returns_empty(respx_mock) -> None:
     respx_mock.post(_RE_S2).mock(return_value=Response(429, headers={"Retry-After": "0"}))
     assert await get_citation_counts(["10.1/a"]) == {}
+
+
+def test_api_key_header_only_on_semantic_scholar_requests(monkeypatch) -> None:
+    """S2_API_KEY is sent to Semantic Scholar and never to other hosts (arxiv.org PDFs)."""
+    from app.config import get_settings
+    from app.services import semantic_scholar as s2
+
+    monkeypatch.setenv("S2_API_KEY", "test-key")
+    get_settings.cache_clear()
+    try:
+        headers = s2._build_headers()
+        assert headers["x-api-key"] == "test-key"
+        assert "x-api-key" not in s2._PLAIN_HEADERS
+    finally:
+        monkeypatch.delenv("S2_API_KEY")
+        get_settings.cache_clear()
+    assert "x-api-key" not in s2._build_headers()

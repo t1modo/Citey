@@ -4,7 +4,7 @@
 {% if recipient_name %}Hi {{ recipient_name }},
 
 {% endif %}
-{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} across {{ total_papers }} of your paper{% if total_papers != 1 %}s{% endif %}, found in OpenAlex and Semantic Scholar on {{ digest_date }}.
+{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} {% if total_papers == 1 %}of one of your papers{% else %}across {{ total_papers }} of your papers{% endif %}, found in OpenAlex and Semantic Scholar on {{ digest_date }}.
 {% for group in citation_groups %}
 {% set shown = group.citations[:5] %}
 {% set overflow = (group.citations | length) - 5 %}
