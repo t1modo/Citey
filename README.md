@@ -1,82 +1,43 @@
 # Citey
 
-Get email notifications whenever one of your papers is cited by a new work.
-
-**Want to try it out? Visit [citey.email](https://www.citey.email/)**
-
----
+Get an email when a new paper cites yours. Try it at [citey.email](https://www.citey.email/).
 
 ## What it does
 
-Citey lets researchers track citations to their published papers. Add a paper by DOI, and Citey will notify you by email whenever a new citation is detected. Citation data is drawn from multiple sources — OpenAlex, Semantic Scholar, PubMed, NASA ADS, INSPIRE-HEP, and DBLP — giving broad coverage across disciplines, publishers, and conference proceedings.
+* Add papers by DOI, or import your whole list from an OpenAlex, Semantic Scholar, INSPIRE or DBLP profile.
+* Every night Citey checks OpenAlex and Semantic Scholar for new citing papers and emails you the title, authors and affiliations.
+* New papers on your linked profile are added automatically.
+* Export every citation as BibTeX.
 
-You can bulk-import your entire publication list by author profile. Search by name (queried in parallel across OpenAlex and Semantic Scholar), enter a paper DOI to find co-authors, or paste a profile URL directly from INSPIRE-HEP or DBLP. After import, Citey cross-references all six sources to maximize coverage. Duplicate detection and merge prompts handle cases where the same author appears under multiple profiles.
+## Stack
 
-Citey also automatically discovers new publications from your linked author profile and adds them to your tracking list, so you don't have to add new papers manually.
+* **Frontend:** Next.js, Tailwind, Firebase Auth, PostHog analytics. Hosted on Vercel.
+* **Backend:** FastAPI, Firestore, Resend for email. Hosted on Render.
+* **Nightly job:** GitHub Actions calls `/jobs/run`.
+* **Data:** OpenAlex and Semantic Scholar for citations. Crossref, PubMed, NASA ADS, INSPIRE and DBLP for imports and DOI lookups.
 
----
+## Run locally
 
-## Tech Stack
+```bash
+# API on :8000
+cd backend && pip install -r requirements.txt && uvicorn main:app
 
-### Frontend
+# Site on :3000
+cd frontend && cp .env.example .env.local && npm install && npm run dev
+```
 
-**[Next.js](https://nextjs.org)** — React framework powering the entire frontend. Built with the App Router, TypeScript, and server/client component separation.
+Fill `frontend/.env.local` with your Firebase web config.
 
-**[Tailwind CSS](https://tailwindcss.com)** — Utility-first CSS framework used for all styling and layout throughout the app.
+## Backend settings
 
-**[Framer Motion](https://www.framer.com/motion)** — Handles UI animations, including scroll reveals, transitions, and interactive card effects.
+Required in production:
 
-**[Firebase Authentication](https://firebase.google.com/products/auth)** — Manages user sign-up, sign-in, and email verification. Passwords are hashed and stored entirely within Firebase — the application never handles raw credentials.
+* `CRON_SECRET`: shared secret the nightly job sends.
+* `TOKEN_SECRET`: signs unsubscribe and confirmation links.
+* `API_URL`: public API address used in email links.
+* `ALLOWED_ORIGINS`: comma separated site addresses allowed to call the API.
 
-**[Vercel](https://vercel.com)** — Hosts and deploys the Next.js frontend. Provides automatic deployments on every push and global CDN delivery.
+Optional:
 
----
-
-### Backend
-
-**[FastAPI](https://fastapi.tiangolo.com)** — Python web framework serving the REST API. Handles all business logic: tracking works, querying citation sources, writing notifications, and triggering email delivery.
-
-**[Firebase Firestore](https://firebase.google.com/products/firestore)** — NoSQL cloud database storing user profiles, tracked works, and citation notifications. Each user's data lives under a `users/{uid}` document with subcollections for works and notifications.
-
-**[Firebase Admin SDK](https://firebase.google.com/docs/admin/setup)** — Used server-side to verify user identity tokens on every API request and to manage user account data without exposing credentials to the client.
-
-**[Resend](https://resend.com)** — Transactional email provider used to deliver citation notification emails and digest summaries. Emails are rendered from Jinja2 HTML templates and sent via the Resend Python SDK.
-
-**[Render](https://render.com)** — Hosts the FastAPI backend as a web service. A GitHub Actions workflow (`.github/workflows/daily-citation-check.yml`) calls the `/jobs/run` endpoint every night to trigger citation checks.
-
----
-
-### Data Sources
-
-**[OpenAlex](https://openalex.org)** — Primary citation data source. An open, comprehensive index of scholarly works used to resolve DOIs to paper metadata and fetch lists of citing papers. Also the primary source for author profile lookup and publication auto-sync.
-
-**[Semantic Scholar](https://www.semanticscholar.org)** — Secondary citation source queried in parallel with OpenAlex to broaden coverage. Also powers paper-DOI author lookup and is included in parallel author name searches during bulk import. Works without a key, but the shared anonymous pool is heavily rate limited at night; set `S2_API_KEY` for a dedicated limit.
-
-**[Crossref](https://www.crossref.org)** — Used for DOI resolution and metadata enrichment. Serves as the first step in the DOI resolution fallback chain (Crossref → OpenAlex → DataCite).
-
-**[PubMed](https://pubmed.ncbi.nlm.nih.gov)** — NCBI's biomedical literature database. Queried during bulk import to supplement coverage for life-science and clinical papers.
-
-**[NASA ADS](https://ui.adsabs.harvard.edu)** — Astrophysics Data System for space science and astronomy papers. Requires a free personal API token; gracefully skipped if not configured.
-
-**[INSPIRE-HEP](https://inspirehep.net)** — High-energy physics literature database. Supports direct profile URL import and is queried during bulk import for physics and accelerator-science papers. No API key required.
-
-**[DBLP](https://dblp.org)** — Computer science bibliography covering ACM, IEEE, and major CS conference proceedings. Supports direct profile URL import. No API key required.
----
-
-## Backend configuration
-
-Security related environment variables for the API:
-
-| Variable | Purpose |
-| --- | --- |
-| `CRON_SECRET` | Required. Sent as `X-Cron-Secret` by the scheduler. Job endpoints refuse requests while it is unset or `changeme` (outside localhost). |
-| `TOKEN_SECRET` | Signs unsubscribe and email confirmation links. Set it to a value different from `CRON_SECRET`. Links signed with the old `CRON_SECRET` keep working. |
-| `API_URL` | Public base URL of the API (e.g. `https://api.citey.email`), used for links inside emails. Falls back to the request URL. |
-| `ALLOWED_ORIGINS` | Comma separated frontend origins for CORS. |
-
-Data source keys (all optional; the app runs without them):
-
-| Variable | Purpose |
-| --- | --- |
-| `S2_API_KEY` | Semantic Scholar API key, sent as `x-api-key`. Without it, nightly checks share an anonymous pool that often answers 429. Request one free at https://www.semanticscholar.org/product/api#api-key-form. Requests are paced at about one per second either way. |
-| `ADS_API_KEY` | NASA ADS token for astronomy imports. Free at https://ui.adsabs.harvard.edu/user/settings/token. |
+* `S2_API_KEY`: Semantic Scholar key. Avoids night time rate limits. [Request one free](https://www.semanticscholar.org/product/api).
+* `ADS_API_KEY`: NASA ADS token for astronomy imports. [Get one free](https://ui.adsabs.harvard.edu/user/settings/token).
