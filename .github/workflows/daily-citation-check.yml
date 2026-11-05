@@ -6,6 +6,12 @@ on:
     - cron: "0 7 * * *"   # 07:00 UTC = 00:00 PDT (daylight time, UTC-7)
   workflow_dispatch:       # allow manual runs from the GitHub Actions UI
 
+# Never run two copies at once (e.g. a manual dispatch overlapping the
+# schedule); a second run waits for the first to finish.
+concurrency:
+  group: daily-citation-check
+  cancel-in-progress: false
+
 jobs:
   run-citation-check:
     runs-on: ubuntu-latest

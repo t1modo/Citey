@@ -10,6 +10,7 @@ Two approaches to trigger the citation-check job:
 import asyncio
 import hmac
 import logging
+import threading
 from datetime import datetime, timezone
 
 # Minimum seconds between manual job triggers from the same user.
@@ -82,6 +83,29 @@ async def _authorize_job_request(
     )
 
 
+# One lock per all-users job. Two overlapping sweeps would each read the
+# existing notifications before the other writes, and could email the same
+# citation twice, so a second request while one is running is refused.
+_JOB_LOCKS: dict[str, threading.Lock] = {
+    name: threading.Lock()
+    for name in ("citation_check", "publication_sync", "notification_cleanup", "orphan_cleanup")
+}
+
+
+async def _run_exclusive(name: str, job, /, **kwargs):
+    lock = _JOB_LOCKS[name]
+    if not lock.acquire(blocking=False):
+        logger.warning("Refused overlapping %s run; one is already in progress.", name)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A {name.replace('_', ' ')} run is already in progress.",
+        )
+    try:
+        return await _off_loop(job, **kwargs)
+    finally:
+        lock.release()
+
+
 async def _off_loop(job, /, **kwargs):
     """Run an async job on a worker thread with its own event loop.
 
@@ -123,7 +147,8 @@ async def run_job(
 
     if caller_id == "cron":
         from app.services.citation_service import run_job_for_all_users
-        summary = await _off_loop(
+        summary = await _run_exclusive(
+            "citation_check",
             run_job_for_all_users,
             db=_db,
             email_service=email_svc,
@@ -196,7 +221,9 @@ async def cleanup_notifications(
     )
 
     if caller_id == "cron":
-        summary = await _off_loop(cleanup_old_notifications, db=_db, dry_run=body.dry_run)
+        summary = await _run_exclusive(
+            "notification_cleanup", cleanup_old_notifications, db=_db, dry_run=body.dry_run
+        )
     else:
         # Scoped to the requesting user only.
         from datetime import datetime, timedelta, timezone
@@ -252,7 +279,8 @@ async def sync_publications(
     )
 
     if caller_id == "cron":
-        summary = await _off_loop(
+        summary = await _run_exclusive(
+            "publication_sync",
             sync_new_publications_for_all_users,
             db=_db,
             email_service=email_svc,
@@ -314,7 +342,7 @@ async def cleanup_orphan_users(
         caller_id,
         body.dry_run,
     )
-    summary = await _off_loop(_cleanup, db=_db, dry_run=body.dry_run)
+    summary = await _run_exclusive("orphan_cleanup", _cleanup, db=_db, dry_run=body.dry_run)
     logger.info("Orphan cleanup complete: %s", summary)
     return summary
 

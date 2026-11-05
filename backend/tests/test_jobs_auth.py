@@ -89,3 +89,34 @@ def test_cron_run_executes_job_off_the_event_loop() -> None:
         resp = client.post("/jobs/run", json={"dry_run": True}, headers={"X-Cron-Secret": "s3cret"})
     assert resp.status_code == 200
     assert seen["thread"] is True
+
+
+def test_overlapping_cron_runs_are_refused() -> None:
+    import threading
+
+    started, release = threading.Event(), threading.Event()
+
+    async def slow_job(**kwargs):
+        started.set()
+        release.wait(5)
+        return {"users_processed": 0, "works_processed": 0, "new_notifications": 0}
+
+    client = _client()
+    results: dict = {}
+    with patch("app.firebase_client.get_db"), patch(
+        "app.services.citation_service.run_job_for_all_users", new=slow_job
+    ):
+        def first():
+            results["first"] = client.post(
+                "/jobs/run", json={"dry_run": True}, headers={"X-Cron-Secret": "s3cret"}
+            ).status_code
+
+        t = threading.Thread(target=first)
+        t.start()
+        assert started.wait(5)
+        second = client.post("/jobs/run", json={"dry_run": True}, headers={"X-Cron-Secret": "s3cret"})
+        release.set()
+        t.join(5)
+
+    assert second.status_code == 409
+    assert results["first"] == 200
