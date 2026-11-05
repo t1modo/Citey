@@ -59,18 +59,19 @@ jobs:
           nslookup api.citey.email || { echo "ERROR: DNS resolution failed for api.citey.email"; exit 1; }
 
           echo "Pinging https://api.citey.email/health ..."
-          for i in $(seq 1 18); do
-            # -s silences the progress meter; -S still prints errors to stderr so
-            # they appear in the Actions log. Remove || echo "000" — curl's
-            # -w "%{http_code}" already outputs "000" on connection failure.
-            STATUS=$(curl -s -S -o /dev/null -w "%{http_code}" --max-time 60 https://api.citey.email/health)
+          for i in $(seq 1 8); do
+            # -s silences the progress meter; -S still prints errors to the log.
+            # On a failed connection -w prints "000". A cold start on Render's free plan takes about a minute. The job
+            # runs with bash -e, so a timed out curl used to end the job on the
+            # first attempt; "|| true" keeps it a retry.
+            STATUS=$(curl -s -S -o /dev/null -w "%{http_code}" --max-time 90 https://api.citey.email/health) || true
             echo "  attempt $i — HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then
               echo "Instance is awake."
               break
             fi
-            if [ "$i" = "18" ]; then
-              echo "ERROR: Instance did not respond after 18 attempts."
+            if [ "$i" = "8" ]; then
+              echo "ERROR: Instance did not respond after 8 attempts."
               exit 1
             fi
             sleep 15
