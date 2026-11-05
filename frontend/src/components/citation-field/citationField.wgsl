@@ -20,9 +20,11 @@ const FOCAL: u32 = 1u;
 const PERIOD: f32 = 2.4;
 const TRAVEL: f32 = 1.5;     // seconds for a pulse to cross its arc
 const LINGER: f32 = 2.6;     // seconds the drawn arc stays visible after landing
-const INK = vec3f(0.047, 0.051, 0.063);
-const PAPER = vec3f(0.91, 0.886, 0.84);
-const SIGNAL = vec3f(1.0, 0.416, 0.239);
+// "Annotated manuscript" palette: Prussian ink on cool paper, with a
+// highlighter mark for the citation that just landed.
+const PAPER = vec3f(0.933, 0.945, 0.957); // #EEF1F4
+const INK = vec3f(0.078, 0.129, 0.239);   // #14213D
+const MARK = vec3f(1.0, 0.894, 0.361);    // #FFE45C
 
 fn hash11(n: f32) -> f32 { return fract(sin(n * 127.1) * 43758.5453); }
 fn hash21(n: f32) -> vec2f {
@@ -70,19 +72,16 @@ fn bez(a: vec2f, c: vec2f, b: vec2f, s: f32) -> vec2f {
   let p = (uv - vec2f(0.5)) * vec2f(params.aspect, 1.0);
   let f = focus_pos();
 
-  var col = INK;
-  // faint warm light around the focal paper, and a vignette
-  col += SIGNAL * 0.035 * exp(-length(p - f) * 3.2);
-  col *= 1.0 - 0.35 * smoothstep(0.35, 1.0, length(p / vec2f(params.aspect, 1.0)));
+  var col = PAPER;
 
   // year rules: faint vertical hairlines, dashed
   var rules = 0.0;
   for (var c = 0u; c < COLS; c++) {
     let d = abs(p.x - col_x(f32(c)));
     let dash = step(0.5, fract(uv.y * 90.0));
-    rules = max(rules, (1.0 - smoothstep(0.0, px, d)) * dash * 0.07);
+    rules = max(rules, (1.0 - smoothstep(0.0, px, d)) * dash * 0.10);
   }
-  col = mix(col, PAPER, rules);
+  col = mix(col, INK, rules);
 
   // background citations: every paper cites one or two from earlier years
   var net = 0.0;
@@ -95,17 +94,17 @@ fn bez(a: vec2f, c: vec2f, b: vec2f, s: f32) -> vec2f {
     let row = u32(clamp(r, 0, i32(ROWS) - 1));
     let j = row * COLS + (c - min(back, c));
     let d = seg_dist(p, a, node(j, t));
-    net = max(net, (1.0 - smoothstep(0.0, 1.1 * px, d)) * 0.075);
+    net = max(net, (1.0 - smoothstep(0.0, 1.1 * px, d)) * 0.16);
   }
-  col = mix(col, PAPER, net);
+  col = mix(col, INK, net);
 
   // nodes
   for (var i = 0u; i < N; i++) {
     let c = node(i, t);
     let r = (1.4 + 1.6 * hash11(f32(i) + 9.0)) * px;
     let d = length(p - c);
-    let dot = 1.0 - smoothstep(r - px, r + px, d);
-    col = mix(col, PAPER, dot * 0.55);
+    let disc = 1.0 - smoothstep(r - px, r + px, d);
+    col = mix(col, INK, disc * 0.6);
   }
 
   // citation events
@@ -138,38 +137,40 @@ fn bez(a: vec2f, c: vec2f, b: vec2f, s: f32) -> vec2f {
       if (d < dmin) { dmin = d; along = f32(s) / f32(STEPS); }
       prev = q;
     }
-    let line = 1.0 - smoothstep(0.4 * px, 1.6 * px, dmin);
-    col = mix(col, SIGNAL, line * fade * (0.25 + 0.6 * along));
+    let line = 1.0 - smoothstep(0.5 * px, 1.7 * px, dmin);
+    col = mix(col, INK, line * fade * (0.35 + 0.6 * along));
 
     // the pulse head, while travelling
     if (prog < 1.0) {
       let head = bez(src, ctrl, f, ease);
       let hd = length(p - head);
-      col += SIGNAL * (exp(-hd / (2.5 * px)) * 0.9 + exp(-hd / (14.0 * px)) * 0.18);
+      col = mix(col, MARK, exp(-hd / (9.0 * px)) * 0.85);
+      col = mix(col, INK, 1.0 - smoothstep(2.0 * px, 3.2 * px, hd));
     } else {
       // landed: ripple out from the focal paper
       let since = age - TRAVEL;
       let rr = since * 0.11;
       let ring = 1.0 - smoothstep(0.0, 1.5 * px, abs(length(p - f) - rr));
-      col = mix(col, SIGNAL, ring * (1.0 - smoothstep(0.0, 1.4, since)) * 0.6);
+      col = mix(col, INK, ring * (1.0 - smoothstep(0.0, 1.4, since)) * 0.45);
       flare = max(flare, 1.0 - smoothstep(0.0, 0.9, since));
     }
     // source paper lights up
     let sd = length(p - src);
-    col = mix(col, SIGNAL, (1.0 - smoothstep(2.0 * px, 3.5 * px, sd)) * fade);
+    col = mix(col, INK, (1.0 - smoothstep(2.0 * px, 3.5 * px, sd)) * fade);
   }
 
-  // focal paper: ring + core
+  // focal paper: highlighter bloom when cited, then ring + core in ink
   let fd = length(p - f);
+  let bloom = (1.0 - smoothstep(12.0 * px, 22.0 * px, fd)) * (0.25 + 0.75 * flare);
+  col = mix(col, MARK, bloom);
   let ringR = 10.0 * px;
   let ring = 1.0 - smoothstep(0.0, 1.3 * px, abs(fd - ringR));
-  col = mix(col, PAPER, ring * 0.8);
+  col = mix(col, INK, ring * 0.9);
   let core = 1.0 - smoothstep(3.0 * px, 4.5 * px, fd);
-  col = mix(col, mix(PAPER, SIGNAL, flare), core);
-  col += SIGNAL * flare * 0.35 * exp(-fd / (18.0 * px));
+  col = mix(col, INK, core);
 
   // film grain keeps the dark field from banding
-  col += (grain(uv * 1000.0, fract(t) * 10.0) - 0.5) * 0.022;
-  col = mix(INK, col, params.intensity);
+  col += (grain(uv * 1000.0, fract(t) * 10.0) - 0.5) * 0.012;
+  col = mix(PAPER, col, params.intensity);
   return vec4f(col, 1.0);
 }

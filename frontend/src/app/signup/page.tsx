@@ -145,18 +145,16 @@ export default function SignUpPage() {
     <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-16">
       {/* Background glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-        <div className="absolute -top-32 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-white/5 blur-3xl" />
-        <div className="absolute top-1/3 right-1/4 h-64 w-64 rounded-full bg-white/3 blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-md">
         {/* Card */}
-        <div className="rounded-2xl border border-white/10 bg-gray-900/80 p-8 shadow-2xl backdrop-blur-sm">
+        <div className="rounded-2xl border border-rule bg-sheet p-8 shadow-2xl backdrop-blur-sm">
           {/* Logo */}
           <div className="mb-8 flex justify-center">
             <Link href="/" className="flex items-center gap-2">
               <Logo className="h-9 w-9" />
-              <span className="text-xl font-bold text-white" style={{ fontFamily: "var(--font-serif)", fontWeight: 400 }}>
+              <span className="text-xl font-bold text-ink" style={{ fontFamily: "var(--font-serif)", fontWeight: 400 }}>
                 Citey
               </span>
             </Link>
@@ -164,46 +162,46 @@ export default function SignUpPage() {
 
           {verifyScreen ? (
             <div className="flex flex-col items-center gap-5 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-2xl">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-rule bg-ink/5 text-2xl">
                 ✉
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">Check your inbox</h1>
-                <p className="mt-2 text-sm text-gray-400">
+                <h1 className="font-serif text-2xl font-semibold text-ink">Check your inbox</h1>
+                <p className="mt-2 text-sm text-muted">
                   We sent a verification link to{" "}
-                  <span className="font-medium text-gray-200">{email}</span>.
+                  <span className="font-medium text-ink">{email}</span>.
                   Click the link to activate your account.
                 </p>
               </div>
               {resendSent ? (
-                <p className="text-sm text-gray-400">Verification email resent.</p>
+                <p className="text-sm text-muted">Verification email resent.</p>
               ) : (
                 <div className="flex flex-col items-center gap-2">
                   <button
                     onClick={handleResend}
                     disabled={resendLoading}
-                    className="text-sm font-medium text-gray-300 underline decoration-dotted underline-offset-2 hover:text-white disabled:opacity-50 transition-colors"
+                    className="text-sm font-medium text-ink underline decoration-dotted underline-offset-2 hover:text-ink disabled:opacity-50 transition-colors"
                   >
                     {resendLoading ? "Sending…" : "Resend verification email"}
                   </button>
                   {resendError && (
-                    <p className="text-xs text-red-400">{resendError}</p>
+                    <p className="text-xs text-danger">{resendError}</p>
                   )}
                 </div>
               )}
               <Link
                 href="/dashboard"
-                className="mt-1 w-full rounded-xl bg-white py-3 text-center text-sm font-bold text-gray-950 shadow-lg transition-all hover:bg-gray-100"
+                className="mt-1 w-full rounded-xl bg-ink py-3 text-center text-sm font-bold text-paper shadow-lg transition-all hover:bg-ink-soft"
               >
                 Continue to dashboard
               </Link>
             </div>
           ) : (
             <>
-          <h1 className="mb-2 text-center text-2xl font-bold text-white">
+          <h1 className="font-serif mb-2 text-center text-2xl font-semibold text-ink">
             {mode === "signin" ? "Welcome back" : "Create your account"}
           </h1>
-          <p className="mb-8 text-center text-sm text-gray-400">
+          <p className="mb-8 text-center text-sm text-muted">
             {mode === "signin"
               ? "Sign in to access your citation dashboard."
               : "Start tracking citations to your research, free forever."}
@@ -213,7 +211,7 @@ export default function SignUpPage() {
             <div>
               <label
                 htmlFor="email"
-                className="mb-1.5 block text-sm font-medium text-gray-300"
+                className="mb-1.5 block text-sm font-medium text-ink"
               >
                 Email address
               </label>
@@ -225,7 +223,7 @@ export default function SignUpPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@institution.edu"
-                className="w-full rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/40 focus:ring-1 focus:ring-white/20"
+                className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                 disabled={loading}
               />
             </div>
@@ -233,7 +231,7 @@ export default function SignUpPage() {
             <div>
               <label
                 htmlFor="password"
-                className="mb-1.5 block text-sm font-medium text-gray-300"
+                className="mb-1.5 block text-sm font-medium text-ink"
               >
                 Password
               </label>
@@ -246,7 +244,7 @@ export default function SignUpPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/40 focus:ring-1 focus:ring-white/20"
+                className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                 disabled={loading}
               />
             </div>
@@ -255,7 +253,7 @@ export default function SignUpPage() {
               <div>
                 <label
                   htmlFor="confirm-password"
-                  className="mb-1.5 block text-sm font-medium text-gray-300"
+                  className="mb-1.5 block text-sm font-medium text-ink"
                 >
                   Confirm password
                 </label>
@@ -267,14 +265,14 @@ export default function SignUpPage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/40 focus:ring-1 focus:ring-white/20"
+                  className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                   disabled={loading}
                 />
               </div>
             )}
 
             {error && (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
                 {error}
               </div>
             )}
@@ -282,7 +280,7 @@ export default function SignUpPage() {
             <button
               type="submit"
               disabled={loading}
-              className="mt-1 rounded-xl bg-white py-3 text-sm font-bold text-gray-950 shadow-lg transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-1 rounded-xl bg-ink py-3 text-sm font-bold text-paper shadow-lg transition-all hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -293,20 +291,20 @@ export default function SignUpPage() {
                   {mode === "signin" ? "Signing in…" : "Creating account…"}
                 </span>
               ) : mode === "signin" ? (
-                "Sign In"
+                "Sign in"
               ) : (
-                "Create Account"
+                "Create account"
               )}
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-gray-400">
+          <div className="mt-6 text-center text-sm text-muted">
             {mode === "signin" ? (
               <>
                 Don&apos;t have an account?{" "}
                 <button
                   onClick={toggle}
-                  className="font-semibold text-gray-300 hover:text-white transition-colors"
+                  className="font-semibold text-ink hover:text-ink transition-colors"
                 >
                   Sign up free
                 </button>
@@ -316,7 +314,7 @@ export default function SignUpPage() {
                 Already have an account?{" "}
                 <button
                   onClick={toggle}
-                  className="font-semibold text-gray-300 hover:text-white transition-colors"
+                  className="font-semibold text-ink hover:text-ink transition-colors"
                 >
                   Sign in
                 </button>
@@ -327,22 +325,22 @@ export default function SignUpPage() {
           )}
         </div>
 
-        <p className="mt-6 text-center text-xs text-gray-600">
+        <p className="mt-6 text-center text-xs text-muted">
           By using Citey you agree to our terms of service and privacy policy.
           Citation data sourced from{" "}
-          <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">OpenAlex</a>
+          <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-muted">OpenAlex</a>
           ,{" "}
-          <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">Crossref</a>
+          <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-muted">Crossref</a>
           ,{" "}
-          <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">Semantic Scholar</a>
+          <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-muted">Semantic Scholar</a>
           ,{" "}
-          <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">PubMed</a>
+          <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-muted">PubMed</a>
           ,{" "}
-          <a href="https://ui.adsabs.harvard.edu" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">NASA ADS</a>
+          <a href="https://ui.adsabs.harvard.edu" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-muted">NASA ADS</a>
           ,{" "}
-          <a href="https://inspirehep.net" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">INSPIRE-HEP</a>
+          <a href="https://inspirehep.net" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-muted">INSPIRE-HEP</a>
           , and{" "}
-          <a href="https://dblp.org" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-400">DBLP</a>
+          <a href="https://dblp.org" target="_blank" rel="noopener noreferrer" className="text-muted hover:text-muted">DBLP</a>
           .
         </p>
       </div>

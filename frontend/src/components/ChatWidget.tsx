@@ -77,7 +77,7 @@ export default function ChatWidget() {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close assistant" : "Open Citey Assistant"}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-2xl shadow-black/40 transition-all duration-200 hover:scale-105 hover:bg-gray-100 active:scale-95"
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-ink shadow-2xl shadow-ink/10 transition-all duration-200 hover:scale-105 hover:bg-ink-soft active:scale-95"
       >
         <AnimatePresence mode="wait" initial={false}>
           {open ? (
@@ -87,7 +87,7 @@ export default function ChatWidget() {
               animate={{ rotate: 0, opacity: 1 }}
               exit={{ rotate: 90, opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="h-5 w-5 text-gray-900"
+              className="h-5 w-5 text-ink"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -102,7 +102,7 @@ export default function ChatWidget() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.7, opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="h-6 w-6 text-gray-900"
+              className="h-6 w-6 text-ink"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -126,20 +126,20 @@ export default function ChatWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.96 }}
             transition={{ type: "spring", stiffness: 380, damping: 32 }}
-            className="fixed bottom-24 right-6 z-50 flex h-[520px] w-[360px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-ink shadow-2xl shadow-black/60"
+            className="fixed bottom-24 right-6 z-50 flex h-[520px] w-[360px] flex-col overflow-hidden rounded-2xl border border-rule bg-sheet shadow-2xl shadow-ink/10"
           >
             {/* Header */}
-            <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10">
+            <div className="flex shrink-0 items-center gap-3 border-b border-rule px-4 py-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink/10">
                 <Logo className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-white">Citey Assistant</p>
-                <p className="text-[11px] text-gray-500">Powered by Claude · Ask me anything</p>
+                <p className="text-sm font-semibold text-ink">Citey Assistant</p>
+                <p className="text-[11px] text-muted">Powered by Claude · Ask me anything</p>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-white/5 hover:text-gray-400"
+                className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-ink/5 hover:text-muted"
                 aria-label="Close"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -155,8 +155,8 @@ export default function ChatWidget() {
                   <div
                     className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                       msg.role === "user"
-                        ? "rounded-br-sm bg-white text-gray-950"
-                        : "rounded-bl-sm bg-gray-800 text-gray-200"
+                        ? "rounded-br-sm bg-ink text-paper"
+                        : "rounded-bl-sm bg-sheet text-paper"
                     }`}
                   >
                     <MessageContent content={msg.content} />
@@ -167,12 +167,12 @@ export default function ChatWidget() {
               {/* Typing indicator */}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="rounded-2xl rounded-bl-sm bg-gray-800 px-4 py-3">
+                  <div className="rounded-2xl rounded-bl-sm bg-sheet px-4 py-3">
                     <span className="flex items-center gap-1">
                       {[0, 0.15, 0.3].map((delay, i) => (
                         <span
                           key={i}
-                          className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400"
+                          className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-muted"
                           style={{ animationDelay: `${delay}s` }}
                         />
                       ))}
@@ -183,7 +183,7 @@ export default function ChatWidget() {
 
               {/* Error banner */}
               {error && (
-                <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-400">
+                <div className="rounded-xl border border-danger/40 bg-danger/10 px-3.5 py-2.5 text-xs text-danger">
                   {error}
                 </div>
               )}
@@ -192,7 +192,7 @@ export default function ChatWidget() {
             </div>
 
             {/* Input area */}
-            <div className="shrink-0 border-t border-white/10 p-3">
+            <div className="shrink-0 border-t border-rule p-3">
               <div className="flex items-end gap-2">
                 <textarea
                   ref={textareaRef}
@@ -202,21 +202,21 @@ export default function ChatWidget() {
                   placeholder="Ask about DOIs, adding papers…"
                   rows={1}
                   disabled={loading}
-                  className="flex-1 resize-none rounded-xl border border-white/10 bg-gray-800 px-3.5 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/25 focus:ring-1 focus:ring-white/10 disabled:opacity-50"
+                  className="flex-1 resize-none rounded-xl border border-rule bg-sheet px-3.5 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20 disabled:opacity-50"
                   style={{ minHeight: "40px", maxHeight: "120px" }}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!input.trim() || loading}
                   aria-label="Send"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-gray-950 shadow-md transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink text-paper shadow-md transition-all hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
                   </svg>
                 </button>
               </div>
-              <p className="mt-2 text-center text-[10px] text-gray-600">
+              <p className="mt-2 text-center text-[10px] text-muted">
                 Enter to send · Shift+Enter for new line
               </p>
             </div>

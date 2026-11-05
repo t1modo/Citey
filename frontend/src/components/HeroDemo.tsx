@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence, useInView } from "framer-motion";
+import Logo from "@/components/Logo";
 
 // The card is authored at this width. On narrower viewports we apply a
 // CSS scale transform so the layout never reflows and cursor hotspots
@@ -45,21 +46,21 @@ const DEMO_POOL: DemoEntry[] = [
       {
         title: "Attention Is All You Need",
         year: 2017,
-        authors: "Vaswani · Shazeer · Parmar · +5 more",
+        authors: "Vaswani, Shazeer, Parmar and 5 more",
         citedBy: "131,204",
         newCitations: 47,
       },
       {
         title: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
         year: 2019,
-        authors: "Devlin · Chang · Lee · +1 more",
+        authors: "Devlin, Chang, Lee and 1 more",
         citedBy: "96,518",
         newCitations: 29,
       },
     ],
     citation: {
       citingTitle: "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
-      citingAuthors: "Gu · Dao",
+      citingAuthors: "Gu, Dao",
       citingDate: "Apr 12, 2026",
       yourPaper: "Attention Is All You Need",
       affiliations: ["Carnegie Mellon", "Princeton", "Together AI"],
@@ -72,21 +73,21 @@ const DEMO_POOL: DemoEntry[] = [
       {
         title: "Deep Residual Learning for Image Recognition",
         year: 2016,
-        authors: "He · Zhang · Ren · Sun",
+        authors: "He, Zhang, Ren, Sun",
         citedBy: "208,347",
         newCitations: 63,
       },
       {
         title: "An Image is Worth 16×16 Words: Transformers for Image Recognition at Scale",
         year: 2021,
-        authors: "Dosovitskiy · Beyer · Kolesnikov · +10 more",
+        authors: "Dosovitskiy, Beyer, Kolesnikov and 10 more",
         citedBy: "44,281",
         newCitations: 19,
       },
     ],
     citation: {
       citingTitle: "Segment Anything",
-      citingAuthors: "Kirillov · Mintun · Ravi · +9 more",
+      citingAuthors: "Kirillov, Mintun, Ravi and 9 more",
       citingDate: "Apr 18, 2026",
       yourPaper: "Deep Residual Learning for Image Recognition",
       affiliations: ["Meta AI Research", "CMU"],
@@ -99,21 +100,21 @@ const DEMO_POOL: DemoEntry[] = [
       {
         title: "Language Models are Few-Shot Learners",
         year: 2020,
-        authors: "Brown · Mann · Ryder · +28 more",
+        authors: "Brown, Mann, Ryder and 28 more",
         citedBy: "57,831",
         newCitations: 22,
       },
       {
         title: "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
         year: 2022,
-        authors: "Wei · Wang · Schuurmans · +4 more",
+        authors: "Wei, Wang, Schuurmans and 4 more",
         citedBy: "11,842",
         newCitations: 8,
       },
     ],
     citation: {
       citingTitle: "Llama 2: Open Foundation and Fine-Tuned Chat Models",
-      citingAuthors: "Touvron · Martin · Stone · +55 more",
+      citingAuthors: "Touvron, Martin, Stone and 55 more",
       citingDate: "Apr 15, 2026",
       yourPaper: "Language Models are Few-Shot Learners",
       affiliations: ["Meta AI", "UT Austin", "CMU"],
@@ -126,21 +127,21 @@ const DEMO_POOL: DemoEntry[] = [
       {
         title: "A Programmable Dual-RNA–Guided DNA Endonuclease in Adaptive Bacterial Immunity",
         year: 2012,
-        authors: "Jinek · Chylinski · Fonfara · +3 more",
+        authors: "Jinek, Chylinski, Fonfara and 3 more",
         citedBy: "24,108",
         newCitations: 11,
       },
       {
         title: "Multiplex Genome Engineering Using CRISPR/Cas Systems",
         year: 2013,
-        authors: "Cong · Ran · Cox · +7 more",
+        authors: "Cong, Ran, Cox and 7 more",
         citedBy: "18,392",
         newCitations: 6,
       },
     ],
     citation: {
       citingTitle: "Programmable base editing of A·T to G·C in genomic DNA without DNA cleavage",
-      citingAuthors: "Gaudelli · Komor · Rees · +4 more",
+      citingAuthors: "Gaudelli, Komor, Rees and 4 more",
       citingDate: "Apr 9, 2026",
       yourPaper: "A Programmable Dual-RNA–Guided DNA Endonuclease in Adaptive Bacterial Immunity",
       affiliations: ["Broad Institute", "Harvard University", "MIT"],
@@ -153,21 +154,21 @@ const DEMO_POOL: DemoEntry[] = [
       {
         title: "Observation of Gravitational Waves from a Binary Black Hole Merger",
         year: 2016,
-        authors: "Abbott · Abbott · Abbott · +1009 more",
+        authors: "Abbott, Abbott, Abbott and 1009 more",
         citedBy: "18,743",
         newCitations: 9,
       },
       {
         title: "First M87 Event Horizon Telescope Results. I. The Shadow of the Supermassive Black Hole",
         year: 2019,
-        authors: "Akiyama · Alberdi · Alef · +198 more",
+        authors: "Akiyama, Alberdi, Alef and 198 more",
         citedBy: "4,821",
         newCitations: 4,
       },
     ],
     citation: {
       citingTitle: "GW190521: A Binary Black Hole Merger with a Total Mass of 150 M☉",
-      citingAuthors: "Abbott · Abbott · Abbott · +1203 more",
+      citingAuthors: "Abbott, Abbott, Abbott and 1203 more",
       citingDate: "Apr 7, 2026",
       yourPaper: "Observation of Gravitational Waves from a Binary Black Hole Merger",
       affiliations: ["LIGO Scientific Collaboration", "Virgo Collaboration"],
@@ -180,7 +181,7 @@ const DEMO_POOL: DemoEntry[] = [
       {
         title: "Prospect Theory: An Analysis of Decision under Risk",
         year: 1979,
-        authors: "Kahneman · Tversky",
+        authors: "Kahneman, Tversky",
         citedBy: "57,832",
         newCitations: 18,
       },
@@ -194,7 +195,7 @@ const DEMO_POOL: DemoEntry[] = [
     ],
     citation: {
       citingTitle: "A Model of Reference-Dependent Preferences",
-      citingAuthors: "Kőszegi · Rabin",
+      citingAuthors: "Kőszegi, Rabin",
       citingDate: "Apr 14, 2026",
       yourPaper: "Prospect Theory: An Analysis of Decision under Risk",
       affiliations: ["UC Berkeley", "Harvard University"],
@@ -237,7 +238,7 @@ function DemoCursor({ pos, clicking }: { pos: CursorPos; clicking: boolean }) {
         <>
           <motion.div
             key="ripple-a"
-            className="absolute rounded-full border-2 border-white/75"
+            className="absolute rounded-full border-2 border-rule"
             style={{ width: 14, height: 14, top: -7, left: -6 }}
             initial={{ scale: 0.25, opacity: 1 }}
             animate={{ scale: 2.8, opacity: 0 }}
@@ -245,7 +246,7 @@ function DemoCursor({ pos, clicking }: { pos: CursorPos; clicking: boolean }) {
           />
           <motion.div
             key="ripple-b"
-            className="absolute rounded-full border border-white/40"
+            className="absolute rounded-full border border-rule"
             style={{ width: 22, height: 22, top: -11, left: -10 }}
             initial={{ scale: 0.2, opacity: 0.85 }}
             animate={{ scale: 3.4, opacity: 0 }}
@@ -257,7 +258,7 @@ function DemoCursor({ pos, clicking }: { pos: CursorPos; clicking: boolean }) {
   );
 }
 
-// ─── Phase 0: Tracked Works ───────────────────────────────────────────────────
+// ─── Phase 0: Tracked papers ───────────────────────────────────────────────────
 function PhaseDashboard({ papers }: { papers: DemoEntry["trackedPapers"] }) {
   const [btnPressed, setBtnPressed] = useState(false);
 
@@ -271,13 +272,13 @@ function PhaseDashboard({ papers }: { papers: DemoEntry["trackedPapers"] }) {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-bold text-white">Tracked Works</h2>
-          <div className="flex rounded-lg border border-white/10 bg-gray-800 p-0.5">
-            {["Year", "Cited By"].map((s, i) => (
+          <h2 className="font-serif text-lg font-semibold text-ink">Your papers</h2>
+          <div className="flex rounded-md border border-rule bg-sheet p-0.5">
+            {["Newest", "Most cited"].map((s, i) => (
               <span
                 key={s}
                 className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                  i === 0 ? "bg-white text-gray-950 shadow" : "text-gray-400"
+                  i === 0 ? "bg-ink text-paper" : "text-muted"
                 }`}
               >
                 {s}
@@ -286,63 +287,45 @@ function PhaseDashboard({ papers }: { papers: DemoEntry["trackedPapers"] }) {
           </div>
         </div>
         <motion.button
-          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-950 shadow"
+          className="flex shrink-0 items-center gap-1.5 rounded-md bg-ink px-3 py-2 text-xs font-bold text-paper"
           animate={btnPressed ? { scale: [1, 0.84, 1.08, 1] } : {}}
           transition={{ duration: 0.42, ease: "easeInOut" }}
         >
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
-          Import Papers
+          Add papers
         </motion.button>
       </div>
 
-      <p className="text-xs text-gray-500">2 papers</p>
+      <p className="text-xs text-muted">2 papers</p>
 
-      <div className="flex flex-col gap-3">
+      <div className="divide-y divide-rule border-y border-rule">
         {papers.map((p, i) => (
-          <motion.div
+          <motion.article
             key={p.title}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.13 }}
-            className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-4 transition-all duration-200 hover:border-white/20"
+            className="py-4"
           >
-            <div className="flex items-start justify-between gap-3">
-              <h3 className="flex-1 text-sm font-semibold leading-snug text-white line-clamp-2">
-                {p.title}
-              </h3>
-              <span className="shrink-0 rounded bg-gray-800 px-2 py-0.5 text-xs font-medium text-gray-400">
-                {p.year}
-              </span>
-            </div>
-
-            <p className="text-xs text-gray-400">{p.authors}</p>
-
-            <div className="flex items-center gap-2">
-              <span className="rounded-full border border-white/10 bg-gray-800 px-2.5 py-0.5 text-xs font-medium text-gray-300">
-                Cited by {p.citedBy}
-              </span>
+            <h3 className="mb-1 line-clamp-2 font-serif text-[15px] font-semibold leading-snug text-ink">{p.title}</h3>
+            <p className="text-xs text-muted">
+              {p.authors}. <i>{p.year}</i>.
+            </p>
+            <div className="mt-2 flex items-center gap-3 text-xs">
+              <span className="text-ink">Cited by {p.citedBy}</span>
               <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.4 + i * 0.1, type: "spring", stiffness: 300, damping: 20 }}
-                className="rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5 text-xs font-semibold text-white"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 + i * 0.1 }}
+                className="highlight font-bold text-ink"
               >
-                +{p.newCitations} new
+                {p.newCitations} new this month
               </motion.span>
+              <span className="ml-auto text-muted">Checked Apr 15</span>
             </div>
-
-            <div className="flex items-center justify-between gap-2 border-t border-white/5 pt-2">
-              <span className="flex items-center gap-1.5 text-xs text-gray-500">
-                <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                Checked Apr 15, 2026
-              </span>
-              <button className="rounded px-2.5 py-1 text-xs font-medium text-red-400 hover:bg-red-500/10">
-                Remove
-              </button>
-            </div>
-          </motion.div>
+          </motion.article>
         ))}
       </div>
     </div>
@@ -386,18 +369,18 @@ function PhaseAddPaper({ doi }: { doi: string }) {
   }, [doi]);
 
   const chips = [
-    { label: "DOI",             cls: "border-sky-500/25 bg-sky-500/10 text-sky-400" },
-    { label: "arXiv URL",       cls: "border-teal-500/25 bg-teal-500/10 text-teal-400" },
-    { label: "INSPIRE profile", cls: "border-purple-500/25 bg-purple-500/10 text-purple-400" },
-    { label: "DBLP profile",    cls: "border-orange-500/25 bg-orange-500/10 text-orange-400" },
-    { label: "author name",     cls: "border-white/10 bg-white/5 text-gray-400" },
+    { label: "DOI",             cls: "border-sky-300 bg-sky-100 text-sky-800" },
+    { label: "arXiv URL",       cls: "border-ok/40 bg-ok/10 text-ok" },
+    { label: "INSPIRE profile", cls: "border-purple-300 bg-purple-100 text-purple-800" },
+    { label: "DBLP profile",    cls: "border-orange-300 bg-orange-100 text-orange-800" },
+    { label: "author name",     cls: "border-rule bg-ink/5 text-muted" },
   ];
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Add Papers</h2>
-        <button className="rounded-md p-1.5 text-gray-400 hover:bg-white/5 hover:text-white">
+        <h2 className="text-lg font-semibold text-ink">Add papers</h2>
+        <button className="rounded-md p-1.5 text-muted hover:bg-ink/5 hover:text-ink">
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -405,14 +388,14 @@ function PhaseAddPaper({ doi }: { doi: string }) {
       </div>
 
       <div>
-        <div className="flex items-center rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5">
+        <div className="flex items-center rounded-lg border border-rule bg-sheet px-4 py-2.5">
           <span className="flex-1 text-left font-mono text-sm">
             {focused ? (
               <>
-                {typed && <span className="text-white">{typed}</span>}
+                {typed && <span className="text-ink">{typed}</span>}
                 {!detected && (
                   <motion.span
-                    className="inline-block w-px bg-white"
+                    className="inline-block w-px bg-ink"
                     style={{ height: "1em", verticalAlign: "text-bottom", marginLeft: "1px" }}
                     animate={{ opacity: [1, 1, 0, 0] }}
                     transition={{ duration: 1, times: [0, 0.47, 0.5, 0.97], repeat: Infinity, ease: "linear" }}
@@ -420,7 +403,7 @@ function PhaseAddPaper({ doi }: { doi: string }) {
                 )}
               </>
             ) : (
-              <span className="text-gray-500">DOI, arXiv URL, author URL, or name…</span>
+              <span className="text-muted">DOI, arXiv URL, author URL, or name…</span>
             )}
           </span>
         </div>
@@ -429,7 +412,7 @@ function PhaseAddPaper({ doi }: { doi: string }) {
           <motion.p
             initial={{ opacity: 0, y: -3 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-1.5 text-xs text-teal-400/80"
+            className="mt-1.5 text-xs text-ok"
           >
             Detected: DOI
           </motion.p>
@@ -437,7 +420,7 @@ function PhaseAddPaper({ doi }: { doi: string }) {
 
         {!typed && (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-gray-600">Accepts</span>
+            <span className="text-[10px] font-medium text-muted">Accepts</span>
             {chips.map((c) => (
               <span
                 key={c.label}
@@ -451,11 +434,11 @@ function PhaseAddPaper({ doi }: { doi: string }) {
       </div>
 
       <div className="flex justify-end gap-3">
-        <button className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-white/5">
+        <button className="rounded-lg border border-rule px-4 py-2 text-sm font-medium text-ink hover:bg-ink/5">
           Cancel
         </button>
         <motion.button
-          className="rounded-lg bg-white px-5 py-2 text-sm font-semibold text-gray-950 shadow-lg"
+          className="rounded-lg bg-ink px-5 py-2 text-sm font-semibold text-paper shadow-lg"
           animate={btnClicked ? { scale: [1, 0.84, 1.06, 1], opacity: [1, 0.65, 1, 1] } : {}}
           transition={{ duration: 0.38, ease: "easeInOut" }}
         >
@@ -485,33 +468,33 @@ function PhaseScanning() {
 
   return (
     <div className="flex flex-col items-center gap-6">
-      <p className="text-center text-xs font-semibold uppercase tracking-widest text-gray-500">
+      <p className="text-center text-xs font-semibold text-muted">
         Daily citation scan
       </p>
 
       <div className="relative flex h-28 w-28 items-center justify-center">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/10" />
-        <span className="absolute inline-flex h-20 w-20 animate-ping rounded-full bg-white/[0.08] [animation-delay:0.3s]" />
-        <div className="relative flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-white/5 text-3xl">
-          🔍
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ink/10" />
+        <span className="absolute inline-flex h-20 w-20 animate-ping rounded-full bg-ink/5 [animation-delay:0.3s]" />
+        <div className="relative flex h-16 w-16 items-center justify-center rounded-full border border-rule bg-sheet text-ink">
+          <Logo className="h-8 w-8" />
         </div>
       </div>
 
       <div className="w-full">
-        <div className="mb-2 flex justify-between gap-2 text-xs text-gray-500">
-          <span className="truncate">OpenAlex · Crossref · Semantic Scholar · PubMed · NASA ADS · INSPIRE · DBLP</span>
-          <span className="shrink-0 font-medium text-white">{progress}%</span>
+        <div className="mb-2 flex justify-between gap-2 text-xs text-muted">
+          <span className="truncate">Checking all seven indexes</span>
+          <span className="shrink-0 font-medium text-ink">{progress}%</span>
         </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-ink/10">
           <motion.div
-            className="h-full rounded-full bg-white"
+            className="h-full rounded-full bg-ink"
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.1 }}
           />
         </div>
       </div>
 
-      <p className="text-center text-sm text-gray-500">Checking 250M+ scholarly works</p>
+      <p className="text-center text-sm text-muted">OpenAlex, Crossref, Semantic Scholar, PubMed, NASA ADS, INSPIRE and DBLP</p>
     </div>
   );
 }
@@ -522,71 +505,31 @@ function PhaseCited({ citation }: { citation: DemoEntry["citation"] }) {
     <div className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h2 className="text-lg font-bold text-white">
-            Citations
-            <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-xs font-bold text-gray-950">
-              2
-            </span>
-          </h2>
-          <p className="mt-0.5 text-xs text-gray-500">47 total · page 1 of 5</p>
+          <h2 className="font-serif text-lg font-semibold text-ink">Recent citations</h2>
+          <p className="mt-0.5 text-xs text-muted">Papers that cited you in the last 30 days</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="text-xs font-medium text-gray-500 hover:text-gray-300">
-            Mark all as read
-          </button>
-        </div>
+        <button className="text-xs font-medium text-muted hover:text-ink">Mark all as read</button>
       </div>
 
-      <motion.div
+      <motion.article
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-        className="flex cursor-pointer flex-col gap-3 rounded-xl border border-white/15 bg-white/5 p-4 transition-all duration-200 hover:border-white/20"
+        className="border-y border-rule py-4"
       >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-white" />
-            <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
-              New citation
-            </span>
-          </div>
-          <span className="shrink-0 text-xs text-gray-600">{citation.citingDate}</span>
+        <div className="mb-1 flex items-baseline justify-between gap-3">
+          <h3 className="font-serif text-[15px] font-semibold leading-snug text-ink">
+            <span className="highlight mr-1.5 font-sans text-[11px] font-bold">New</span>
+            <span className="underline decoration-rule underline-offset-4">{citation.citingTitle}</span>
+          </h3>
+          <span className="shrink-0 text-xs text-muted">{citation.citingDate}</span>
         </div>
-
-        <p className="text-sm font-bold leading-snug text-white underline decoration-dotted underline-offset-2">
-          {citation.citingTitle}
+        <p className="text-xs leading-relaxed text-muted">{citation.citingAuthors}</p>
+        <p className="text-xs leading-relaxed text-muted">{citation.affiliations.join("; ")}</p>
+        <p className="mt-2 text-xs text-ink">
+          Cites <i className="font-serif">{citation.yourPaper}</i>
         </p>
-
-        <p className="text-xs leading-relaxed text-gray-400 -mt-1">
-          {citation.citingAuthors}
-        </p>
-
-        <div className="flex items-center gap-2">
-          <div className="h-px flex-1 bg-white/5" />
-          <span className="text-[10px] italic text-gray-600">cites your paper</span>
-          <div className="h-px flex-1 bg-white/5" />
-        </div>
-
-        <div>
-          <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400">
-            Your paper
-          </p>
-          <p className="text-xs leading-snug text-white/70">
-            {citation.yourPaper}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {citation.affiliations.map((affil) => (
-            <span
-              key={affil}
-              className="inline-flex items-center rounded-full bg-white/[0.08] px-2.5 py-0.5 text-xs font-medium text-gray-300 ring-1 ring-white/10"
-            >
-              {affil}
-            </span>
-          ))}
-        </div>
-      </motion.div>
+      </motion.article>
     </div>
   );
 }
@@ -595,14 +538,14 @@ function PhaseCited({ citation }: { citation: DemoEntry["citation"] }) {
 type Waypoint = { lp: string; tp: string; afterMs: number; click?: true };
 
 const CURSOR_SEQUENCES: Waypoint[][] = [
-  // Phase 0: Dashboard — notice "+new" badges, hover Import Papers, then click
+  // Phase 0: Dashboard — notice "+new" badges, hover Add papers, then click
   [
     { lp: "72%", tp: "38%", afterMs: 1000 },
     { lp: "66%", tp: "66%", afterMs: 1100 },
     { lp: "86%", tp: "17%", afterMs: 1620 },
     { lp: "86%", tp: "17%", afterMs: 600, click: true },
   ],
-  // Phase 1: Add Papers modal — hover over input, click, 2 s delay, type DOI, click Look up
+  // Phase 1: Add papers modal — hover over input, click, 2 s delay, type DOI, click Look up
   [
     { lp: "50%", tp: "29%", afterMs: 2100 },
     { lp: "50%", tp: "29%", afterMs: 700,  click: true },
@@ -708,7 +651,7 @@ export default function HeroDemo() {
     >
       <div
         ref={cardRef}
-        className="relative overflow-hidden rounded-2xl border border-white/15 bg-ink/80 shadow-2xl shadow-black/50 backdrop-blur-xl"
+        className="relative overflow-hidden rounded-2xl border border-rule bg-paper/90 shadow-2xl shadow-ink/10 backdrop-blur-xl"
         style={isScaled ? {
           width: DESIGN_WIDTH,
           position: "absolute",
@@ -720,14 +663,14 @@ export default function HeroDemo() {
         <DemoCursor pos={cursorPos} clicking={clicking} />
 
         {/* Title bar */}
-        <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3">
+        <div className="flex items-center justify-between border-b border-rule px-4 py-3">
           <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-            <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-            <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
+            <span className="h-2.5 w-2.5 rounded-full bg-ink/10" />
+            <span className="h-2.5 w-2.5 rounded-full bg-ink/10" />
+            <span className="h-2.5 w-2.5 rounded-full bg-ink/10" />
           </div>
           <span
-            className="text-xs font-semibold text-gray-400"
+            className="text-xs font-semibold text-muted"
             style={{ fontFamily: "var(--font-serif)", fontWeight: 400 }}
           >
             Citey
@@ -754,7 +697,7 @@ export default function HeroDemo() {
         </div>
 
         {/* Step indicators */}
-        <div className="border-t border-white/[0.08] px-5 py-3">
+        <div className="border-t border-rule px-5 py-3">
           <div className="flex items-center justify-center gap-3">
             {PHASE_LABELS.map((label, i) => (
               <button
@@ -764,12 +707,12 @@ export default function HeroDemo() {
               >
                 <span
                   className={`h-1.5 w-6 rounded-full transition-all duration-300 ${
-                    phase === i ? "bg-white" : "bg-white/20"
+                    phase === i ? "bg-ink" : "bg-ink/10"
                   }`}
                 />
                 <span
                   className={`text-[10px] font-medium transition-colors ${
-                    phase === i ? "text-gray-300" : "text-gray-600"
+                    phase === i ? "text-ink" : "text-muted"
                   }`}
                 >
                   {label}

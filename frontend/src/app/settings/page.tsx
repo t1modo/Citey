@@ -36,11 +36,11 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="glass-card p-6">
+    <div className="surface p-6">
       <div className="mb-5">
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
+        <h2 className="font-serif text-lg font-semibold text-ink">{title}</h2>
         {description && (
-          <p className="mt-1 text-sm text-gray-400">{description}</p>
+          <p className="mt-1 text-sm text-muted">{description}</p>
         )}
       </div>
       {children}
@@ -231,7 +231,7 @@ export default function SettingsPage() {
   if (authLoading || profileLoading) {
     return (
       <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
-        <Spinner className="h-6 w-6 text-gray-400" />
+        <Spinner className="h-6 w-6 text-muted" />
       </div>
     );
   }
@@ -243,27 +243,27 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="mb-10 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">Settings</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <h1 className="font-serif text-3xl font-semibold text-ink">Settings</h1>
+          <p className="mt-1 text-sm text-muted">
             Manage your notification preferences and tracked works.
           </p>
         </div>
         <a
           href="/help"
-          className="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:border-white/30 hover:text-white"
+          className="shrink-0 rounded-lg border border-rule px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:border-ink/40 hover:text-ink"
         >
           Help guide
         </a>
       </div>
 
       <div className="flex flex-col gap-6">
-        {/* ─── Notification Preferences ───────────────────────────── */}
+        {/* ─── Notifications ───────────────────────────── */}
         <SectionCard
-          title="Notification Preferences"
+          title="Notifications"
           description="Control how and where Citey sends you citation alerts."
         >
           {profileError ? (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
               {profileError}{" "}
               <button onClick={loadProfile} className="underline hover:no-underline">
                 Retry
@@ -272,10 +272,10 @@ export default function SettingsPage() {
           ) : (
             <form onSubmit={handleSave} className="flex flex-col gap-5">
               {/* Enable toggle */}
-              <div className="flex items-center justify-between rounded-lg border border-white/10 bg-gray-800/50 px-4 py-3">
+              <div className="flex items-center justify-between rounded-lg border border-rule bg-sheet px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-white">New Citation Alerts</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-sm font-medium text-ink">New citation alerts</p>
+                  <p className="text-xs text-muted">
                     Receive an email each time a new citation is detected.
                   </p>
                 </div>
@@ -284,12 +284,12 @@ export default function SettingsPage() {
                   role="switch"
                   aria-checked={notifyEnabled}
                   onClick={() => setNotifyEnabled((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-                    notifyEnabled ? "bg-gray-300" : "bg-gray-700"
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ink/20 focus:ring-offset-2 focus:ring-offset-paper ${
+                    notifyEnabled ? "bg-ink" : "bg-rule"
                   }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    className={`inline-block h-4 w-4 transform rounded-full bg-sheet shadow transition-transform ${
                       notifyEnabled ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
@@ -297,10 +297,10 @@ export default function SettingsPage() {
               </div>
 
               {/* New publication alerts toggle */}
-              <div className="flex items-center justify-between rounded-lg border border-white/10 bg-gray-800/50 px-4 py-3">
+              <div className="flex items-center justify-between rounded-lg border border-rule bg-sheet px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-white">New Publication Alerts</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-sm font-medium text-ink">New publication alerts</p>
+                  <p className="text-xs text-muted">
                     Get notified when new papers from your author profile are auto-added.
                   </p>
                 </div>
@@ -309,12 +309,12 @@ export default function SettingsPage() {
                   role="switch"
                   aria-checked={notifyNewPublications}
                   onClick={() => setNotifyNewPublications((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-                    notifyNewPublications ? "bg-gray-300" : "bg-gray-700"
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ink/20 focus:ring-offset-2 focus:ring-offset-paper ${
+                    notifyNewPublications ? "bg-ink" : "bg-rule"
                   }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    className={`inline-block h-4 w-4 transform rounded-full bg-sheet shadow transition-transform ${
                       notifyNewPublications ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
@@ -325,7 +325,7 @@ export default function SettingsPage() {
               <div>
                 <label
                   htmlFor="notification-email"
-                  className="mb-1.5 block text-sm font-medium text-gray-300"
+                  className="mb-1.5 block text-sm font-medium text-ink"
                 >
                   Notification email
                 </label>
@@ -335,23 +335,23 @@ export default function SettingsPage() {
                   value={notificationEmail}
                   onChange={(e) => setNotificationEmail(e.target.value)}
                   placeholder={profile?.email ?? "your@email.com"}
-                  className="w-full rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/40 focus:ring-1 focus:ring-white/20"
+                  className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                 />
-                <p className="mt-1.5 text-xs text-gray-500">
+                <p className="mt-1.5 text-xs text-muted">
                   Leave blank to use your account email ({profile?.email}).
                 </p>
                 {profile?.notification_email_pending && (
-                  <p className="mt-2 rounded-md border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-200" role="status">
+                  <p className="mt-2 rounded-md border border-mark/40 bg-mark/60 px-3 py-2 text-xs text-amber-900" role="status">
                     We sent a confirmation link to {profile.notification_email}. Alerts go to {profile.email} until you confirm it.
                   </p>
                 )}
                 {emailLinkStatus === "confirmed" && (
-                  <p className="mt-2 rounded-md border border-teal-400/20 bg-teal-400/10 px-3 py-2 text-xs text-teal-200" role="status">
+                  <p className="mt-2 rounded-md border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ok" role="status">
                     Notification email confirmed.
                   </p>
                 )}
                 {emailLinkStatus === "invalid" && (
-                  <p className="mt-2 rounded-md border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-200" role="alert">
+                  <p className="mt-2 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger" role="alert">
                     That confirmation link is invalid. Save your settings again to get a new link.
                   </p>
                 )}
@@ -361,7 +361,7 @@ export default function SettingsPage() {
               <div>
                 <label
                   htmlFor="display-name"
-                  className="mb-1.5 block text-sm font-medium text-gray-300"
+                  className="mb-1.5 block text-sm font-medium text-ink"
                 >
                   Display name
                 </label>
@@ -371,7 +371,7 @@ export default function SettingsPage() {
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Dr. Jane Smith"
-                  className="w-full rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/40 focus:ring-1 focus:ring-white/20"
+                  className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                 />
               </div>
 
@@ -379,7 +379,7 @@ export default function SettingsPage() {
               <div>
                 <label
                   htmlFor="scholar-url"
-                  className="mb-1.5 block text-sm font-medium text-gray-300"
+                  className="mb-1.5 block text-sm font-medium text-ink"
                 >
                   Google Scholar profile URL
                 </label>
@@ -392,9 +392,9 @@ export default function SettingsPage() {
                     setScholarConfirmPending(false);
                   }}
                   placeholder="https://scholar.google.com/citations?user=..."
-                  className="w-full rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/40 focus:ring-1 focus:ring-white/20"
+                  className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                 />
-                <p className="mt-1.5 text-xs text-gray-500">
+                <p className="mt-1.5 text-xs text-muted">
                   Paste your Google Scholar profile URL to add a quick link on your dashboard.
                   Your citation count is never scraped. This is a link only.
                 </p>
@@ -402,18 +402,18 @@ export default function SettingsPage() {
 
               {/* Scholar URL / linked-author mismatch confirmation */}
               {scholarConfirmPending && (
-                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-sm">
-                  <p className="font-semibold text-amber-300">
+                <div className="rounded-lg border border-mark/40 bg-mark/60 px-4 py-4 text-sm">
+                  <p className="font-semibold text-amber-900">
                     Confirm Google Scholar profile
                   </p>
-                  <p className="mt-1 text-amber-200/80">
+                  <p className="mt-1 text-amber-900">
                     Are you certain this Google Scholar URL matches your linked
                     account{" "}
-                    <span className="font-semibold text-white">
+                    <span className="font-semibold text-ink">
                       {profile?.linked_author_name}
                     </span>
                     ? The app uses{" "}
-                    <span className="font-semibold text-white">
+                    <span className="font-semibold text-ink">
                       {profile?.linked_author_name}
                     </span>{" "}
                     to track citations. The Scholar link is for your reference
@@ -423,14 +423,14 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={doSave}
-                      className="rounded-lg bg-amber-500/20 px-4 py-1.5 text-xs font-semibold text-amber-300 transition-colors hover:bg-amber-500/30"
+                      className="rounded-lg bg-mark/60 px-4 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-mark/60"
                     >
                       Yes, save it
                     </button>
                     <button
                       type="button"
                       onClick={() => setScholarConfirmPending(false)}
-                      className="rounded-lg border border-white/10 px-4 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5"
+                      className="rounded-lg border border-rule px-4 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-ink/5"
                     >
                       Cancel
                     </button>
@@ -439,12 +439,12 @@ export default function SettingsPage() {
               )}
 
               {saveError && (
-                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
                   {saveError}
                 </div>
               )}
               {saveSuccess && (
-                <div className="rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-sm text-gray-300">
+                <div className="rounded-lg border border-rule bg-ink/5 px-4 py-3 text-sm text-ink">
                   Settings saved successfully.
                 </div>
               )}
@@ -453,36 +453,36 @@ export default function SettingsPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex items-center gap-2 rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-gray-950 shadow transition-opacity hover:bg-gray-100 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-ink px-5 py-2.5 text-sm font-semibold text-paper shadow transition-opacity hover:bg-ink-soft disabled:opacity-50"
                 >
                   {saving && <Spinner className="h-4 w-4" />}
-                  {saving ? "Saving…" : "Save Changes"}
+                  {saving ? "Saving…" : "Save changes"}
                 </button>
               </div>
             </form>
           )}
         </SectionCard>
 
-        {/* ─── Tracked Works ───────────────────────────────────────── */}
+        {/* ─── Tracked papers ───────────────────────────────────────── */}
         <SectionCard
-          title="Tracked Works"
+          title="Tracked papers"
           description="Remove papers from your tracking list."
         >
           {worksLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Spinner className="h-5 w-5 text-gray-400" />
+              <Spinner className="h-5 w-5 text-muted" />
             </div>
           ) : worksError ? (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
               {worksError}{" "}
               <button onClick={loadWorks} className="underline hover:no-underline">
                 Retry
               </button>
             </div>
           ) : works.length === 0 ? (
-            <p className="py-6 text-center text-sm text-gray-500">
+            <p className="py-6 text-center text-sm text-muted">
               No tracked works. Add papers from the{" "}
-              <a href="/dashboard" className="text-gray-400 hover:underline">
+              <a href="/dashboard" className="text-muted hover:underline">
                 Dashboard
               </a>
               .
@@ -493,40 +493,40 @@ export default function SettingsPage() {
             const pageWorks = works.slice((page - 1) * WORKS_PER_PAGE, page * WORKS_PER_PAGE);
             return (
               <div className="flex flex-col gap-3">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted">
                   {works.length} paper{works.length !== 1 ? "s" : ""}
-                  {totalPages > 1 && ` · page ${page} of ${totalPages}`}
+                  {totalPages > 1 && `, page ${page} of ${totalPages}`}
                 </p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-white/10 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                      <tr className="border-b border-rule text-left text-xs font-medium text-muted">
                         <th className="pb-3 pr-4">Title / DOI</th>
                         <th className="pb-3 pr-4">Year</th>
                         <th className="pb-3 pr-4">Last checked</th>
                         <th className="pb-3 text-right">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
+                    <tbody className="divide-y divide-rule">
                       {pageWorks.map((work) => (
                         <tr key={work.id} className="group">
                           <td className="py-3 pr-4">
-                            <p className="font-medium text-white leading-snug">
+                            <p className="font-medium text-ink leading-snug">
                               {work.title ?? "Untitled"}
                             </p>
                             <a
                               href={`https://doi.org/${work.doi}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="mt-0.5 block font-mono text-xs text-gray-400 underline decoration-dotted underline-offset-2 hover:text-gray-300 transition-colors"
+                              className="mt-0.5 block font-mono text-xs text-muted underline decoration-dotted underline-offset-2 hover:text-ink transition-colors"
                             >
                               {work.doi}
                             </a>
                           </td>
-                          <td className="py-3 pr-4 text-gray-400">
+                          <td className="py-3 pr-4 text-muted">
                             {work.year ?? "–"}
                           </td>
-                          <td className="py-3 pr-4 text-gray-400">
+                          <td className="py-3 pr-4 text-muted">
                             {work.last_checked_at
                               ? new Date(work.last_checked_at).toLocaleDateString()
                               : "–"}
@@ -535,7 +535,7 @@ export default function SettingsPage() {
                             <button
                               onClick={() => handleRemoveWork(work.id)}
                               disabled={removingIds.has(work.id)}
-                              className="rounded px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+                              className="rounded px-2.5 py-1 text-xs font-medium text-danger transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-40"
                             >
                               {removingIds.has(work.id) ? "Removing…" : "Remove"}
                             </button>
@@ -550,18 +550,18 @@ export default function SettingsPage() {
                     <button
                       onClick={() => setWorksPage((p) => Math.max(1, p - 1))}
                       disabled={page <= 1}
-                      className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-30"
+                      className="flex items-center gap-1.5 rounded-lg border border-rule px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                       </svg>
                       Prev
                     </button>
-                    <span className="text-xs text-gray-500">Page {page} of {totalPages}</span>
+                    <span className="text-xs text-muted">Page {page} of {totalPages}</span>
                     <button
                       onClick={() => setWorksPage((p) => Math.min(totalPages, p + 1))}
                       disabled={page >= totalPages}
-                      className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-30"
+                      className="flex items-center gap-1.5 rounded-lg border border-rule px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       Next
                       <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -575,28 +575,28 @@ export default function SettingsPage() {
           })()}
         </SectionCard>
 
-        {/* ─── Danger Zone ────────────────────────────────────────── */}
+        {/* ─── Account ────────────────────────────────────────── */}
         <SectionCard
-          title="Danger Zone"
-          description="Irreversible actions for your account."
+          title="Account"
+          description="Sign out, change your linked author, or delete your account."
         >
           <div className="flex flex-col gap-4">
             {/* Change linked author */}
             {profile?.linked_author_id && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3">
+              <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-white">Change linked author</p>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-sm font-semibold text-ink">Change linked author</p>
+                    <p className="text-xs text-muted">
                       Currently linked as{" "}
-                      <span className="font-medium text-gray-300">{profile.linked_author_name}</span>
+                      <span className="font-medium text-ink">{profile.linked_author_name}</span>
                       . Changing this will permanently delete all tracked papers.
                     </p>
                   </div>
                   {!unlinkPending && (
                     <button
                       onClick={() => { setUnlinkPending(true); setUnlinkError(null); }}
-                      className="shrink-0 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:border-red-500/50"
+                      className="shrink-0 rounded-lg border border-danger/40 px-4 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10 hover:border-danger/40"
                     >
                       Change
                     </button>
@@ -604,25 +604,25 @@ export default function SettingsPage() {
                 </div>
                 {unlinkPending && (
                   <div className="mt-4 flex flex-col gap-3">
-                    <div className="rounded-lg border border-red-500/30 bg-red-950/40 px-4 py-3 text-xs text-red-300">
-                      <p className="font-semibold text-red-200">This will permanently delete:</p>
-                      <ul className="mt-1.5 list-disc pl-4 space-y-0.5 text-red-300/80">
+                    <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-xs text-danger">
+                      <p className="font-semibold text-danger">This will permanently delete:</p>
+                      <ul className="mt-1.5 list-disc pl-4 space-y-0.5 text-danger">
                         <li>All {works.length} tracked paper{works.length !== 1 ? "s" : ""} and their citation history</li>
                         <li>Your linked author profile ({profile.linked_author_name})</li>
                       </ul>
-                      <p className="mt-2 font-medium text-red-200">This cannot be undone.</p>
-                      <p className="mt-1.5 text-red-300/70">
-                        After resetting, use <span className="font-medium text-red-300">Add by arXiv</span> on the dashboard to link a new author profile.
+                      <p className="mt-2 font-medium text-danger">This cannot be undone.</p>
+                      <p className="mt-1.5 text-danger">
+                        After resetting, use <span className="font-medium text-danger">Add by arXiv</span> on the dashboard to link a new author profile.
                       </p>
                     </div>
                     {unlinkError && (
-                      <p className="text-xs text-red-400">{unlinkError}</p>
+                      <p className="text-xs text-danger">{unlinkError}</p>
                     )}
                     <div className="flex gap-2">
                       <button
                         onClick={() => { setUnlinkPending(false); setUnlinkError(null); }}
                         disabled={unlinkLoading}
-                        className="flex-1 rounded-lg border border-white/10 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 disabled:opacity-50"
+                        className="flex-1 rounded-lg border border-rule py-2 text-sm font-medium text-ink transition-colors hover:bg-ink/5 disabled:opacity-50"
                       >
                         Cancel
                       </button>
@@ -642,7 +642,7 @@ export default function SettingsPage() {
                           }
                         }}
                         disabled={unlinkLoading}
-                        className="flex-1 rounded-lg bg-red-500/80 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                        className="flex-1 rounded-lg bg-danger/10 py-2 text-sm font-semibold text-ink transition-opacity hover:opacity-90 disabled:opacity-50"
                       >
                         {unlinkLoading ? (
                           <span className="flex items-center justify-center gap-2">
@@ -658,28 +658,28 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Sign out */}
-            <div className="flex items-center justify-between rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3">
+            {/* Sign out: not destructive, so not styled as a danger action */}
+            <div className="flex items-center justify-between rounded-lg border border-rule bg-sheet px-4 py-3">
               <div>
-                <p className="text-sm font-semibold text-white">Sign out</p>
-                <p className="text-xs text-gray-400">
+                <p className="text-sm font-semibold text-ink">Sign out</p>
+                <p className="text-xs text-muted">
                   Sign out of your Citey account on this device.
                 </p>
               </div>
               <button
                 onClick={handleSignOut}
-                className="rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:border-red-500/50"
+                className="rounded-lg border border-rule px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-ink/40"
               >
-                Sign Out
+                Sign out
               </button>
             </div>
 
             {/* Delete account */}
-            <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3">
+            <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-white">Delete account</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-sm font-semibold text-ink">Delete account</p>
+                  <p className="text-xs text-muted">
                     Permanently remove your account and all tracked papers.
                   </p>
                 </div>
@@ -690,55 +690,55 @@ export default function SettingsPage() {
                       setDeleteConfirmText("");
                       setDeleteAccountError(null);
                     }}
-                    className="rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:border-red-500/50"
+                    className="rounded-lg border border-danger/40 px-4 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/10 hover:border-danger/40"
                   >
-                    Delete Account
+                    Delete account
                   </button>
                 )}
               </div>
 
               {deleteAccountPending && (
                 <div className="mt-4 flex flex-col gap-3">
-                  <div className="rounded-lg border border-red-500/30 bg-red-950/40 px-4 py-3 text-xs text-red-300">
-                    <p className="mb-1.5 font-semibold text-red-200">
+                  <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-xs text-danger">
+                    <p className="mb-1.5 font-semibold text-danger">
                       This will permanently delete:
                     </p>
-                    <ul className="list-disc pl-4 space-y-0.5 text-red-300/80">
+                    <ul className="list-disc pl-4 space-y-0.5 text-danger">
                       <li>All {works.length} tracked paper{works.length !== 1 ? "s" : ""} and their citation history</li>
                       <li>All notifications and alerts</li>
                       <li>Your profile, settings, and linked author</li>
                       <li>Your login — you will not be able to sign in again</li>
                     </ul>
-                    <p className="mt-2 font-medium text-red-200">
+                    <p className="mt-2 font-medium text-danger">
                       This action cannot be undone.
                     </p>
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-gray-400">
-                      Type <span className="font-mono font-bold text-red-300">DELETE</span> to confirm
+                    <label className="mb-1.5 block text-xs font-medium text-muted">
+                      Type <span className="font-mono font-bold text-danger">DELETE</span> to confirm
                     </label>
                     <input
                       type="text"
                       value={deleteConfirmText}
                       onChange={(e) => setDeleteConfirmText(e.target.value)}
                       placeholder="DELETE"
-                      className="w-full rounded-lg border border-red-500/20 bg-gray-900 px-3 py-2 font-mono text-sm text-white placeholder-gray-600 outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20"
+                      className="w-full rounded-lg border border-danger/40 bg-sheet px-3 py-2 font-mono text-sm text-ink placeholder-muted/70 outline-none focus:border-danger/40 focus:ring-1 focus:ring-danger/40"
                     />
                   </div>
 
                   {deleteAccountError && (
-                    <p className="text-xs text-red-400">{deleteAccountError}</p>
+                    <p className="text-xs text-danger">{deleteAccountError}</p>
                   )}
 
                   <div className="flex gap-2">
                     <button
                       onClick={handleDeleteAccount}
                       disabled={deleteConfirmText !== "DELETE" || deletingAccount}
-                      className="flex items-center gap-2 rounded-lg bg-red-600/80 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="flex items-center gap-2 rounded-lg bg-danger/10 px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-danger disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {deletingAccount && <Spinner className="h-3.5 w-3.5" />}
-                      {deletingAccount ? "Deleting…" : "Delete My Account"}
+                      {deletingAccount ? "Deleting…" : "Delete my account"}
                     </button>
                     <button
                       onClick={() => {
@@ -747,7 +747,7 @@ export default function SettingsPage() {
                         setDeleteAccountError(null);
                       }}
                       disabled={deletingAccount}
-                      className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-gray-400 transition-colors hover:bg-white/5 disabled:opacity-40"
+                      className="rounded-lg border border-rule px-4 py-2 text-sm font-medium text-muted transition-colors hover:bg-ink/5 disabled:opacity-40"
                     >
                       Cancel
                     </button>

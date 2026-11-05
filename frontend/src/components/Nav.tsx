@@ -35,7 +35,7 @@ export default function Nav() {
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-white/10 bg-ink/80 backdrop-blur-md">
+    <nav className="sticky top-0 z-50 border-b border-rule bg-paper/90 backdrop-blur-md">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
@@ -45,7 +45,7 @@ export default function Nav() {
           >
             <Logo className="h-8 w-8" />
             <span
-              className="text-xl font-bold tracking-tight text-white"
+              className="text-xl font-bold tracking-tight text-ink"
               style={{ fontFamily: "var(--font-serif)", fontWeight: 400 }}
             >
               Citey
@@ -60,8 +60,8 @@ export default function Nav() {
                 href={link.href}
                 className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                   isActive(link.href)
-                    ? "bg-white/10 text-white"
-                    : "text-gray-300 hover:bg-white/5 hover:text-white"
+                    ? "bg-ink/10 text-ink"
+                    : "text-ink hover:bg-ink/5 hover:text-ink"
                 }`}
               >
                 {link.label}
@@ -73,22 +73,22 @@ export default function Nav() {
           <div className="hidden items-center gap-2 md:flex">
             {user ? (
               <>
-                <span className="max-w-[180px] truncate text-sm text-gray-400">
+                <span className="max-w-[180px] truncate text-sm text-muted">
                   {user.email}
                 </span>
                 <button
                   onClick={handleSignOut}
-                  className="rounded-md border border-white/10 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400"
+                  className="rounded-md border border-rule px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-danger/40 hover:bg-danger/10 hover:text-danger"
                 >
-                  Sign Out
+                  Sign out
                 </button>
               </>
             ) : (
               <Link
                 href="/signup"
-                className="rounded-md border border-paper/20 px-4 py-1.5 text-sm font-medium text-paper transition-colors hover:border-paper/50"
+                className="rounded-md border border-rule px-4 py-1.5 text-sm font-medium text-ink transition-colors hover:border-ink"
               >
-                Sign In
+                Sign in
               </Link>
             )}
           </div>
@@ -96,7 +96,7 @@ export default function Nav() {
           {/* Mobile right: hamburger */}
           <div className="flex items-center gap-1 md:hidden">
             <button
-              className="flex items-center justify-center rounded-md p-2 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
+              className="flex items-center justify-center rounded-md p-2 text-muted transition-colors hover:bg-ink/5 hover:text-ink"
               onClick={() => setMenuOpen((prev) => !prev)}
               aria-label="Toggle menu"
               aria-expanded={menuOpen}
@@ -117,7 +117,7 @@ export default function Nav() {
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div className="border-t border-white/10 bg-ink/95 px-4 pb-4 pt-2 md:hidden">
+        <div className="border-t border-rule bg-paper/90 px-4 pb-4 pt-2 md:hidden">
           <div className="flex flex-col gap-1">
             {navLinks.map((link) => (
               <Link
@@ -126,31 +126,31 @@ export default function Nav() {
                 onClick={() => setMenuOpen(false)}
                 className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                   isActive(link.href)
-                    ? "bg-white/10 text-white"
-                    : "text-gray-300 hover:bg-white/5 hover:text-white"
+                    ? "bg-ink/10 text-ink"
+                    : "text-ink hover:bg-ink/5 hover:text-ink"
                 }`}
               >
                 {link.label}
               </Link>
             ))}
-            <div className="mt-2 border-t border-white/10 pt-2">
+            <div className="mt-2 border-t border-rule pt-2">
               {user ? (
                 <>
-                  <p className="px-3 py-1 text-xs text-gray-500 truncate">{user.email}</p>
+                  <p className="px-3 py-1 text-xs text-muted truncate">{user.email}</p>
                   <button
                     onClick={() => { handleSignOut(); setMenuOpen(false); }}
-                    className="mt-1 w-full rounded-md border border-white/10 px-3 py-2 text-left text-sm font-medium text-gray-300 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400"
+                    className="mt-1 w-full rounded-md border border-rule px-3 py-2 text-left text-sm font-medium text-ink transition-colors hover:border-danger/40 hover:bg-danger/10 hover:text-danger"
                   >
-                    Sign Out
+                    Sign out
                   </button>
                 </>
               ) : (
                 <Link
                   href="/signup"
                   onClick={() => setMenuOpen(false)}
-                  className="block rounded-md bg-white px-4 py-2 text-center text-sm font-semibold text-gray-950"
+                  className="block rounded-md bg-ink px-4 py-2 text-center text-sm font-semibold text-paper"
                 >
-                  Sign In
+                  Sign in
                 </Link>
               )}
             </div>

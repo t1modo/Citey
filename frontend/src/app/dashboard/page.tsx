@@ -21,10 +21,6 @@ const WORKS_PER_PAGE = 10;
 type WorksSort = "year" | "citations";
 import TrackedWorkCard from "@/components/TrackedWorkCard";
 import ImportModal from "@/components/ImportModal";
-import CountUp from "@/components/CountUp";
-import ScrollReveal from "@/components/ScrollReveal";
-import TiltedCard from "@/components/TiltedCard";
-import Galaxy from "@/components/Galaxy";
 
 type ToastType = "success" | "error" | "info";
 
@@ -50,10 +46,10 @@ function ToastContainer({
           key={t.id}
           className={`pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 shadow-xl backdrop-blur-sm transition-all ${
             t.type === "success"
-              ? "border-white/20 bg-gray-800/80 text-gray-200"
+              ? "border-rule bg-sheet text-ink"
               : t.type === "error"
-              ? "border-red-500/30 bg-red-900/80 text-red-200"
-              : "border-white/20 bg-gray-800/80 text-gray-200"
+              ? "border-danger/40 bg-danger/10 text-danger"
+              : "border-rule bg-sheet text-ink"
           }`}
         >
           <span className="mt-0.5 text-base">
@@ -77,7 +73,7 @@ function ToastContainer({
 
 function Spinner() {
   return (
-    <svg className="h-5 w-5 animate-spin text-gray-400" viewBox="0 0 24 24" fill="none">
+    <svg className="h-5 w-5 animate-spin text-muted" viewBox="0 0 24 24" fill="none">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
     </svg>
@@ -108,116 +104,55 @@ function RecentCitationCard({
       ? `https://doi.org/${notification.citing_work_doi}`
       : null);
 
-  const affiliations =
-    notification.citing_affiliations.length > 0
-      ? notification.citing_affiliations
-      : ["Independent"];
-
   const handleClick = () => {
     if (!notification.seen) onMarkSeen(notification.id);
   };
 
+  const authors = notification.citing_authors;
+  const authorText =
+    authors.length > 3 ? `${authors.slice(0, 3).join(", ")} and ${authors.length - 3} more` : authors.join(", ");
+  const when = notification.citing_publication_date
+    ? formatDate(notification.citing_publication_date)
+    : notification.citing_year ?? null;
+
   return (
-    <div
-      className={`glass-card flex flex-col gap-3 p-4 transition-all duration-200 cursor-pointer hover:border-white/20 ${
-        !notification.seen ? "border-white/15 bg-white/5" : ""
-      }`}
+    <article
+      className="group cursor-pointer py-5"
       onClick={handleClick}
-      role="button"
-      tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && handleClick()}
-      aria-label={`Citation: ${notification.citing_work_title}`}
+      tabIndex={0}
+      aria-label={`${notification.seen ? "" : "New: "}${notification.citing_work_title}`}
     >
-      {/* Header row: unread dot + badge + date */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {!notification.seen && (
-            <span
-              className="h-2 w-2 shrink-0 rounded-full bg-white"
-              aria-label="Unread"
-            />
-          )}
-          <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
-            New citation
-          </span>
-        </div>
-        {(notification.citing_publication_date || notification.citing_year) && (
-          <span className="shrink-0 text-xs text-gray-600">
-            {notification.citing_publication_date
-              ? formatDate(notification.citing_publication_date)
-              : notification.citing_year}
-          </span>
-        )}
-      </div>
-
-      {/* Citing paper title — prominent headline */}
-      {citingUrl ? (
-        <a
-          href={citingUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="text-sm font-bold text-white underline decoration-dotted underline-offset-2 hover:text-gray-300 hover:decoration-solid leading-snug transition-colors"
-        >
-          {notification.citing_work_title || "Untitled"}
-        </a>
-      ) : (
-        <p className="text-sm font-bold text-white leading-snug">
-          {notification.citing_work_title || "Untitled"}
-        </p>
-      )}
-
-      {/* Authors — directly below citing title */}
-      {notification.citing_authors.length > 0 && (
-        <p className="text-xs text-gray-400 leading-relaxed -mt-1">
-          {notification.citing_authors.slice(0, 3).join(" · ")}
-          {notification.citing_authors.length > 3 && (
-            <span className="text-gray-600"> +{notification.citing_authors.length - 3} more</span>
-          )}
-        </p>
-      )}
-
-      {/* "cites your paper" divider */}
-      <div className="flex items-center gap-2">
-        <div className="h-px flex-1 bg-white/5" />
-        <span className="text-[10px] text-gray-600 italic">cites your paper</span>
-        <div className="h-px flex-1 bg-white/5" />
-      </div>
-
-      {/* Your paper */}
-      <div>
-        <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400">
-          Your paper
-        </p>
-        <p className="text-xs text-white/70 leading-snug">
-          {notification.cited_work_title || notification.cited_work_id}
-        </p>
-      </div>
-
-      {/* Affiliation pills */}
-      <div className="flex flex-wrap gap-1.5">
-        {affiliations.slice(0, 4).map((affil) => {
-          const isIndependent = affil === "Independent";
-          return (
-            <span
-              key={affil}
-              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${
-                isIndependent
-                  ? "bg-white/5 text-gray-500 ring-white/10"
-                  : "bg-white/8 text-gray-300 ring-white/10"
-              }`}
+      <div className="mb-1.5 flex items-baseline justify-between gap-4">
+        <h3 className="font-serif text-lg font-semibold leading-snug text-ink">
+          {!notification.seen && <span className="highlight mr-2 font-sans text-xs font-bold not-italic">New</span>}
+          {citingUrl ? (
+            <a
+              href={citingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => { e.stopPropagation(); handleClick(); }}
+              className="underline decoration-rule decoration-1 underline-offset-4 hover:decoration-ink"
             >
-              {affil}
-            </span>
-          );
-        })}
-        {affiliations.length > 4 && (
-          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-white/5 text-gray-500 ring-1 ring-white/10">
-            +{affiliations.length - 4} more
-          </span>
-        )}
+              {notification.citing_work_title || "Untitled"}
+            </a>
+          ) : (
+            notification.citing_work_title || "Untitled"
+          )}
+        </h3>
+        {when && <span className="shrink-0 text-sm tabular-nums text-muted">{when}</span>}
       </div>
-    </div>
+      {authorText && <p className="text-sm leading-relaxed text-muted">{authorText}</p>}
+      {notification.citing_affiliations.length > 0 && (
+        <p className="text-sm leading-relaxed text-muted">
+          {notification.citing_affiliations.slice(0, 3).join("; ")}
+          {notification.citing_affiliations.length > 3 && ` and ${notification.citing_affiliations.length - 3} more`}
+        </p>
+      )}
+      <p className="mt-2 text-sm text-ink">
+        Cites <i className="font-serif">{notification.cited_work_title || notification.cited_work_id}</i>
+      </p>
+    </article>
   );
 }
 
@@ -240,7 +175,7 @@ function VerificationBanner({ onToast }: { onToast: (msg: string, type: ToastTyp
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-mark/40 bg-mark/60 px-4 py-3 text-sm text-amber-900">
         <p>
           <span className="font-semibold">Verify your email</span> to receive citation notification emails.
           Check your inbox for the verification link.
@@ -249,7 +184,7 @@ function VerificationBanner({ onToast }: { onToast: (msg: string, type: ToastTyp
           <button
             onClick={handleResend}
             disabled={loading}
-            className="shrink-0 font-medium underline decoration-dotted underline-offset-2 hover:text-amber-100 disabled:opacity-50 transition-colors"
+            className="shrink-0 font-medium underline decoration-dotted underline-offset-2 hover:text-amber-900 disabled:opacity-50 transition-colors"
           >
             {loading ? "Sending…" : "Resend"}
           </button>
@@ -271,7 +206,7 @@ function FirstPaperInfoModal({ onClose }: { onClose: () => void }) {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/40 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -279,10 +214,10 @@ function FirstPaperInfoModal({ onClose }: { onClose: () => void }) {
         initial={{ opacity: 0, scale: 0.88, y: 24 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 380, damping: 28 }}
-        className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-ink shadow-2xl shadow-black/60"
+        className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-rule bg-sheet shadow-2xl shadow-ink/10"
       >
         {/* Top accent line */}
-        <div className="h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+        <div className="h-px bg-gradient-to-r from-transparent via-ink/20 to-transparent" />
 
         <div className="p-6">
           {/* Animated icon with pulsing rings */}
@@ -291,15 +226,15 @@ function FirstPaperInfoModal({ onClose }: { onClose: () => void }) {
               <motion.div
                 animate={{ scale: [1, 1.55, 1], opacity: [0.2, 0, 0.2] }}
                 transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 rounded-full bg-white/15"
+                className="absolute inset-0 rounded-full bg-ink/10"
               />
               <motion.div
                 animate={{ scale: [1, 1.9, 1], opacity: [0.1, 0, 0.1] }}
                 transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut", delay: 0.35 }}
-                className="absolute inset-0 rounded-full bg-white/10"
+                className="absolute inset-0 rounded-full bg-ink/10"
               />
-              <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/20">
-                <svg className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-ink/10 ring-1 ring-ink/20">
+                <svg className="h-7 w-7 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
@@ -315,19 +250,19 @@ function FirstPaperInfoModal({ onClose }: { onClose: () => void }) {
           >
             <motion.p
               variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
-              className="mb-0.5 text-xs font-semibold uppercase tracking-widest text-gray-500"
+              className="mb-0.5 text-xs font-semibold text-muted"
             >
               You&apos;re all set
             </motion.p>
             <motion.h2
               variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
-              className="mb-3 text-xl font-bold text-white"
+              className="mb-3 text-xl font-bold text-ink"
             >
               Citations checked daily
             </motion.h2>
             <motion.p
               variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
-              className="mb-5 text-sm leading-relaxed text-gray-400"
+              className="mb-5 text-sm leading-relaxed text-muted"
             >
               Papers added today will be scanned tonight at midnight. You&apos;ll get an email the moment a new citation is found.
             </motion.p>
@@ -340,7 +275,7 @@ function FirstPaperInfoModal({ onClose }: { onClose: () => void }) {
               {chips.map(({ icon, label }) => (
                 <span
                   key={label}
-                  className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-gray-300"
+                  className="flex items-center gap-1.5 rounded-full border border-rule bg-ink/5 px-3 py-1 text-xs font-medium text-ink"
                 >
                   <span>{icon}</span>
                   {label}
@@ -351,7 +286,7 @@ function FirstPaperInfoModal({ onClose }: { onClose: () => void }) {
             <motion.button
               variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
               onClick={onClose}
-              className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-gray-950 shadow-lg shadow-black/30 transition-opacity hover:bg-gray-100 active:scale-[0.98]"
+              className="w-full rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-paper shadow-lg shadow-ink/10 transition-opacity hover:bg-ink-soft active:scale-[0.98]"
             >
               Start tracking
             </motion.button>
@@ -613,86 +548,62 @@ export default function DashboardPage() {
         }}
       />
 
-      <Galaxy speedMultiplier={3} />
-      <div className="relative z-10 mx-auto max-w-7xl overflow-x-hidden px-4 py-10 sm:px-6 lg:px-8">
-        {/* Header */}
-        <ScrollReveal className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mx-auto max-w-6xl overflow-x-hidden px-4 py-12 sm:px-6 lg:px-8">
+        <header className="mb-12 flex flex-col gap-4 border-b border-rule pb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">
-              Welcome back
+            <h1 className="mb-2 font-serif text-4xl font-semibold text-ink">
               {(profileDisplayName || user.displayName)
-                ? `, ${profileDisplayName || user.displayName}`
-                : ""}
+                ? `Welcome back, ${(profileDisplayName || user.displayName)!.split(" ")[0]}`
+                : "Welcome back"}
             </h1>
-            <p className="mt-1 text-sm text-gray-400">
-              Here&apos;s your citation overview.
+            <p className="text-lg text-muted">
+              {worksLoading || notifsLoading ? (
+                "Loading your papers…"
+              ) : (
+                <>
+                  {works.length} {works.length === 1 ? "paper" : "papers"} tracked.{" "}
+                  {unreadCount > 0 ? (
+                    <span className="highlight font-bold text-ink">
+                      {unreadCount} new {unreadCount === 1 ? "citation" : "citations"}
+                    </span>
+                  ) : (
+                    "No new citations"
+                  )}{" "}
+                  since you last looked.
+                </>
+              )}
             </p>
           </div>
+          <a
+            href={scholarUrl ?? "https://scholar.google.com"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-ink underline decoration-rule underline-offset-4 hover:decoration-ink"
+          >
+            {scholarUrl ? "Your Google Scholar profile" : "Compare with Google Scholar"}
+          </a>
+        </header>
 
-        </ScrollReveal>
-
-        {/* Stats row */}
-        <ScrollReveal className="mb-10 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-          <TiltedCard>
-            <div className="glass-card p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Tracked works</p>
-              <p className="mt-1 text-3xl font-bold text-white">
-                {worksLoading ? "." : <CountUp end={works.length} />}
-              </p>
-            </div>
-          </TiltedCard>
-          <TiltedCard>
-            <a
-              href={scholarUrl ?? "https://scholar.google.com"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="glass-card group flex flex-col gap-2 p-4 transition-all duration-200 hover:border-white/20 hover:bg-white/5"
-            >
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Google Scholar</p>
-              <div className="flex items-center gap-1.5">
-                <svg className="h-4 w-4 shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-                <span className="text-sm font-semibold text-gray-300 group-hover:text-white transition-colors">
-                  {scholarUrl ? "View your profile" : "Open Google Scholar"}
-                </span>
-              </div>
-              <p className="text-[10px] text-gray-600">
-                {scholarUrl ? "your linked profile" : "for accurate lifetime citation counts"}
-              </p>
-            </a>
-          </TiltedCard>
-          <TiltedCard>
-            <div className="glass-card p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Unread</p>
-              <p className="mt-1 text-3xl font-bold text-white">
-                {notifsLoading ? "." : <CountUp end={unreadCount} />}
-              </p>
-              <p className="mt-0.5 text-[10px] text-gray-600">new citations</p>
-            </div>
-          </TiltedCard>
-        </ScrollReveal>
-
-        <div className="grid gap-10 lg:grid-cols-2">
-          {/* ─── Tracked Works ─────────────────────────────────────── */}
+        <div className="grid gap-x-14 gap-y-12 lg:grid-cols-2">
+          {/* ─── Tracked papers ─────────────────────────────────────── */}
           <section>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-y-2 gap-x-3">
               <div className="flex min-w-0 items-center gap-3">
-                <h2 className="text-xl font-bold text-white">Tracked Works</h2>
+                <h2 className="font-serif text-2xl font-semibold text-ink">Your papers</h2>
                 {/* Sort controls */}
                 {works.length > 1 && (
-                  <div className="flex rounded-lg border border-white/10 bg-gray-800 p-0.5">
+                  <div className="flex rounded-md border border-rule bg-sheet p-0.5" role="group" aria-label="Sort papers">
                     {(["year", "citations"] as WorksSort[]).map((s) => (
                       <button
                         key={s}
                         onClick={() => { setWorksSort(s); setWorksPage(1); }}
                         className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                           worksSort === s
-                            ? "bg-white text-gray-950 shadow"
-                            : "text-gray-400 hover:text-white"
+                            ? "bg-ink text-paper"
+                            : "text-muted hover:text-ink"
                         }`}
                       >
-                        {s === "year" ? "Year" : "Cited By"}
+                        {s === "year" ? "Newest" : "Most cited"}
                       </button>
                     ))}
                   </div>
@@ -700,19 +611,19 @@ export default function DashboardPage() {
               </div>
               <button
                 onClick={() => setAddModalOpen(true)}
-                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white px-3 sm:px-4 py-2 text-sm font-semibold text-gray-950 shadow transition-opacity hover:bg-gray-100"
+                className="flex shrink-0 items-center gap-1.5 rounded-md bg-ink px-3 py-2 text-sm font-bold text-paper transition-colors hover:bg-ink-soft sm:px-4"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
-                <span className="hidden sm:inline">Import Papers</span>
+                <span className="hidden sm:inline">Add papers</span>
               </button>
             </div>
 
             {works.length > 0 && (
-              <p className="mb-3 text-xs text-gray-500">
+              <p className="mb-3 text-xs text-muted">
                 {works.length} paper{works.length !== 1 ? "s" : ""}
-                {worksPages > 1 && ` · page ${worksPageClamped} of ${worksPages}`}
+                {worksPages > 1 && `, page ${worksPageClamped} of ${worksPages}`}
               </p>
             )}
 
@@ -721,43 +632,41 @@ export default function DashboardPage() {
                 <Spinner />
               </div>
             ) : worksError ? (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-400">
+              <div className="rounded-xl border border-danger/40 bg-danger/10 px-5 py-4 text-sm text-danger">
                 {worksError}{" "}
                 <button onClick={loadWorks} className="underline hover:no-underline">
                   Retry
                 </button>
               </div>
             ) : works.length === 0 ? (
-              <div className="glass-card flex flex-col items-center gap-3 py-16 text-center">
-                <div className="text-4xl">📄</div>
-                <p className="text-sm font-semibold text-gray-300">No tracked works yet</p>
-                <p className="text-xs text-gray-500">
-                  Click &quot;Import Papers&quot; to start tracking citations for your publications.
+              <div className="flex flex-col items-start gap-3 border-y border-rule py-10">
+                <p className="font-serif text-lg font-semibold text-ink">No papers tracked yet</p>
+                <p className="max-w-xs text-sm text-muted">
+                  Add a DOI or link your author profile, and Citey starts checking for citations tonight.
                 </p>
                 <button
                   onClick={() => setAddModalOpen(true)}
-                  className="mt-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15 transition-colors"
+                  className="mt-2 rounded-md bg-ink px-4 py-2 text-sm font-bold text-paper transition-colors hover:bg-ink-soft"
                 >
-                  Import your papers
+                  Add your papers
                 </button>
                 <a
                   href="/help"
-                  className="mt-1 text-xs text-gray-500 underline decoration-dotted underline-offset-2 hover:text-gray-300 transition-colors"
+                  className="mt-1 text-xs text-muted underline decoration-dotted underline-offset-2 hover:text-ink transition-colors"
                 >
                   Need help? Read the guide
                 </a>
               </div>
             ) : (
               <>
-                <div className="flex flex-col gap-3">
+                <div className="divide-y divide-rule border-y border-rule">
                   {pagedWorks.map((work) => (
-                    <TiltedCard key={work.id} tiltAmount={4}>
-                      <TrackedWorkCard
-                        work={work}
-                        onRemove={handleRemoveWork}
-                        removing={removingIds.has(work.id)}
-                      />
-                    </TiltedCard>
+                    <TrackedWorkCard
+                      key={work.id}
+                      work={work}
+                      onRemove={handleRemoveWork}
+                      removing={removingIds.has(work.id)}
+                    />
                   ))}
                 </div>
 
@@ -767,7 +676,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => setWorksPage((p) => Math.max(1, p - 1))}
                       disabled={worksPageClamped <= 1}
-                      className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-30"
+                      className="flex items-center gap-1.5 rounded-lg border border-rule px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -775,14 +684,14 @@ export default function DashboardPage() {
                       Prev
                     </button>
 
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted">
                       Page {worksPageClamped} of {worksPages}
                     </span>
 
                     <button
                       onClick={() => setWorksPage((p) => Math.min(worksPages, p + 1))}
                       disabled={worksPageClamped >= worksPages}
-                      className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-30"
+                      className="flex items-center gap-1.5 rounded-lg border border-rule px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       Next
                       <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -799,18 +708,11 @@ export default function DashboardPage() {
           <section>
             <div className="mb-4 flex flex-wrap items-start justify-between gap-y-2">
               <div>
-                <h2 className="text-xl font-bold text-white">
-                  Citations
-                  {unreadCount > 0 && (
-                    <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-xs font-bold text-gray-950">
-                      {unreadCount}
-                    </span>
-                  )}
-                </h2>
-                <p className="mt-0.5 text-xs text-gray-500">
+                <h2 className="font-serif text-2xl font-semibold text-ink">Recent citations</h2>
+                <p className="mt-0.5 text-xs text-muted">
                   {citationTotal > 0
-                    ? `${citationTotal} total · page ${citationPage} of ${citationPages}`
-                    : "No citations detected yet"}
+                    ? `Papers that cited you in the last 30 days${citationPages > 1 ? `, page ${citationPage} of ${citationPages}` : ""}`
+                    : "Nothing in the last 30 days"}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -818,19 +720,19 @@ export default function DashboardPage() {
                   <button
                     onClick={handleExportBibtex}
                     disabled={exportingBibtex}
-                    className="flex items-center gap-1 text-xs font-medium text-gray-500 transition-colors hover:text-gray-300 disabled:opacity-40"
+                    className="flex items-center gap-1 text-xs font-medium text-muted transition-colors hover:text-ink disabled:opacity-40"
                     title="Download all citations as BibTeX"
                   >
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    {exportingBibtex ? "Exporting…" : ".bib"}
+                    {exportingBibtex ? "Exporting…" : "Export BibTeX"}
                   </button>
                 )}
                 {unreadCount > 0 && (
                   <button
                     onClick={markAllSeen}
-                    className="text-xs font-medium text-gray-500 transition-colors hover:text-gray-300"
+                    className="text-xs font-medium text-muted transition-colors hover:text-ink"
                   >
                     <span className="hidden sm:inline">Mark all as read</span>
                     <span className="sm:hidden">Mark read</span>
@@ -839,7 +741,7 @@ export default function DashboardPage() {
                 <button
                   onClick={handleRefreshCitations}
                   disabled={notifsLoading}
-                  className="text-xs text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-40"
+                  className="text-xs text-muted hover:text-ink transition-colors disabled:opacity-40"
                   aria-label="Refresh citations"
                 >
                   <svg className={`h-4 w-4 ${notifsLoading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -854,30 +756,24 @@ export default function DashboardPage() {
                 <Spinner />
               </div>
             ) : notifsError ? (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-400">
+              <div className="rounded-xl border border-danger/40 bg-danger/10 px-5 py-4 text-sm text-danger">
                 {notifsError}{" "}
                 <button onClick={() => loadNotifications(citationPage)} className="underline hover:no-underline">
                   Retry
                 </button>
               </div>
             ) : citations.length === 0 ? (
-              <div className="glass-card flex flex-col items-center gap-3 py-16 text-center">
-                <div className="text-4xl">📑</div>
-                <p className="text-sm font-semibold text-gray-300">No citations yet</p>
-                <p className="text-xs text-gray-500 max-w-xs">
-                  Citations are checked daily.<br />New ones will appear here automatically.
+              <div className="flex flex-col items-start gap-3 border-y border-rule py-10">
+                <p className="font-serif text-lg font-semibold text-ink">No new citations this month</p>
+                <p className="max-w-xs text-sm text-muted">
+                  Citey checks every night. When a new paper cites you, it shows up here and in your inbox.
                 </p>
               </div>
             ) : (
               <>
-                <div className="flex flex-col gap-3">
+                <div className="divide-y divide-rule border-y border-rule">
                   {citations.map((notif) => (
-                    <TiltedCard key={notif.id} tiltAmount={4}>
-                      <RecentCitationCard
-                        notification={notif}
-                        onMarkSeen={handleMarkSeen}
-                      />
-                    </TiltedCard>
+                    <RecentCitationCard key={notif.id} notification={notif} onMarkSeen={handleMarkSeen} />
                   ))}
                 </div>
 
@@ -887,7 +783,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => handlePageChange(citationPage - 1)}
                       disabled={citationPage <= 1 || notifsLoading}
-                      className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-30"
+                      className="flex items-center gap-1.5 rounded-lg border border-rule px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -895,14 +791,14 @@ export default function DashboardPage() {
                       Prev
                     </button>
 
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted">
                       Page {citationPage} of {citationPages}
                     </span>
 
                     <button
                       onClick={() => handlePageChange(citationPage + 1)}
                       disabled={citationPage >= citationPages || notifsLoading}
-                      className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-30"
+                      className="flex items-center gap-1.5 rounded-lg border border-rule px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       Next
                       <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

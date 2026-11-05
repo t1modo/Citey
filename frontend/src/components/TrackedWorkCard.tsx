@@ -16,102 +16,67 @@ function formatDate(iso: string): string {
   });
 }
 
-export default function TrackedWorkCard({
-  work,
-  onRemove,
-  removing = false,
-}: TrackedWorkCardProps) {
-  const displayedAuthors =
-    work.authors.length > 3
-      ? [...work.authors.slice(0, 3), `+${work.authors.length - 3} more`]
-      : work.authors;
+function authorLine(authors: string[]): string {
+  if (authors.length === 0) return "";
+  if (authors.length <= 3) return authors.join(", ");
+  return `${authors.slice(0, 3).join(", ")} and ${authors.length - 3} more`;
+}
+
+/** One tracked paper, set like an entry in a reference list. */
+export default function TrackedWorkCard({ work, onRemove, removing = false }: TrackedWorkCardProps) {
+  const hasCounts = work.s2_citation_count != null || work.openalex_citation_count != null;
+  const lifetime = Math.max(work.s2_citation_count ?? 0, work.openalex_citation_count ?? 0);
+  const source = [work.venue, work.year].filter(Boolean).join(", ");
 
   return (
-    <div className="glass-card flex flex-col gap-3 p-4 transition-all duration-200 hover:border-white/20">
-      {/* Title */}
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="flex-1 text-sm font-semibold leading-snug text-white">
-          {work.title ?? "Untitled work"}
-        </h3>
-        {work.year && (
-          <span className="shrink-0 rounded bg-gray-800 px-2 py-0.5 text-xs font-medium text-gray-400">
-            {work.year}
-          </span>
+    <article className="py-5">
+      <h3 className="mb-1.5 font-serif text-lg font-semibold leading-snug text-ink">
+        {work.title ?? "Untitled work"}
+      </h3>
+      <p className="text-sm leading-relaxed text-muted">
+        {authorLine(work.authors)}
+        {source && (
+          <>
+            {work.authors.length > 0 && ". "}
+            <i>{source}</i>.
+          </>
         )}
-      </div>
-
-      {/* DOI */}
+      </p>
       {work.doi && (
         <a
           href={`https://doi.org/${work.doi}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="block max-w-full truncate rounded text-xs font-mono text-gray-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-gray-300 hover:decoration-solid"
+          className="mt-1 block max-w-full truncate font-mono text-xs text-muted underline decoration-rule underline-offset-2 hover:text-ink hover:decoration-ink"
         >
-          {work.doi}
+          doi:{work.doi}
         </a>
       )}
 
-      {/* Authors */}
-      {displayedAuthors.length > 0 && (
-        <p className="text-xs text-gray-400 leading-relaxed">
-          {displayedAuthors.join(" · ")}
-        </p>
-      )}
-
-      {/* Venue */}
-      {work.venue && (
-        <p className="text-xs text-gray-500 italic leading-snug truncate" title={work.venue}>
-          {work.venue}
-        </p>
-      )}
-
-      {/* Citation stats */}
-      <div className="flex items-center gap-2">
-        {/* Lifetime total — best of S2 and OpenAlex */}
-        {(() => {
-          const best = Math.max(work.s2_citation_count ?? 0, work.openalex_citation_count ?? 0);
-          const hasData = (work.s2_citation_count !== null && work.s2_citation_count !== undefined)
-            || (work.openalex_citation_count !== null && work.openalex_citation_count !== undefined);
-          return hasData ? (
-            <span className="rounded-full border border-white/10 bg-gray-800 px-2.5 py-0.5 text-xs font-medium text-gray-300">
-              Cited by {best.toLocaleString()}
-            </span>
-          ) : work.citation_count > 0 ? (
-            <span className="rounded-full border border-white/10 bg-gray-800 px-2.5 py-0.5 text-xs font-medium text-gray-300">
-              {work.citation_count} {work.citation_count === 1 ? "citation" : "citations"}
-            </span>
-          ) : null;
-        })()}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        {hasCounts ? (
+          <span className="text-ink">Cited by {lifetime.toLocaleString()}</span>
+        ) : work.citation_count > 0 ? (
+          <span className="text-ink">
+            {work.citation_count} {work.citation_count === 1 ? "citation" : "citations"} found
+          </span>
+        ) : null}
         {work.new_citations_30d > 0 && (
-          <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5 text-xs font-semibold text-white">
-            +{work.new_citations_30d} new
+          <span className="highlight font-bold text-ink">
+            {work.new_citations_30d} new this month
           </span>
         )}
-      </div>
-
-      {/* Footer row */}
-      <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/5">
-        {work.last_checked_at ? (
-          <span className="flex items-center gap-1.5 text-xs text-gray-500">
-            <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-            Checked {formatDate(work.last_checked_at)}
-          </span>
-        ) : (
-          <span className="flex items-center gap-1.5 text-xs text-gray-600">
-            <span className="h-1.5 w-1.5 rounded-full bg-gray-700" />
-            Not yet checked
-          </span>
-        )}
-
+        <span className="text-muted">
+          {work.last_checked_at ? `Checked ${formatDate(work.last_checked_at)}` : "Not checked yet"}
+        </span>
         <button
           onClick={() => onRemove(work.id)}
           disabled={removing}
-          className="rounded px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+          className="ml-auto text-sm text-muted underline decoration-rule underline-offset-2 hover:text-danger hover:decoration-danger disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {removing ? "Removing…" : "Remove"}
+          {removing ? "Removing…" : "Stop tracking"}
         </button>
       </div>
-    </div>
+    </article>
   );
 }

@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
-import { Instrument_Serif, JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { Atkinson_Hyperlegible, JetBrains_Mono, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import Nav from "@/components/Nav";
 
-const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta" });
-const serif = Instrument_Serif({
+// Atkinson Hyperlegible for interface text; Source Serif 4 (a reading serif
+// with optical sizes) for headings and longer prose; mono only for DOIs.
+const ui = Atkinson_Hyperlegible({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-ui" });
+const serif = Source_Serif_4({
   subsets: ["latin"],
-  weight: "400",
   style: ["normal", "italic"],
+  axes: ["opsz"],
   variable: "--font-serif",
 });
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono" });
@@ -32,9 +34,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <body
-        className={`${jakarta.variable} ${serif.variable} ${mono.variable} bg-ink font-sans text-white antialiased`}
+        className={`${ui.variable} ${serif.variable} ${mono.variable} bg-paper font-sans text-ink antialiased`}
       >
         <AuthProvider>
           <NotificationsProvider>

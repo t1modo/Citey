@@ -2,19 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-ink text-white;
-}
-
-::selection {
-  background: rgb(255 106 61 / 0.35);
-  color: #fff;
-}
-
 @layer base {
   :root {
-    --scrollbar-thumb: #4b5563;
-    --scrollbar-track: #0c0d10;
+    color-scheme: light;
+    --scrollbar-thumb: #c9d0da;
+    --scrollbar-track: #eef1f4;
+  }
+
+  body {
+    @apply bg-paper text-ink;
   }
 
   * {
@@ -22,27 +18,27 @@ body {
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
 
-  *::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  ::selection {
+    background: #ffe45c;
+    color: #14213d;
   }
 
-  *::-webkit-scrollbar-track {
-    background: var(--scrollbar-track);
-  }
-
-  *::-webkit-scrollbar-thumb {
-    background-color: var(--scrollbar-thumb);
-    border-radius: 3px;
+  :focus-visible {
+    outline: 2px solid #14213d;
+    outline-offset: 2px;
   }
 }
 
 @layer utilities {
-  .gradient-text {
-    @apply bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent;
+  /* Highlighter stroke behind text: used only for things that are new. */
+  .highlight {
+    background: linear-gradient(transparent 12%, #ffe45c 12%, #ffe45c 88%, transparent 88%);
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    padding: 0 0.25em;
   }
 
-  .glass-card {
-    @apply bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl;
+  .surface {
+    @apply rounded-md border border-rule bg-sheet;
   }
 }

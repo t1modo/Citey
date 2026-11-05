@@ -122,10 +122,10 @@ function sourceLabel(source: AuthorSource): string {
 
 function sourceBadgeClass(source: AuthorSource): string {
   switch (source) {
-    case "semantic_scholar": return "bg-teal-500/15 text-teal-400";
-    case "inspire": return "bg-purple-500/15 text-purple-400";
-    case "dblp": return "bg-orange-500/15 text-orange-400";
-    default: return "bg-blue-500/15 text-blue-400";
+    case "semantic_scholar": return "bg-ok/10 text-ok";
+    case "inspire": return "bg-purple-100 text-purple-800";
+    case "dblp": return "bg-orange-100 text-orange-800";
+    default: return "bg-blue-100 text-blue-800";
   }
 }
 
@@ -339,13 +339,13 @@ export default function ImportModal({
     anyBusy: boolean;
   }) => (
     <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
-      highlight ? "border-teal-500/30 bg-teal-500/10" : "border-white/10 bg-gray-800"
+      highlight ? "border-ok/40 bg-ok/10" : "border-rule bg-sheet"
     }`}>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-medium text-white">{author.display_name}</p>
+          <p className="truncate text-sm font-medium text-ink">{author.display_name}</p>
           {highlight && (
-            <span className="shrink-0 rounded-full bg-teal-500/20 px-2 py-0.5 text-[10px] font-semibold text-teal-400">
+            <span className="shrink-0 rounded-full bg-ok/10 px-2 py-0.5 text-[10px] font-semibold text-ok">
               You
             </span>
           )}
@@ -354,13 +354,13 @@ export default function ImportModal({
           </span>
         </div>
         {author.affiliations.length > 0 && (
-          <p className="truncate text-xs text-gray-400">
+          <p className="truncate text-xs text-muted">
             {author.affiliations
               .map((a: AuthorAffiliation) => a.year_range ? `${a.name} (${a.year_range})` : a.name)
-              .join(" · ")}
+              .join(", ")}
           </p>
         )}
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted">
           {author.works_count > 0 && <span>{author.works_count} works</span>}
           {author.h_index > 0 && <span className={author.works_count > 0 ? "ml-2" : ""}>h-index {author.h_index}</span>}
         </p>
@@ -370,8 +370,8 @@ export default function ImportModal({
         disabled={anyBusy}
         className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
           highlight
-            ? "bg-teal-500/80 text-white hover:bg-teal-500"
-            : "bg-white/10 text-white hover:bg-white/15"
+            ? "bg-ok/10 text-ink hover:bg-ok"
+            : "bg-ink/10 text-ink hover:bg-ink/10"
         }`}
       >
         {importingId === author.id ? (
@@ -407,22 +407,22 @@ export default function ImportModal({
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/40 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Dialog */}
-      <div className="relative z-10 flex w-full max-w-md flex-col rounded-2xl border border-white/10 bg-gray-900 shadow-2xl max-h-[90vh] sm:max-h-[85vh]">
+      <div className="relative z-10 flex w-full max-w-md flex-col rounded-2xl border border-rule bg-sheet shadow-2xl max-h-[90vh] sm:max-h-[85vh]">
 
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between px-6 pt-6 pb-5">
-          <h2 id="import-modal-title" className="text-lg font-semibold text-white">
-            Add Papers
+          <h2 id="import-modal-title" className="text-lg font-semibold text-ink">
+            Add papers
           </h2>
           <button
             onClick={onClose}
-            className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
+            className="rounded-md p-1.5 text-muted transition-colors hover:bg-ink/5 hover:text-ink"
             aria-label="Close"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -439,15 +439,15 @@ export default function ImportModal({
             {phase.type === "input" && (
               <>
                 {linkedAuthorName && (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-rule bg-ink/5 px-3 py-2.5">
                     <div className="min-w-0">
-                      <p className="text-xs text-gray-400">
-                        <span className="font-medium text-gray-300">Linked as:</span>{" "}
+                      <p className="text-xs text-muted">
+                        <span className="font-medium text-ink">Linked as:</span>{" "}
                         {linkedAuthorName}
                       </p>
-                      <p className="mt-0.5 text-[11px] text-gray-600">
+                      <p className="mt-0.5 text-[11px] text-muted">
                         To change your linked author, visit{" "}
-                        <a href="/settings" className="text-gray-500 underline underline-offset-2 hover:text-gray-300">
+                        <a href="/settings" className="text-muted underline underline-offset-2 hover:text-ink">
                           Settings
                         </a>.
                       </p>
@@ -463,32 +463,32 @@ export default function ImportModal({
                       value={query}
                       onChange={(e) => { setQuery(e.target.value); setError(null); }}
                       placeholder="DOI, arXiv URL, author URL, or name…"
-                      className="w-full rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/40 focus:ring-1 focus:ring-white/20"
+                      className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                       disabled={loading}
                       autoComplete="off"
                       spellCheck={false}
                     />
                     {detectedType && !error && (
-                      <p className="mt-1.5 text-xs text-teal-400/80">
+                      <p className="mt-1.5 text-xs text-ok">
                         {hintMap[detectedType]}
                       </p>
                     )}
                     {!detectedType && (
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        <span className="text-[10px] font-medium uppercase tracking-wider text-gray-600">Accepts</span>
-                        <span className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-medium text-sky-400">
+                        <span className="text-[10px] font-medium text-muted">Accepts</span>
+                        <span className="inline-flex items-center rounded-full border border-sky-300 bg-sky-100 px-2.5 py-0.5 text-[11px] font-medium text-sky-800">
                           DOI
                         </span>
-                        <span className="inline-flex items-center rounded-full border border-teal-500/25 bg-teal-500/10 px-2.5 py-0.5 text-[11px] font-medium text-teal-400">
+                        <span className="inline-flex items-center rounded-full border border-ok/40 bg-ok/10 px-2.5 py-0.5 text-[11px] font-medium text-ok">
                           arXiv URL
                         </span>
-                        <span className="inline-flex items-center rounded-full border border-purple-500/25 bg-purple-500/10 px-2.5 py-0.5 text-[11px] font-medium text-purple-400">
+                        <span className="inline-flex items-center rounded-full border border-purple-300 bg-purple-100 px-2.5 py-0.5 text-[11px] font-medium text-purple-800">
                           INSPIRE profile
                         </span>
-                        <span className="inline-flex items-center rounded-full border border-orange-500/25 bg-orange-500/10 px-2.5 py-0.5 text-[11px] font-medium text-orange-400">
+                        <span className="inline-flex items-center rounded-full border border-orange-300 bg-orange-100 px-2.5 py-0.5 text-[11px] font-medium text-orange-800">
                           DBLP profile
                         </span>
-                        <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[11px] font-medium text-gray-400">
+                        <span className="inline-flex items-center rounded-full border border-rule bg-ink/5 px-2.5 py-0.5 text-[11px] font-medium text-muted">
                           author name
                         </span>
                       </div>
@@ -496,7 +496,7 @@ export default function ImportModal({
                   </div>
 
                   {error && (
-                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                    <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
                       {error}
                     </div>
                   )}
@@ -506,14 +506,14 @@ export default function ImportModal({
                       type="button"
                       onClick={onClose}
                       disabled={loading}
-                      className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 disabled:opacity-50"
+                      className="rounded-lg border border-rule px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-ink/5 disabled:opacity-50"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={loading || !query.trim()}
-                      className="rounded-lg bg-white px-5 py-2 text-sm font-semibold text-gray-950 shadow-lg transition-opacity hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-lg bg-ink px-5 py-2 text-sm font-semibold text-paper shadow-lg transition-opacity hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {loading ? (
                         <span className="flex items-center gap-2"><Spinner /> Looking up…</span>
@@ -529,25 +529,25 @@ export default function ImportModal({
             {/* ── Direct confirm (INSPIRE / DBLP author URL) ──────────── */}
             {phase.type === "direct-confirm" && (
               <>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <div className="rounded-xl border border-rule bg-ink/5 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                       phase.source === "inspire"
-                        ? "bg-purple-500/15 text-purple-400"
-                        : "bg-orange-500/15 text-orange-400"
+                        ? "bg-purple-100 text-purple-800"
+                        : "bg-orange-100 text-orange-800"
                     }`}>
                       {phase.source === "inspire" ? "INSPIRE-HEP" : "DBLP"}
                     </span>
-                    <p className="text-sm font-medium text-white">Author profile detected</p>
+                    <p className="text-sm font-medium text-ink">Author profile detected</p>
                   </div>
-                  <p className="text-xs text-gray-400 font-mono break-all">{query.trim()}</p>
-                  <p className="mt-2 text-xs text-gray-500">
+                  <p className="text-xs text-muted font-mono break-all">{query.trim()}</p>
+                  <p className="mt-2 text-xs text-muted">
                     Citey will import all papers from this profile and cross-check other sources for additional coverage.
                   </p>
                 </div>
 
                 {importError && (
-                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                  <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
                     {importError}
                   </div>
                 )}
@@ -556,14 +556,14 @@ export default function ImportModal({
                   <button
                     onClick={() => { setPhase({ type: "input" }); setImportError(null); }}
                     disabled={anyBusy}
-                    className="flex-1 rounded-lg border border-white/10 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 disabled:opacity-50"
+                    className="flex-1 rounded-lg border border-rule py-2 text-sm font-medium text-ink transition-colors hover:bg-ink/5 disabled:opacity-50"
                   >
                     Back
                   </button>
                   <button
                     onClick={() => handleImport(phase.authorId, undefined, phase.source)}
                     disabled={anyBusy}
-                    className="flex-1 rounded-lg bg-white py-2 text-sm font-semibold text-gray-950 shadow transition-opacity hover:bg-gray-100 disabled:opacity-50"
+                    className="flex-1 rounded-lg bg-ink py-2 text-sm font-semibold text-paper shadow transition-opacity hover:bg-ink-soft disabled:opacity-50"
                   >
                     {importingId ? (
                       <span className="flex items-center justify-center gap-2"><Spinner /> Importing…</span>
@@ -580,21 +580,21 @@ export default function ImportModal({
               <>
                 {/* Paper banner */}
                 {phase.paper && (
-                  <div className="flex items-start gap-2 rounded-lg border border-teal-500/25 bg-teal-500/10 px-3 py-2.5">
-                    <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="flex items-start gap-2 rounded-lg border border-ok/40 bg-ok/10 px-3 py-2.5">
+                    <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ok" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    <p className="text-xs text-teal-300 leading-relaxed">
+                    <p className="text-xs text-ok leading-relaxed">
                       <span className="font-medium">Found:</span> {phase.paper.title}
                       {phase.paper.year && (
-                        <span className="ml-1 text-teal-400/70">({phase.paper.year})</span>
+                        <span className="ml-1 text-ok">({phase.paper.year})</span>
                       )}
                     </p>
                   </div>
                 )}
 
                 {importError && (
-                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                  <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
                     {importError}
                   </div>
                 )}
@@ -610,19 +610,19 @@ export default function ImportModal({
                     // Linked author found in this paper
                     return (
                       <>
-                        <p className="text-xs font-medium text-gray-500">
+                        <p className="text-xs font-medium text-muted">
                           Your linked author was found in this paper:
                         </p>
                         <AuthorCard author={linkedMatch} highlight anyBusy={anyBusy} />
                         {linkedAuthorId && phase.resolvedDoi && (
-                          <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
-                            <p className="text-xs text-gray-400">
-                              <span className="font-medium text-gray-300">Just this paper?</span>{" "}
+                          <div className="rounded-lg border border-rule bg-ink/5 px-4 py-3">
+                            <p className="text-xs text-muted">
+                              <span className="font-medium text-ink">Just this paper?</span>{" "}
                               You can{" "}
                               <button
                                 onClick={() => handleFallback(phase.resolvedDoi!)}
                                 disabled={anyBusy}
-                                className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
+                                className="text-ink underline underline-offset-2 hover:text-ink disabled:opacity-50"
                               >
                                 {fallbackLoading ? "Adding…" : "add just this paper"}
                               </button>{" "}
@@ -644,25 +644,25 @@ export default function ImportModal({
                   return (
                     <>
                       {linkedAuthorId && !linkedMatch && (
-                        <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
-                          <p className="text-xs text-amber-300">
+                        <div className="rounded-lg border border-mark/40 bg-mark/60 px-3 py-2.5">
+                          <p className="text-xs text-amber-900">
                             <span className="font-medium">{linkedAuthorName}</span> was not found in this paper. They may publish under a different name.
                           </p>
                         </div>
                       )}
-                      <p className="text-xs font-medium text-gray-500">{label}</p>
+                      <p className="text-xs font-medium text-muted">{label}</p>
                       {phase.candidates.map((author) => (
                         <AuthorCard key={author.id} author={author} anyBusy={anyBusy} />
                       ))}
                       {phase.resolvedDoi && linkedAuthorId && (
-                        <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
-                          <p className="text-xs text-gray-400">
-                            <span className="font-medium text-gray-300">Just this paper?</span>{" "}
+                        <div className="rounded-lg border border-rule bg-ink/5 px-4 py-3">
+                          <p className="text-xs text-muted">
+                            <span className="font-medium text-ink">Just this paper?</span>{" "}
                             You can{" "}
                             <button
                               onClick={() => handleFallback(phase.resolvedDoi!)}
                               disabled={anyBusy}
-                              className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
+                              className="text-ink underline underline-offset-2 hover:text-ink disabled:opacity-50"
                             >
                               {fallbackLoading ? "Adding…" : "add just this paper"}
                             </button>{" "}
@@ -675,13 +675,13 @@ export default function ImportModal({
                 })() : (
                   phase.paper ? (
                     linkedAuthorId ? (
-                      <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
-                        <p className="text-xs text-gray-400">
+                      <div className="rounded-lg border border-rule bg-ink/5 px-4 py-3">
+                        <p className="text-xs text-muted">
                           No author profiles found for this paper. You can still{" "}
                           <button
                             onClick={() => handleFallback(phase.resolvedDoi!)}
                             disabled={fallbackLoading}
-                            className="text-gray-300 underline underline-offset-2 hover:text-white disabled:opacity-50"
+                            className="text-ink underline underline-offset-2 hover:text-ink disabled:opacity-50"
                           >
                             {fallbackLoading ? "Adding…" : "add just this paper"}
                           </button>{" "}
@@ -689,15 +689,15 @@ export default function ImportModal({
                         </p>
                       </div>
                     ) : (
-                      <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
-                        <p className="text-xs text-amber-300">
+                      <div className="rounded-lg border border-mark/40 bg-mark/60 px-3 py-2.5">
+                        <p className="text-xs text-amber-900">
                           No author profiles were found for this paper. Try pasting a DOI, or link your profile first via a paper you are listed on.
                         </p>
                       </div>
                     )
                   ) : (
-                    <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
-                      <p className="text-xs text-amber-300">
+                    <div className="rounded-lg border border-mark/40 bg-mark/60 px-3 py-2.5">
+                      <p className="text-xs text-amber-900">
                         No matching author profiles found. Try a different spelling or use a DOI or arXiv URL instead.
                       </p>
                     </div>
@@ -705,10 +705,10 @@ export default function ImportModal({
                 )}
 
                 {/* ── Cross-source toggles ──────────────────────────── */}
-                <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                  <p className="mb-2 text-xs font-medium text-gray-400">
+                <div className="rounded-lg border border-rule bg-ink/5 p-3">
+                  <p className="mb-2 text-xs font-medium text-muted">
                     Also search additional databases
-                    <span className="ml-1.5 font-normal text-gray-600">
+                    <span className="ml-1.5 font-normal text-muted">
                       (off by default — enable only if your papers are missing)
                     </span>
                   </p>
@@ -737,8 +737,8 @@ export default function ImportModal({
                           disabled={anyBusy}
                           className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors disabled:opacity-40 ${
                             on
-                              ? "border-white/30 bg-white/15 text-white"
-                              : "border-white/10 bg-transparent text-gray-500 hover:border-white/20 hover:text-gray-400"
+                              ? "border-rule bg-ink/10 text-ink"
+                              : "border-rule bg-transparent text-muted hover:border-ink/40 hover:text-muted"
                           }`}
                         >
                           {on ? "✓ " : ""}{labels[src]}
@@ -751,7 +751,7 @@ export default function ImportModal({
                 <button
                   onClick={() => { setPhase({ type: "input" }); setImportError(null); }}
                   disabled={anyBusy}
-                  className="self-start text-xs text-gray-500 transition-colors hover:text-gray-300 disabled:opacity-50"
+                  className="self-start text-xs text-muted transition-colors hover:text-ink disabled:opacity-50"
                 >
                   Back
                 </button>
@@ -761,31 +761,31 @@ export default function ImportModal({
             {/* ── Author not found (DOI with linked author) ────────────── */}
             {phase.type === "author-not-found" && (
               <>
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-                  <p className="text-sm font-semibold text-amber-300">Author not detected</p>
-                  <p className="mt-1.5 text-xs text-amber-200/80 leading-relaxed">
+                <div className="rounded-xl border border-mark/40 bg-mark/60 p-4">
+                  <p className="text-sm font-semibold text-amber-900">Author not detected</p>
+                  <p className="mt-1.5 text-xs text-amber-900 leading-relaxed">
                     Your linked profile{" "}
-                    <span className="font-semibold text-white">&ldquo;{phase.check.linkedAuthor}&rdquo;</span>{" "}
+                    <span className="font-semibold text-ink">&ldquo;{phase.check.linkedAuthor}&rdquo;</span>{" "}
                     does not appear in the author list for:
                   </p>
-                  <p className="mt-2 text-xs font-semibold text-white/90 leading-snug">
+                  <p className="mt-2 text-xs font-semibold text-ink leading-snug">
                     {phase.check.paperTitle || query}
                   </p>
                   {phase.check.paperAuthors.length > 0 && (
-                    <p className="mt-1.5 text-[11px] text-gray-500 leading-relaxed">
+                    <p className="mt-1.5 text-[11px] text-muted leading-relaxed">
                       Listed authors:{" "}
                       {phase.check.paperAuthors.slice(0, 6).join(", ")}
                       {phase.check.paperAuthors.length > 6 && <> +{phase.check.paperAuthors.length - 6} more</>}
                     </p>
                   )}
-                  <p className="mt-2.5 text-xs text-amber-200/70 leading-relaxed">
+                  <p className="mt-2.5 text-xs text-amber-900 leading-relaxed">
                     Some authors publish under different names. If this paper is yours, click &ldquo;Add anyway&rdquo;.
                   </p>
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPhase({ type: "input" })}
-                    className="flex-1 rounded-lg border border-white/10 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5"
+                    className="flex-1 rounded-lg border border-rule py-2 text-sm font-medium text-ink transition-colors hover:bg-ink/5"
                   >
                     Cancel
                   </button>
@@ -804,7 +804,7 @@ export default function ImportModal({
                       }
                     }}
                     disabled={loading}
-                    className="flex-1 rounded-lg bg-white py-2 text-sm font-semibold text-gray-950 shadow transition-opacity hover:bg-gray-100 disabled:opacity-50"
+                    className="flex-1 rounded-lg bg-ink py-2 text-sm font-semibold text-paper shadow transition-opacity hover:bg-ink-soft disabled:opacity-50"
                   >
                     {loading ? (
                       <span className="flex items-center justify-center gap-2"><Spinner /> Adding…</span>
@@ -818,19 +818,19 @@ export default function ImportModal({
 
             {/* ── Merge confirm ────────────────────────────────────────── */}
             {phase.type === "merge-confirm" && (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex flex-col gap-3">
+              <div className="rounded-xl border border-mark/40 bg-mark/60 p-4 flex flex-col gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-amber-300">Confirm profile merge</p>
-                  <p className="mt-1.5 text-xs text-amber-200/80 leading-relaxed">
+                  <p className="text-sm font-semibold text-amber-900">Confirm profile merge</p>
+                  <p className="mt-1.5 text-xs text-amber-900 leading-relaxed">
                     Your account is linked to{" "}
-                    <span className="font-semibold text-amber-200">{phase.existingAuthorName}</span>.
+                    <span className="font-semibold text-amber-900">{phase.existingAuthorName}</span>.
                     Are you sure{" "}
-                    <span className="font-semibold text-amber-200">{phase.author.display_name}</span>{" "}
+                    <span className="font-semibold text-amber-900">{phase.author.display_name}</span>{" "}
                     is the same person? Their papers will be combined into your tracked list.
                   </p>
                 </div>
                 {importError && (
-                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                  <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
                     {importError}
                   </div>
                 )}
@@ -838,14 +838,14 @@ export default function ImportModal({
                   <button
                     onClick={() => { setPhase({ type: "input" }); setImportError(null); }}
                     disabled={importingId !== null}
-                    className="flex-1 rounded-lg border border-white/10 py-2 text-xs font-medium text-gray-300 transition-colors hover:bg-white/5 disabled:opacity-50"
+                    className="flex-1 rounded-lg border border-rule py-2 text-xs font-medium text-ink transition-colors hover:bg-ink/5 disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => handleImport(phase.author.id, phase.author.display_name, phase.author.source, true)}
                     disabled={importingId !== null}
-                    className="flex-1 rounded-lg bg-amber-500/80 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    className="flex-1 rounded-lg bg-mark/60 py-2 text-xs font-semibold text-ink transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
                     {importingId ? (
                       <span className="flex items-center justify-center gap-1.5"><Spinner className="h-3 w-3" /> Merging…</span>

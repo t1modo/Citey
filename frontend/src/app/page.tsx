@@ -2,83 +2,82 @@
 
 import Link from "next/link";
 import Logo from "@/components/Logo";
-import ScrollReveal from "@/components/ScrollReveal";
 import HeroDemo from "@/components/HeroDemo";
 import CitationField from "@/components/citation-field/CitationField";
 import { useAuth } from "@/contexts/AuthContext";
 
-const SOURCES = ["OpenAlex", "Semantic Scholar", "Crossref", "PubMed", "INSPIRE-HEP", "DBLP", "NASA ADS"];
+const SOURCES: [string, string][] = [
+  ["OpenAlex", "https://openalex.org"],
+  ["Semantic Scholar", "https://www.semanticscholar.org"],
+  ["Crossref", "https://www.crossref.org"],
+  ["PubMed", "https://pubmed.ncbi.nlm.nih.gov"],
+  ["INSPIRE-HEP", "https://inspirehep.net"],
+  ["DBLP", "https://dblp.org"],
+  ["NASA ADS", "https://ui.adsabs.harvard.edu"],
+];
 
-// Written like a reference list: numbered entries with a "source" line.
-const references = [
+// What a researcher actually asks before signing up, answered plainly.
+const questions = [
   {
-    title: "Seven indexes, checked every night",
-    body: "One citing paper can show up in Semantic Scholar weeks before OpenAlex, or only in INSPIRE. Citey queries all seven and merges the results, so you hear about it once, from whichever saw it first.",
-    meta: SOURCES.join(" · "),
+    q: "Where does Citey look?",
+    a: "OpenAlex, Semantic Scholar, Crossref, PubMed, INSPIRE-HEP, DBLP and NASA ADS, every night. A citing paper often appears in one index weeks before the others; Citey merges them so you hear about it once.",
   },
   {
-    title: "An email with the paper, not just a count",
-    body: "Each alert carries the citing paper's title, authors, affiliations and year, with a link straight to it. No dashboard to remember to check.",
-    meta: "Daily digest · one-click unsubscribe",
+    q: "What's in the email?",
+    a: "The citing paper's title, authors, affiliations and year, with a link to it. You don't need to open the dashboard to know what happened.",
   },
   {
-    title: "Your whole bibliography in one step",
-    body: "Link an OpenAlex, INSPIRE-HEP or DBLP profile, or search by name, and every paper is imported. New papers you publish are picked up each week.",
-    meta: "DOI · arXiv URL · author profile",
+    q: "Do I have to add papers one by one?",
+    a: "No. Link your OpenAlex, INSPIRE-HEP or DBLP profile, or search your name, and your publications are imported. Papers you publish later are picked up each week.",
   },
   {
-    title: "Preprints and published versions, merged",
-    body: "The arXiv preprint and the journal version of the same paper are recognised as one work, so it is tracked once and you aren't alerted twice.",
-    meta: "Title matching · DOI normalisation",
+    q: "What about my preprint and the published version?",
+    a: "They're recognised as the same work, so it's tracked once and you aren't alerted twice.",
   },
   {
-    title: "Export what you've collected",
-    body: "Download every citing paper as BibTeX for a grant report, a tenure file or your CV.",
-    meta: "citey-citations.bib",
+    q: "Can I get the list out?",
+    a: "Yes. Export every citing paper as BibTeX for a grant report, a tenure file or your CV.",
   },
 ];
 
 const steps = [
   { title: "Create an account", body: "Email and password. No card." },
   { title: "Add your papers", body: "Paste a DOI or arXiv link, or link an author profile to import everything." },
-  { title: "We check nightly", body: "Every tracked paper is checked against seven citation indexes." },
-  { title: "You get the email", body: "New citing papers land in your inbox with full details and a link." },
+  { title: "Citey checks every night", body: "Each tracked paper is looked up in all seven indexes." },
+  { title: "You get an email", body: "When something new cites you, it's in your inbox the next morning." },
 ];
 
 export default function HomePage() {
   const { user } = useAuth();
   const ctaHref = user ? "/dashboard" : "/signup";
+  const ctaLabel = user ? "Open your dashboard" : "Start tracking, free";
 
   return (
     <div className="flex flex-col">
-      {/* ─── Hero ─────────────────────────────────────────────────────── */}
-      <section className="relative isolate flex min-h-[calc(100svh-4rem)] items-center overflow-hidden border-b border-paper/10">
+      {/* Hero: the citation timeline is the page's one moment of motion. */}
+      <section className="relative isolate flex min-h-[calc(100svh-4rem)] items-center overflow-hidden border-b border-rule">
         <CitationField className="-z-10" />
-        {/* keep the headline legible over the field */}
-        <div className="pointer-events-none absolute inset-y-0 left-0 -z-10 w-full bg-gradient-to-r from-ink via-ink/85 to-transparent md:w-[62%]" />
+        <div className="pointer-events-none absolute inset-y-0 left-0 -z-10 w-full bg-gradient-to-r from-paper via-paper/90 to-transparent md:w-[60%]" />
 
-        <div className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-          <div className="max-w-xl">
-            <p className="mb-6 font-mono text-[11px] uppercase tracking-[0.18em] text-paper/50">
-              Citation alerts for researchers
-            </p>
-            <h1 className="mb-6 text-balance font-serif text-5xl leading-[0.98] tracking-[-0.01em] text-paper sm:text-7xl">
-              Know the moment your work is <em className="text-signal">cited</em>.
+        <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="max-w-lg">
+            <h1 className="mb-6 text-balance font-serif text-[2.75rem] font-semibold leading-[1.05] tracking-[-0.015em] text-ink sm:text-[4rem]">
+              Know when your work is cited.
             </h1>
-            <p className="mb-9 max-w-md text-lg leading-relaxed text-paper/65">
-              Citey checks seven citation indexes every night and emails you when a new
-              paper references yours.
+            <p className="mb-9 max-w-md text-lg leading-relaxed text-muted">
+              Citey checks seven citation indexes every night and emails you when a new paper
+              references yours.
             </p>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+            <div className="flex flex-wrap items-center gap-x-7 gap-y-4">
               <Link
                 href={ctaHref}
-                className="rounded-md bg-signal px-6 py-3 text-[15px] font-semibold text-ink transition-colors hover:bg-signal-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal"
+                className="rounded-md bg-ink px-6 py-3 text-base font-bold text-paper transition-colors hover:bg-ink-soft"
               >
-                {user ? "Open your dashboard" : "Start tracking, free"}
+                {ctaLabel}
               </Link>
               <a
                 href="#how"
-                className="font-mono text-xs uppercase tracking-[0.14em] text-paper/55 underline decoration-paper/20 underline-offset-4 transition-colors hover:text-paper hover:decoration-paper/60"
+                className="text-base text-ink underline decoration-rule decoration-2 underline-offset-[6px] transition-colors hover:decoration-ink"
               >
                 How it works
               </a>
@@ -87,126 +86,98 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── Product ──────────────────────────────────────────────────── */}
-      <section className="mx-auto w-full max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-        <ScrollReveal className="mb-12 grid gap-6 lg:grid-cols-[1fr_2fr] lg:items-end">
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-paper/45">Fig. 1 — Your dashboard</p>
-          <h2 className="font-serif text-4xl leading-tight text-paper sm:text-5xl">
+      {/* The product, shown rather than described. */}
+      <section className="mx-auto grid w-full max-w-6xl gap-12 px-4 py-24 sm:px-6 lg:grid-cols-[5fr_7fr] lg:items-center lg:px-8">
+        <div className="max-w-md">
+          <h2 className="mb-4 font-serif text-4xl font-semibold leading-tight text-ink">
             Every paper you&apos;ve written, and who has cited it since.
           </h2>
-        </ScrollReveal>
-        <ScrollReveal>
-          <HeroDemo />
-        </ScrollReveal>
+          <p className="text-lg leading-relaxed text-muted">
+            New citations are marked until you&apos;ve seen them. Sort by year or by how often
+            each paper is cited, and remove anything you don&apos;t want tracked.
+          </p>
+        </div>
+        <HeroDemo />
       </section>
 
-      {/* ─── References (features) ────────────────────────────────────── */}
-      <section id="features" className="border-t border-paper/10">
-        <div className="mx-auto grid max-w-7xl gap-12 px-4 py-24 sm:px-6 lg:grid-cols-[1fr_2fr] lg:px-8">
-          <ScrollReveal className="lg:sticky lg:top-24 lg:self-start">
-            <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-paper/45">References</p>
-            <h2 className="font-serif text-4xl leading-tight text-paper sm:text-5xl">What Citey does for you</h2>
-          </ScrollReveal>
-
-          <ol className="divide-y divide-paper/10 border-y border-paper/10">
-            {references.map(({ title, body, meta }, i) => (
-              <ScrollReveal key={title} delay={i * 0.05}>
-                <li className="grid gap-x-6 gap-y-2 py-8 sm:grid-cols-[3rem_1fr]">
-                  <span className="font-mono text-sm text-signal">[{i + 1}]</span>
-                  <div>
-                    <h3 className="mb-2 font-serif text-2xl text-paper">{title}</h3>
-                    <p className="mb-3 max-w-2xl leading-relaxed text-paper/60">{body}</p>
-                    <p className="font-mono text-[11px] tracking-wide text-paper/35">{meta}</p>
-                  </div>
-                </li>
-              </ScrollReveal>
+      {/* Questions, answered. Not a sequence, so not numbered. */}
+      <section id="features" className="border-t border-rule bg-sheet">
+        <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:px-8">
+          <h2 className="mb-14 max-w-xl font-serif text-4xl font-semibold leading-tight text-ink">
+            What researchers ask before signing up
+          </h2>
+          <dl className="grid gap-x-16 gap-y-12 md:grid-cols-2">
+            {questions.map(({ q, a }) => (
+              <div key={q} className="border-t border-rule pt-6">
+                <dt className="mb-3 font-serif text-[1.375rem] font-semibold leading-snug text-ink">{q}</dt>
+                <dd className="max-w-prose leading-relaxed text-muted">{a}</dd>
+              </div>
             ))}
-          </ol>
+          </dl>
         </div>
       </section>
 
-      {/* ─── How it works ─────────────────────────────────────────────── */}
-      <section id="how" className="scroll-mt-16 border-t border-paper/10 bg-ink-800">
-        <div className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-          <ScrollReveal className="mb-14 max-w-2xl">
-            <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-paper/45">Method</p>
-            <h2 className="font-serif text-4xl leading-tight text-paper sm:text-5xl">
-              Set it up once. Hear about every citation after.
-            </h2>
-          </ScrollReveal>
-
-          <ol className="grid gap-px overflow-hidden rounded-lg border border-paper/10 bg-paper/10 sm:grid-cols-2 lg:grid-cols-4">
+      {/* How it works: a real sequence, so numbered. */}
+      <section id="how" className="scroll-mt-16 border-t border-rule">
+        <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 lg:px-8">
+          <h2 className="mb-14 max-w-xl font-serif text-4xl font-semibold leading-tight text-ink">
+            Set it up once
+          </h2>
+          <ol className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
             {steps.map(({ title, body }, i) => (
-              <li key={title} className="bg-ink-800 p-6">
-                <ScrollReveal delay={i * 0.06}>
-                  <p className="mb-8 font-mono text-xs text-paper/40">0{i + 1}</p>
-                  <h3 className="mb-2 font-serif text-2xl text-paper">{title}</h3>
-                  <p className="text-sm leading-relaxed text-paper/55">{body}</p>
-                </ScrollReveal>
+              <li key={title} className="relative">
+                <span className="mb-4 block font-serif text-5xl font-light leading-none text-rule" aria-hidden="true">
+                  {i + 1}
+                </span>
+                <h3 className="mb-2 text-lg font-bold text-ink">{title}</h3>
+                <p className="leading-relaxed text-muted">{body}</p>
               </li>
             ))}
           </ol>
         </div>
       </section>
 
-      {/* ─── Closing CTA ──────────────────────────────────────────────── */}
-      <section className="border-t border-paper/10">
-        <ScrollReveal className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-24 sm:px-6 md:flex-row md:items-end md:justify-between lg:px-8">
-          <h2 className="max-w-2xl font-serif text-4xl leading-tight text-paper sm:text-6xl">
-            Your next citation is being written <em className="text-signal">right now</em>.
+      {/* Closing */}
+      <section className="border-t border-rule bg-ink text-paper">
+        <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-20 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+          <h2 className="max-w-xl font-serif text-4xl font-semibold leading-tight">
+            Your next citation is being written now.
           </h2>
           <Link
             href={ctaHref}
-            className="shrink-0 rounded-md bg-signal px-6 py-3 text-[15px] font-semibold text-ink transition-colors hover:bg-signal-soft"
+            className="shrink-0 self-start rounded-md bg-mark px-6 py-3 text-base font-bold text-ink transition-colors hover:bg-mark-soft md:self-auto"
           >
-            {user ? "Open your dashboard" : "Start tracking, free"}
+            {ctaLabel}
           </Link>
-        </ScrollReveal>
+        </div>
       </section>
 
-      {/* ─── Footer ───────────────────────────────────────────────────── */}
-      <footer className="border-t border-paper/10 py-12">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <footer className="py-12">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2">
-              <Logo className="h-7 w-7" />
-              <span className="font-serif text-xl text-paper">Citey</span>
-              <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.14em] text-paper/35">
-                Citation alerts
-              </span>
-            </div>
-
-            <nav className="flex flex-wrap gap-6 text-sm text-paper/45">
-              <Link href="/" className="transition-colors hover:text-paper">Home</Link>
-              {user && <Link href="/dashboard" className="transition-colors hover:text-paper">Dashboard</Link>}
-              {user && <Link href="/settings" className="transition-colors hover:text-paper">Settings</Link>}
-              <Link href="/faq" className="transition-colors hover:text-paper">FAQ</Link>
-              <Link href="/help" className="transition-colors hover:text-paper">Help</Link>
+            <Link href="/" className="flex items-center gap-2 text-ink">
+              <Logo className="h-6 w-6" />
+              <span className="font-serif text-lg font-semibold">Citey</span>
+            </Link>
+            <nav className="flex flex-wrap gap-6 text-sm text-muted">
+              {user && <Link href="/dashboard" className="hover:text-ink">Dashboard</Link>}
+              {user && <Link href="/settings" className="hover:text-ink">Settings</Link>}
+              <Link href="/faq" className="hover:text-ink">FAQ</Link>
+              <Link href="/help" className="hover:text-ink">Help</Link>
             </nav>
           </div>
-
-          <div className="mt-8 border-t border-paper/10 pt-8 text-xs text-paper/35">
-            <p>&copy; {new Date().getFullYear()} Citey. Built for researchers, by researchers.</p>
-            <p className="mt-1.5">
-              Citation data from{" "}
-              {[
-                ["OpenAlex", "https://openalex.org"],
-                ["Semantic Scholar", "https://www.semanticscholar.org"],
-                ["Crossref", "https://www.crossref.org"],
-                ["PubMed", "https://pubmed.ncbi.nlm.nih.gov"],
-                ["INSPIRE-HEP", "https://inspirehep.net"],
-                ["DBLP", "https://dblp.org"],
-                ["NASA ADS", "https://ui.adsabs.harvard.edu"],
-              ].map(([name, href], i, all) => (
-                <span key={name}>
-                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-paper/55 hover:text-paper">
-                    {name}
-                  </a>
-                  {i < all.length - 2 ? ", " : i === all.length - 2 ? ", and " : "."}
-                </span>
-              ))}
-            </p>
-          </div>
+          <p className="mt-8 border-t border-rule pt-8 text-sm leading-relaxed text-muted">
+            Citation data from{" "}
+            {SOURCES.map(([name, href], i) => (
+              <span key={name}>
+                <a href={href} target="_blank" rel="noopener noreferrer" className="text-ink underline decoration-rule underline-offset-2 hover:decoration-ink">
+                  {name}
+                </a>
+                {i < SOURCES.length - 2 ? ", " : i === SOURCES.length - 2 ? " and " : "."}
+              </span>
+            ))}{" "}
+            &copy; {new Date().getFullYear()} Citey.
+          </p>
         </div>
       </footer>
     </div>

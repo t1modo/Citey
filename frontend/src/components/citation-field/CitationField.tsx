@@ -58,7 +58,7 @@ export default function CitationField({ className = "" }: { className?: string }
           return;
         }
 
-        const target = surface(gpu, canvas, { dpr: [1, 1.5], clearColor: [0.047, 0.051, 0.063, 1] });
+        const target = surface(gpu, canvas, { dpr: [1, 1.5], clearColor: [0.933, 0.945, 0.957, 1] });
         const fx = effect(gpu, shader);
 
         const applySize = () => {
@@ -150,7 +150,7 @@ export default function CitationField({ className = "" }: { className?: string }
         <img
           src="/citation-field.webp"
           alt=""
-          className="absolute inset-0 h-full w-full object-cover object-right opacity-90"
+          className="absolute inset-0 h-full w-full object-cover object-right"
         />
       )}
       <canvas
@@ -166,21 +166,21 @@ export default function CitationField({ className = "" }: { className?: string }
           {Array.from({ length: COLS }, (_, c) => (
             <span
               key={c}
-              className="absolute bottom-6 -translate-x-1/2 font-mono text-[10px] tracking-wider text-paper/30"
+              className="absolute bottom-6 -translate-x-1/2 text-xs tabular-nums text-muted"
               style={{ left: `${(layout.x0 + c * layout.step) * 100}%`, opacity: layout.intensity }}
             >
               {year - (COLS - 1 - c)}
             </span>
           ))}
           <span
-            className="absolute -translate-x-1/2 translate-y-5 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.14em] text-paper/60"
+            className="absolute -translate-x-1/2 translate-y-6 whitespace-nowrap font-serif text-sm italic text-ink"
             style={{
               left: `${(layout.x0 + FOCAL * layout.step) * 100}%`,
               top: `${FOCUS_Y * 100}%`,
               opacity: layout.intensity,
             }}
           >
-            your paper
+            Your paper
           </span>
         </>
       )}

@@ -40,7 +40,7 @@ function firebaseErrorMessage(err: unknown): string {
 
 function Spinner() {
   return (
-    <svg className="h-5 w-5 animate-spin text-gray-400" viewBox="0 0 24 24" fill="none">
+    <svg className="h-5 w-5 animate-spin text-muted" viewBox="0 0 24 24" fill="none">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
     </svg>
@@ -134,18 +134,16 @@ function AuthActionContent() {
     <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-16">
       {/* Background glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-        <div className="absolute -top-32 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-white/5 blur-3xl" />
-        <div className="absolute top-1/3 right-1/4 h-64 w-64 rounded-full bg-white/3 blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-md">
-        <div className="rounded-2xl border border-white/10 bg-gray-900/80 p-8 shadow-2xl backdrop-blur-sm">
+        <div className="rounded-2xl border border-rule bg-sheet p-8 shadow-2xl backdrop-blur-sm">
           {/* Logo */}
           <div className="mb-8 flex justify-center">
             <Link href="/" className="flex items-center gap-2">
               <Logo className="h-9 w-9" />
               <span
-                className="text-xl font-bold text-white"
+                className="text-xl font-bold text-ink"
                 style={{ fontFamily: "var(--font-serif)", fontWeight: 400 }}
               >
                 Citey
@@ -157,25 +155,25 @@ function AuthActionContent() {
           {stage === "loading" && (
             <div className="flex flex-col items-center gap-4 py-4 text-center">
               <Spinner />
-              <p className="text-sm text-gray-400">Verifying your link…</p>
+              <p className="text-sm text-muted">Verifying your link…</p>
             </div>
           )}
 
           {/* Email verified */}
           {stage === "verified" && (
             <div className="flex flex-col items-center gap-5 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-2xl">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-rule bg-ink/5 text-2xl">
                 ✓
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">Email verified</h1>
-                <p className="mt-2 text-sm text-gray-400">
+                <h1 className="font-serif text-2xl font-semibold text-ink">Email verified</h1>
+                <p className="mt-2 text-sm text-muted">
                   Your email address has been confirmed. You can now receive citation alerts.
                 </p>
               </div>
               <button
                 onClick={() => router.push(destination)}
-                className="mt-1 w-full rounded-xl bg-white py-3 text-sm font-bold text-gray-950 shadow-lg transition-all hover:bg-gray-100"
+                className="mt-1 w-full rounded-xl bg-ink py-3 text-sm font-bold text-paper shadow-lg transition-all hover:bg-ink-soft"
               >
                 Go to dashboard
               </button>
@@ -186,11 +184,11 @@ function AuthActionContent() {
           {stage === "reset-form" && (
             <div className="flex flex-col gap-5">
               <div className="text-center">
-                <h1 className="text-2xl font-bold text-white">Set new password</h1>
+                <h1 className="font-serif text-2xl font-semibold text-ink">Set new password</h1>
                 {resetEmail && (
-                  <p className="mt-2 text-sm text-gray-400">
+                  <p className="mt-2 text-sm text-muted">
                     For{" "}
-                    <span className="font-medium text-gray-200">{resetEmail}</span>
+                    <span className="font-medium text-ink">{resetEmail}</span>
                   </p>
                 )}
               </div>
@@ -199,7 +197,7 @@ function AuthActionContent() {
                 <div>
                   <label
                     htmlFor="new-password"
-                    className="mb-1.5 block text-sm font-medium text-gray-300"
+                    className="mb-1.5 block text-sm font-medium text-ink"
                   >
                     New password
                   </label>
@@ -212,7 +210,7 @@ function AuthActionContent() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/40 focus:ring-1 focus:ring-white/20"
+                    className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                     disabled={resetLoading}
                   />
                 </div>
@@ -220,7 +218,7 @@ function AuthActionContent() {
                 <div>
                   <label
                     htmlFor="confirm-password"
-                    className="mb-1.5 block text-sm font-medium text-gray-300"
+                    className="mb-1.5 block text-sm font-medium text-ink"
                   >
                     Confirm password
                   </label>
@@ -232,13 +230,13 @@ function AuthActionContent() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full rounded-lg border border-white/10 bg-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/40 focus:ring-1 focus:ring-white/20"
+                    className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                     disabled={resetLoading}
                   />
                 </div>
 
                 {resetError && (
-                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                  <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
                     {resetError}
                   </div>
                 )}
@@ -246,7 +244,7 @@ function AuthActionContent() {
                 <button
                   type="submit"
                   disabled={resetLoading}
-                  className="mt-1 rounded-xl bg-white py-3 text-sm font-bold text-gray-950 shadow-lg transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-1 rounded-xl bg-ink py-3 text-sm font-bold text-paper shadow-lg transition-all hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {resetLoading ? (
                     <span className="flex items-center justify-center gap-2">
@@ -254,7 +252,7 @@ function AuthActionContent() {
                       Saving…
                     </span>
                   ) : (
-                    "Set Password"
+                    "Set password"
                   )}
                 </button>
               </form>
@@ -264,18 +262,18 @@ function AuthActionContent() {
           {/* Password reset done */}
           {stage === "reset-done" && (
             <div className="flex flex-col items-center gap-5 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-2xl">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-rule bg-ink/5 text-2xl">
                 ✓
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">Password updated</h1>
-                <p className="mt-2 text-sm text-gray-400">
+                <h1 className="font-serif text-2xl font-semibold text-ink">Password updated</h1>
+                <p className="mt-2 text-sm text-muted">
                   Your password has been changed. Sign in with your new password.
                 </p>
               </div>
               <Link
                 href="/signup"
-                className="mt-1 w-full rounded-xl bg-white py-3 text-center text-sm font-bold text-gray-950 shadow-lg transition-all hover:bg-gray-100"
+                className="mt-1 w-full rounded-xl bg-ink py-3 text-center text-sm font-bold text-paper shadow-lg transition-all hover:bg-ink-soft"
               >
                 Sign in
               </Link>
@@ -285,16 +283,16 @@ function AuthActionContent() {
           {/* Error */}
           {stage === "error" && (
             <div className="flex flex-col items-center gap-5 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-red-500/30 bg-red-500/10 text-2xl">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-danger/40 bg-danger/10 text-2xl">
                 ✕
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">Link invalid</h1>
-                <p className="mt-2 text-sm text-gray-400">{errorMessage}</p>
+                <h1 className="font-serif text-2xl font-semibold text-ink">Link invalid</h1>
+                <p className="mt-2 text-sm text-muted">{errorMessage}</p>
               </div>
               <Link
                 href="/signup"
-                className="mt-1 w-full rounded-xl bg-white py-3 text-center text-sm font-bold text-gray-950 shadow-lg transition-all hover:bg-gray-100"
+                className="mt-1 w-full rounded-xl bg-ink py-3 text-center text-sm font-bold text-paper shadow-lg transition-all hover:bg-ink-soft"
               >
                 Back to sign in
               </Link>

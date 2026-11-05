@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import SplitText from "@/components/SplitText";
-import ScrollReveal from "@/components/ScrollReveal";
 
 interface FaqItem {
   question: string;
@@ -18,31 +16,31 @@ const faqItems: FaqItem[] = [
         <p>
           Citey draws from seven scholarly databases across two roles:
         </p>
-        <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-gray-600">
+        <p className="mt-3 text-xs font-semibold text-muted">
           Primary citation sources
         </p>
         <ul className="mt-2 list-disc space-y-2 pl-5">
           <li>
-            <strong className="text-white">OpenAlex</strong> — a free, open index of
+            <strong className="text-ink">OpenAlex</strong> — a free, open index of
             over 250 million scholarly works updated daily. The main source for citation
             tracking across all disciplines. Learn more at{" "}
-            <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">openalex.org</a>.
+            <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">openalex.org</a>.
           </li>
           <li>
-            <strong className="text-white">Semantic Scholar</strong> — an AI-powered
+            <strong className="text-ink">Semantic Scholar</strong> — an AI-powered
             index of over 200 million papers from the Allen Institute for AI. Provides
             strong additional coverage for computer science, AI/ML, and biomedical
             literature. Learn more at{" "}
-            <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">semanticscholar.org</a>.
+            <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">semanticscholar.org</a>.
           </li>
           <li>
-            <strong className="text-white">Crossref</strong> — the canonical DOI
+            <strong className="text-ink">Crossref</strong> — the canonical DOI
             registration agency, aggregating reference lists from thousands of publishers.
             Used both for DOI resolution and as a citation source. Learn more at{" "}
-            <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">crossref.org</a>.
+            <a href="https://www.crossref.org" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">crossref.org</a>.
           </li>
         </ul>
-        <p className="mt-4 text-xs font-semibold uppercase tracking-widest text-gray-600">
+        <p className="mt-4 text-xs font-semibold text-muted">
           Author import sources
         </p>
         <p className="mt-1">
@@ -51,24 +49,24 @@ const faqItems: FaqItem[] = [
         </p>
         <ul className="mt-2 list-disc space-y-2 pl-5">
           <li>
-            <strong className="text-white">PubMed</strong> — 35 million biomedical and
+            <strong className="text-ink">PubMed</strong> — 35 million biomedical and
             life-science records from the NCBI. Learn more at{" "}
-            <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">pubmed.ncbi.nlm.nih.gov</a>.
+            <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">pubmed.ncbi.nlm.nih.gov</a>.
           </li>
           <li>
-            <strong className="text-white">NASA ADS</strong> — astronomy, astrophysics,
+            <strong className="text-ink">NASA ADS</strong> — astronomy, astrophysics,
             and space-science literature. Learn more at{" "}
-            <a href="https://ui.adsabs.harvard.edu" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">ui.adsabs.harvard.edu</a>.
+            <a href="https://ui.adsabs.harvard.edu" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">ui.adsabs.harvard.edu</a>.
           </li>
           <li>
-            <strong className="text-white">INSPIRE-HEP</strong> — the canonical database
+            <strong className="text-ink">INSPIRE-HEP</strong> — the canonical database
             for high-energy physics, including JACoW conference proceedings. Learn more at{" "}
-            <a href="https://inspirehep.net" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">inspirehep.net</a>.
+            <a href="https://inspirehep.net" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">inspirehep.net</a>.
           </li>
           <li>
-            <strong className="text-white">DBLP</strong> — near-complete ACM and IEEE
+            <strong className="text-ink">DBLP</strong> — near-complete ACM and IEEE
             conference and journal coverage for computer science. Learn more at{" "}
-            <a href="https://dblp.org" target="_blank" rel="noopener noreferrer" className="text-gray-400 underline hover:text-gray-300">dblp.org</a>.
+            <a href="https://dblp.org" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">dblp.org</a>.
           </li>
         </ul>
         <p className="mt-3">
@@ -84,7 +82,7 @@ const faqItems: FaqItem[] = [
     answer: (
       <>
         <p>
-          Citey runs a citation scan job <strong className="text-white">once per day</strong>.
+          Citey runs a citation scan job <strong className="text-ink">once per day</strong>.
           The job iterates over every tracked work in the database, queries OpenAlex,
           Crossref, and Semantic Scholar for new citing papers, and records any newly
           discovered citations.
@@ -93,7 +91,7 @@ const faqItems: FaqItem[] = [
           Email notifications are dispatched immediately after new citations are found, so
           you should receive an alert within 24 hours of a paper being indexed by OpenAlex,
           Crossref, or Semantic Scholar. New citations appear automatically on your{" "}
-          <Link href="/dashboard" className="text-gray-400 underline hover:text-gray-300">
+          <Link href="/dashboard" className="text-muted underline hover:text-ink">
             Dashboard
           </Link>{" "}
           — no manual action needed.
@@ -108,22 +106,22 @@ const faqItems: FaqItem[] = [
         <p>There are several reasons a citation might not appear in Citey:</p>
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>
-            <strong className="text-white">Indexing lag.</strong> OpenAlex, Crossref, and
+            <strong className="text-ink">Indexing lag.</strong> OpenAlex, Crossref, and
             Semantic Scholar rely on publishers depositing metadata and their own crawling
             pipelines. Newly published papers may take days to weeks to be fully indexed.
           </li>
           <li>
-            <strong className="text-white">Missing reference lists.</strong> Not all
+            <strong className="text-ink">Missing reference lists.</strong> Not all
             publishers deposit complete reference lists with Crossref. Open access
             publishers tend to have better coverage.
           </li>
           <li>
-            <strong className="text-white">DOI mismatch.</strong> If the citing paper
+            <strong className="text-ink">DOI mismatch.</strong> If the citing paper
             references your work without the correct DOI (e.g., using a URL or an
             informal citation), the automated system cannot link it to your tracked work.
           </li>
           <li>
-            <strong className="text-white">Conference papers and books.</strong> These
+            <strong className="text-ink">Conference papers and books.</strong> These
             are often less well-covered than journal articles. Preprints on arXiv or
             bioRxiv may also have limited citation data.
           </li>
@@ -135,7 +133,7 @@ const faqItems: FaqItem[] = [
             href="https://openalex.org"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-400 underline hover:text-gray-300"
+            className="text-muted underline hover:text-ink"
           >
             OpenAlex
           </a>
@@ -144,7 +142,7 @@ const faqItems: FaqItem[] = [
             href="https://www.semanticscholar.org"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-400 underline hover:text-gray-300"
+            className="text-muted underline hover:text-ink"
           >
             Semantic Scholar
           </a>
@@ -163,16 +161,16 @@ const faqItems: FaqItem[] = [
         <ol className="mt-3 list-decimal space-y-2 pl-5">
           <li>
             Go to{" "}
-            <Link href="/settings" className="text-gray-400 underline hover:text-gray-300">
+            <Link href="/settings" className="text-muted underline hover:text-ink">
               Settings
             </Link>
             .
           </li>
           <li>
-            In the <strong className="text-white">Notification Preferences</strong> section,
-            toggle off <strong className="text-white">Email notifications</strong>.
+            In the <strong className="text-ink">Notifications</strong> section,
+            toggle off <strong className="text-ink">Email notifications</strong>.
           </li>
-          <li>Click <strong className="text-white">Save Changes</strong>.</li>
+          <li>Click <strong className="text-ink">Save changes</strong>.</li>
         </ol>
         <p className="mt-3">
           You will no longer receive email alerts, but your tracked works and notification
@@ -190,15 +188,15 @@ const faqItems: FaqItem[] = [
         </p>
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>
-            <strong className="text-white">Email address</strong>: for account
+            <strong className="text-ink">Email address</strong>: for account
             authentication (via Firebase Auth) and sending you citation alerts.
           </li>
           <li>
-            <strong className="text-white">DOIs of tracked works</strong>: to know which
+            <strong className="text-ink">DOIs of tracked works</strong>: to know which
             papers to monitor.
           </li>
           <li>
-            <strong className="text-white">Notification records</strong>: to display your
+            <strong className="text-ink">Notification records</strong>: to display your
             citation history in the dashboard and avoid sending duplicate alerts.
           </li>
         </ul>
@@ -219,40 +217,40 @@ const faqItems: FaqItem[] = [
         </p>
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>
-            <strong className="text-white">Bare DOI:</strong>{" "}
-            <code className="rounded bg-gray-800 px-1 py-0.5 font-mono text-xs text-gray-500">
+            <strong className="text-ink">Bare DOI:</strong>{" "}
+            <code className="rounded bg-sheet px-1 py-0.5 font-mono text-xs text-muted">
               10.1038/s41586-021-03819-2
             </code>
           </li>
           <li>
-            <strong className="text-white">HTTPS URL:</strong>{" "}
-            <code className="rounded bg-gray-800 px-1 py-0.5 font-mono text-xs text-gray-500">
+            <strong className="text-ink">HTTPS URL:</strong>{" "}
+            <code className="rounded bg-sheet px-1 py-0.5 font-mono text-xs text-muted">
               https://doi.org/10.1038/s41586-021-03819-2
             </code>
           </li>
           <li>
-            <strong className="text-white">HTTP URL:</strong>{" "}
-            <code className="rounded bg-gray-800 px-1 py-0.5 font-mono text-xs text-gray-500">
+            <strong className="text-ink">HTTP URL:</strong>{" "}
+            <code className="rounded bg-sheet px-1 py-0.5 font-mono text-xs text-muted">
               http://doi.org/10.1038/s41586-021-03819-2
             </code>
           </li>
           <li>
-            <strong className="text-white">Protocol-free URL:</strong>{" "}
-            <code className="rounded bg-gray-800 px-1 py-0.5 font-mono text-xs text-gray-500">
+            <strong className="text-ink">Protocol-free URL:</strong>{" "}
+            <code className="rounded bg-sheet px-1 py-0.5 font-mono text-xs text-muted">
               doi.org/10.1038/s41586-021-03819-2
             </code>
           </li>
         </ul>
         <p className="mt-3">
           All valid DOIs begin with{" "}
-          <code className="rounded bg-gray-800 px-1 py-0.5 font-mono text-xs text-gray-500">10.</code>{" "}
+          <code className="rounded bg-sheet px-1 py-0.5 font-mono text-xs text-muted">10.</code>{" "}
           followed by a registrant code and suffix. Citey resolves DOIs through a
           fallback chain —{" "}
           <a
             href="https://www.crossref.org"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-400 underline hover:text-gray-300"
+            className="text-muted underline hover:text-ink"
           >
             Crossref
           </a>
@@ -261,7 +259,7 @@ const faqItems: FaqItem[] = [
             href="https://datacite.org"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-400 underline hover:text-gray-300"
+            className="text-muted underline hover:text-ink"
           >
             DataCite
           </a>
@@ -270,7 +268,7 @@ const faqItems: FaqItem[] = [
             href="https://openalex.org"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-400 underline hover:text-gray-300"
+            className="text-muted underline hover:text-ink"
           >
             OpenAlex
           </a>{" "}
@@ -280,7 +278,7 @@ const faqItems: FaqItem[] = [
             href="https://search.crossref.org"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-400 underline hover:text-gray-300"
+            className="text-muted underline hover:text-ink"
           >
             search.crossref.org
           </a>
@@ -295,7 +293,7 @@ function AccordionItem({ item, index }: { item: FaqItem; index: number }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="border-b border-white/10">
+    <div className="border-b border-rule">
       <button
         className="flex w-full items-center justify-between gap-4 px-0 py-5 text-left"
         onClick={() => setOpen((v) => !v)}
@@ -303,12 +301,12 @@ function AccordionItem({ item, index }: { item: FaqItem; index: number }) {
         aria-controls={`faq-answer-${index}`}
         id={`faq-question-${index}`}
       >
-        <span className="text-base font-semibold text-white leading-snug">
+        <span className="text-base font-semibold text-ink leading-snug">
           {item.question}
         </span>
         <span
-          className={`shrink-0 rounded-full border border-white/10 p-1 text-gray-400 transition-transform ${
-            open ? "rotate-180 border-white/20 bg-white/10 text-white" : ""
+          className={`shrink-0 rounded-full border border-rule p-1 text-muted transition-transform ${
+            open ? "rotate-180 border-rule bg-ink/10 text-ink" : ""
           }`}
           aria-hidden
         >
@@ -323,7 +321,7 @@ function AccordionItem({ item, index }: { item: FaqItem; index: number }) {
           id={`faq-answer-${index}`}
           role="region"
           aria-labelledby={`faq-question-${index}`}
-          className="pb-6 text-sm leading-relaxed text-gray-400"
+          className="pb-6 text-sm leading-relaxed text-muted"
         >
           {item.answer}
         </div>
@@ -336,41 +334,38 @@ export default function FaqPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
       {/* Header */}
-      <ScrollReveal className="mb-12 text-center">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-medium text-gray-300">
-          Help Center
-        </div>
-        <h1 className="mb-4 text-4xl font-bold text-white">
-          <SplitText text="Frequently Asked Questions" charDelay={0.025} />
+      <div className="mb-12 text-center">
+        <h1 className="font-serif mb-4 text-4xl font-semibold text-ink">
+          Frequently asked questions
         </h1>
-        <p className="text-gray-400">
+        <p className="text-muted">
           Everything you need to know about Citey and how citation tracking works.
         </p>
-      </ScrollReveal>
+      </div>
 
       {/* Accordion */}
-      <ScrollReveal delay={0.15}>
-      <div className="rounded-2xl border border-white/10 bg-gray-900/50 px-6 py-2">
+      <div>
+      <div className="rounded-2xl border border-rule bg-sheet px-6 py-2">
         {faqItems.map((item, i) => (
           <AccordionItem key={i} item={item} index={i} />
         ))}
       </div>
-      </ScrollReveal>
+      </div>
 
       {/* Still have questions */}
-      <ScrollReveal delay={0.1}>
-      <div className="mt-12 rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
-        <h2 className="mb-2 text-xl font-bold text-white">
+      <div>
+      <div className="mt-12 rounded-2xl border border-rule bg-ink/5 p-8 text-center">
+        <h2 className="font-serif mb-2 text-xl font-semibold text-ink">
           Still have questions?
         </h2>
-        <p className="mb-1 text-sm text-gray-400">
+        <p className="mb-1 text-sm text-muted">
           Check the dashboard or update your preferences in Settings.
         </p>
-        <p className="mb-6 text-sm text-gray-400">
+        <p className="mb-6 text-sm text-muted">
           For anything else, email us at{" "}
           <a
             href="mailto:support@citey.email"
-            className="text-gray-300 underline hover:text-white"
+            className="text-ink underline hover:text-ink"
           >
             support@citey.email
           </a>
@@ -379,28 +374,28 @@ export default function FaqPage() {
         <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
             href="/dashboard"
-            className="rounded-xl bg-white px-6 py-2.5 text-sm font-semibold text-gray-950 shadow transition-opacity hover:bg-gray-100"
+            className="rounded-xl bg-ink px-6 py-2.5 text-sm font-semibold text-paper shadow transition-opacity hover:bg-ink-soft"
           >
-            Go to Dashboard
+            Go to dashboard
           </Link>
           <Link
             href="/settings"
-            className="rounded-xl border border-white/10 px-6 py-2.5 text-sm font-semibold text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
+            className="rounded-xl border border-rule px-6 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-ink/5 hover:text-ink"
           >
             Settings
           </Link>
         </div>
       </div>
-      </ScrollReveal>
+      </div>
 
       {/* Data sources attribution */}
-      <p className="mt-10 text-center text-xs text-gray-600">
+      <p className="mt-10 text-center text-xs text-muted">
         Citation data provided by{" "}
         <a
           href="https://openalex.org"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-gray-500 hover:text-gray-400"
+          className="text-muted hover:text-muted"
         >
           OpenAlex
         </a>
@@ -409,7 +404,7 @@ export default function FaqPage() {
           href="https://www.crossref.org"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-gray-500 hover:text-gray-400"
+          className="text-muted hover:text-muted"
         >
           Crossref
         </a>
@@ -418,7 +413,7 @@ export default function FaqPage() {
           href="https://www.semanticscholar.org"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-gray-500 hover:text-gray-400"
+          className="text-muted hover:text-muted"
         >
           Semantic Scholar
         </a>
@@ -427,7 +422,7 @@ export default function FaqPage() {
           href="https://pubmed.ncbi.nlm.nih.gov"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-gray-500 hover:text-gray-400"
+          className="text-muted hover:text-muted"
         >
           PubMed
         </a>
@@ -436,7 +431,7 @@ export default function FaqPage() {
           href="https://ui.adsabs.harvard.edu"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-gray-500 hover:text-gray-400"
+          className="text-muted hover:text-muted"
         >
           NASA ADS
         </a>
@@ -445,7 +440,7 @@ export default function FaqPage() {
           href="https://inspirehep.net"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-gray-500 hover:text-gray-400"
+          className="text-muted hover:text-muted"
         >
           INSPIRE-HEP
         </a>
@@ -454,7 +449,7 @@ export default function FaqPage() {
           href="https://dblp.org"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-gray-500 hover:text-gray-400"
+          className="text-muted hover:text-muted"
         >
           DBLP
         </a>
