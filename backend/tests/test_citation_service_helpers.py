@@ -184,12 +184,31 @@ class _FakeQuery:
         return iter([])
 
 
+class _FakeBatch:
+    """Applies writes immediately; enough for code that uses db.batch()."""
+
+    def set(self, ref, data) -> None:
+        ref.set(data)
+
+    def update(self, ref, data) -> None:
+        ref.update(data)
+
+    def delete(self, ref) -> None:
+        ref.delete()
+
+    def commit(self) -> None:
+        pass
+
+
 class _FakeDB:
     def __init__(self) -> None:
         self._store: dict[str, Any] = {}
 
     def collection(self, name: str) -> _FakeCollRef:
         return _FakeCollRef(self._store, name)
+
+    def batch(self) -> _FakeBatch:
+        return _FakeBatch()
 
     def dump(self) -> dict:
         return dict(self._store)

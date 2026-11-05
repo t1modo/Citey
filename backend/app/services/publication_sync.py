@@ -10,9 +10,7 @@ the S2 works API does not provide a reliable full publication list.
 """
 
 import logging
-import re
 from datetime import datetime, timezone
-from difflib import SequenceMatcher
 from types import ModuleType
 from typing import Any
 
@@ -21,17 +19,11 @@ from app.services import openalex as openalex_svc
 from app.services.openalex import extract_topics, extract_venue
 
 from app.services.email_service import resolve_recipient
+from app.services.normalize import dedupe_works_by_title, doi_to_work_id, normalize_doi
 
 logger = logging.getLogger(__name__)
 
 
-def _strip_doi(doi: str | None) -> str | None:
-    if not doi:
-        return None
-    for prefix in ("https://doi.org/", "http://doi.org/"):
-        if doi.startswith(prefix):
-            return doi[len(prefix):]
-    return doi
 
 
 async def sync_new_publications_for_user(
@@ -72,47 +64,22 @@ async def sync_new_publications_for_user(
 
     # Load the user's existing tracked DOIs (use the doc ID which is doi.replace("/", "__")).
     works_ref = db.collection("users").document(uid).collection("trackedWorks")
-    existing_ids: set[str] = {doc.id for doc in works_ref.stream()}
-
-    # Deduplicate near-duplicate titles (arXiv preprint + journal version of same paper).
-    # Mirrors the logic in import_works_by_author so sync doesn't add duplicates either.
-    def _is_arxiv(doi: str | None) -> bool:
-        return bool(doi and doi.lower().startswith("10.48550/arxiv"))
-
-    def _norm_title(title: str) -> str:
-        return re.sub(r"[^a-z0-9\s]", "", title.lower()).strip()
-
-    def _is_near_duplicate(a: str, b: str) -> bool:
-        return SequenceMatcher(None, a, b).ratio() >= 0.85
-
-    seen_titles: dict[str, dict] = {}
-    for raw in oa_works:
-        doi = _strip_doi(raw.get("doi"))
-        if not doi:
-            continue
-        doi = doi.lower()
-        norm = _norm_title(raw.get("title") or "")
-        if not norm:
-            continue
-        matched_key = next((k for k in seen_titles if _is_near_duplicate(norm, k)), None)
-        if matched_key is None:
-            seen_titles[norm] = raw
-        else:
-            stored_doi = _strip_doi(seen_titles[matched_key].get("doi"))
-            if _is_arxiv(stored_doi) and not _is_arxiv(doi):
-                del seen_titles[matched_key]
-                seen_titles[norm] = raw
+    # Compare case-insensitively: older imports stored mixed-case DOI IDs.
+    existing_ids: set[str] = {doc.id.lower() for doc in works_ref.stream()}
+    # Works the user deleted on purpose must not be re-added by the sync.
+    dismissed: set[str] = {d.lower() for d in (user_data.get("dismissed_work_ids") or [])}
 
     now = datetime.now(tz=timezone.utc)
     added_titles: list[str] = []
 
-    for raw in seen_titles.values():
-        doi = _strip_doi(raw.get("doi"))
+    for raw in dedupe_works_by_title(oa_works):
+        doi = normalize_doi(raw.get("doi"))
         if not doi:
             continue  # Can't track a work with no DOI.
-        doi = doi.lower()
 
-        work_id = doi.replace("/", "__")
+        work_id = doi_to_work_id(doi)
+        if work_id in dismissed:
+            continue
         if work_id in existing_ids:
             continue  # Already tracked.
 

@@ -8,10 +8,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.deps import get_current_user
+from app.deps import enforce_cooldown, get_current_user
 from app.firebase_client import get_db
 from app.models import AddWorkRequest, ImportByAuthorRequest, TrackedWork
 from app.services.crossref import resolve_doi
+from app.services.normalize import dedupe_works_by_title, doi_to_work_id, normalize_doi
 from app.services.openalex import extract_topics, extract_venue
 
 logger = logging.getLogger(__name__)
@@ -213,8 +214,8 @@ async def add_work(
 
     # Normalise DOI to lowercase for consistent Firestore document IDs.
     # DOIs are case-insensitive; mixing cases creates phantom duplicates.
-    work_info["doi"] = work_info["doi"].lower()
-    work_id = work_info["doi"].replace("/", "__")
+    work_info["doi"] = normalize_doi(work_info["doi"])
+    work_id = doi_to_work_id(work_info["doi"])
 
     ref = db.collection("users").document(uid).collection("trackedWorks").document(work_id)
     snapshot = ref.get()
@@ -239,6 +240,11 @@ async def add_work(
         "openalex_citation_count": work_info.get("openalex_citation_count"),
     }
     ref.set(doc_data)
+    # Adding a paper by hand undoes an earlier dismissal.
+    from firebase_admin import firestore
+    db.collection("users").document(uid).set(
+        {"dismissed_work_ids": firestore.ArrayRemove([work_id])}, merge=True
+    )
     logger.info("Added tracked work %s for uid=%s", work_id, uid)
 
     return _doc_to_tracked_work(work_id, doc_data)
@@ -415,9 +421,7 @@ async def import_works_by_author(
     """Bulk-import all works by an author (OpenAlex, S2, INSPIRE-HEP, or DBLP)."""
     from app.services import dblp as dblp_svc
     from app.services import inspire_hep as inspire_svc
-    from app.services import nasa_ads as ads_svc
     from app.services import openalex as openalex_svc
-    from app.services import pubmed as pubmed_svc
     from app.services import semantic_scholar as s2_svc
 
     # Enforce single linked-author policy.
@@ -426,21 +430,11 @@ async def import_works_by_author(
     user_data = user_snap.to_dict() or {} if user_snap.exists else {}
 
     # Rate-limit bulk imports to prevent Firestore write floods.
-    now = datetime.now(tz=timezone.utc)
-    last_import = user_data.get("last_import_at") or user_data.get("created_at")
-    if isinstance(last_import, datetime):
-        if last_import.tzinfo is None:
-            last_import = last_import.replace(tzinfo=timezone.utc)
-        elapsed = (now - last_import).total_seconds()
-        retry_after = int(_IMPORT_COOLDOWN - elapsed)
-        if retry_after > 0:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={
-                    "message": "You've run an import recently. Please wait before importing again.",
-                    "retry_after_seconds": retry_after,
-                },
-            )
+    enforce_cooldown(
+        user_data, "last_import_at", _IMPORT_COOLDOWN,
+        "You've run an import recently. Please wait before importing again.",
+        fallback_field="created_at",
+    )
 
     # Normalise IDs for comparison (strip full URL prefix if present).
     def _short_id(author_id: str) -> str:
@@ -516,365 +510,194 @@ async def import_works_by_author(
                 incoming_short,
             )
 
-    # Deduplicate by title: for papers published in multiple venues (e.g. arXiv
-    # preprint + conference proceedings), keep only the best version per title.
-    # Uses fuzzy matching (SequenceMatcher ratio >= 0.85) to catch near-duplicate
-    # titles where a word or two changed between preprint and final version.
-    # "Best" means non-arXiv first; among ties, the first returned by OpenAlex.
-    import re
-    from difflib import SequenceMatcher
-
-    def _is_arxiv(doi: str | None) -> bool:
-        return bool(doi and doi.lower().startswith("10.48550/arxiv"))
-
-    def _strip_doi(doi: str | None) -> str | None:
-        if not doi:
-            return doi
-        for prefix in ("https://doi.org/", "http://doi.org/"):
-            if doi.startswith(prefix):
-                return doi[len(prefix):]
-        return doi
-
-    def _norm_title(title: str) -> str:
-        """Lowercase and strip punctuation for fuzzy comparison."""
-        return re.sub(r"[^a-z0-9\s]", "", title.lower()).strip()
-
-    def _is_near_duplicate(a: str, b: str) -> bool:
-        return SequenceMatcher(None, a, b).ratio() >= 0.85
-
     # ── Cross-source coverage boost ──────────────────────────────────────────
-    # After fetching from the primary source, search the complementary source
-    # by author name and merge their works in.  This catches papers indexed in
-    # one source but not the other (e.g. S2 misses some conference proceedings
-    # that OpenAlex has, and vice versa).
-    #
-    # Safety: we require at least one DOI to overlap between the primary works
-    # and the candidate's works before merging, so a same-name researcher in
-    # the other source doesn't pollute the import.
+    # Each requested extra source is searched by author name, all at once.
+    # A candidate's works are merged only if at least one DOI overlaps the
+    # primary source, so a same-name researcher can't pollute the import.
     if author_display_name and body.extra_sources:
-        primary_dois: set[str] = set()
-        for r in raw_works:
-            d = _strip_doi(r.get("doi"))
-            if d:
-                primary_dois.add(d.lower())
-
-        try:
-            if body.source == "semantic_scholar" and "openalex" in body.extra_sources:
-                # Primary was S2 — also pull from OpenAlex
-                oa_candidates = await openalex_svc.search_authors(author_display_name)
-                for c in oa_candidates[:3]:
-                    if _names_match(c.get("display_name", ""), author_display_name):
-                        oa_extra = await openalex_svc.get_works_by_author(c["id"])
-                        if oa_extra:
-                            extra_dois: set[str] = set()
-                            for r in oa_extra:
-                                d = _strip_doi(r.get("doi"))
-                                if d:
-                                    extra_dois.add(d.lower())
-                            overlap = primary_dois & extra_dois
-                            if overlap:
-                                raw_works = raw_works + oa_extra
-                                logger.info(
-                                    "Cross-source: merged %d OpenAlex works for '%s' "
-                                    "(%d DOI(s) overlap)",
-                                    len(oa_extra), author_display_name, len(overlap),
-                                )
-                        break
-            elif body.source != "semantic_scholar" and "semantic_scholar" in body.extra_sources:
-                # Primary was OpenAlex/other — also pull from S2
-                s2_candidates = await s2_svc.search_authors(author_display_name)
-                for c in s2_candidates[:3]:
-                    if _names_match(c.get("name", ""), author_display_name):
-                        s2_extra = await s2_svc.get_works_by_author(c["authorId"])
-                        if s2_extra:
-                            extra_dois = set()
-                            for r in s2_extra:
-                                d = _strip_doi(r.get("doi"))
-                                if d:
-                                    extra_dois.add(d.lower())
-                            overlap = primary_dois & extra_dois
-                            if overlap:
-                                raw_works = raw_works + s2_extra
-                                logger.info(
-                                    "Cross-source: merged %d S2 works for '%s' "
-                                    "(%d DOI(s) overlap)",
-                                    len(s2_extra), author_display_name, len(overlap),
-                                )
-                        break
-        except Exception as exc:
-            logger.warning(
-                "Cross-source fetch failed for '%s': %s — continuing with primary source only",
-                author_display_name, exc,
-            )
-
-    # ── PubMed cross-source boost ────────────────────────────────────────────
-    # Only runs when "pubmed" is explicitly requested in extra_sources.
-    if author_display_name and "pubmed" in body.extra_sources:
-        current_dois: set[str] = set()
-        for r in raw_works:
-            d = _strip_doi(r.get("doi"))
-            if d:
-                current_dois.add(d.lower())
-        try:
-            pm_candidates = await pubmed_svc.search_authors(author_display_name)
-            for c in pm_candidates[:1]:
-                if _names_match(c.get("name", ""), author_display_name):
-                    pm_extra = await pubmed_svc.get_works_by_author(c["authorId"])
-                    if pm_extra:
-                        pm_dois: set[str] = set()
-                        for r in pm_extra:
-                            d = _strip_doi(r.get("doi"))
-                            if d:
-                                pm_dois.add(d.lower())
-                        overlap = current_dois & pm_dois
-                        if overlap:
-                            raw_works = raw_works + pm_extra
-                            logger.info(
-                                "Cross-source: merged %d PubMed works for '%s' "
-                                "(%d DOI(s) overlap)",
-                                len(pm_extra), author_display_name, len(overlap),
-                            )
-        except Exception as exc:
-            logger.warning(
-                "PubMed cross-source fetch failed for '%s': %s — skipping",
-                author_display_name, exc,
-            )
-
-    # ── NASA ADS cross-source boost ──────────────────────────────────────────
-    # Only runs when "nasa_ads" is explicitly requested in extra_sources.
-    if author_display_name and "nasa_ads" in body.extra_sources:
-        current_dois_ads: set[str] = set()
-        for r in raw_works:
-            d = _strip_doi(r.get("doi"))
-            if d:
-                current_dois_ads.add(d.lower())
-        try:
-            ads_candidates = await ads_svc.search_authors(author_display_name)
-            for c in ads_candidates[:1]:
-                if _names_match(c.get("name", ""), author_display_name):
-                    ads_extra = await ads_svc.get_works_by_author(c["authorId"])
-                    if ads_extra:
-                        ads_dois: set[str] = set()
-                        for r in ads_extra:
-                            d = _strip_doi(r.get("doi"))
-                            if d:
-                                ads_dois.add(d.lower())
-                        overlap = current_dois_ads & ads_dois
-                        if overlap:
-                            raw_works = raw_works + ads_extra
-                            logger.info(
-                                "Cross-source: merged %d NASA ADS works for '%s' "
-                                "(%d DOI(s) overlap)",
-                                len(ads_extra), author_display_name, len(overlap),
-                            )
-        except Exception as exc:
-            logger.warning(
-                "NASA ADS cross-source fetch failed for '%s': %s — skipping",
-                author_display_name, exc,
-            )
-
-    # ── INSPIRE-HEP cross-source boost ──────────────────────────────────────
-    # HEP, accelerator physics, and JACoW/CERN conference proceedings —
-    # the only automated path for papers from those venues.
-    # Uses a two-step author-search → works-by-id pattern (more precise than
-    # a bare name search against the literature index).
-    if author_display_name and body.source != "inspire" and "inspire" in body.extra_sources:
-        current_dois_inspire: set[str] = set()
-        for r in raw_works:
-            d = _strip_doi(r.get("doi"))
-            if d:
-                current_dois_inspire.add(d.lower())
-        try:
-            inspire_candidates = await inspire_svc.search_authors(author_display_name)
-            for c in inspire_candidates[:3]:
-                if _names_match(c.get("name", ""), author_display_name):
-                    inspire_extra = await inspire_svc.get_works_by_author(c["authorId"])
-                    if inspire_extra:
-                        inspire_dois: set[str] = set()
-                        for r in inspire_extra:
-                            d = _strip_doi(r.get("doi"))
-                            if d:
-                                inspire_dois.add(d.lower())
-                        overlap = current_dois_inspire & inspire_dois
-                        if overlap:
-                            raw_works = raw_works + inspire_extra
-                            logger.info(
-                                "Cross-source: merged %d INSPIRE-HEP works for '%s' "
-                                "(%d DOI(s) overlap)",
-                                len(inspire_extra), author_display_name, len(overlap),
-                            )
-                    break
-        except Exception as exc:
-            logger.warning(
-                "INSPIRE-HEP cross-source fetch failed for '%s': %s — skipping",
-                author_display_name, exc,
-            )
-
-    # ── DBLP cross-source boost ──────────────────────────────────────────────
-    # CS conference and journal papers — virtually complete ACM / IEEE coverage.
-    # Uses a two-step author-search (returns PID) → publication-search pattern
-    # so results are scoped to exactly one person, not a name-based full-text
-    # match that would flood the results with same-name researchers.
-    if author_display_name and body.source != "dblp" and "dblp" in body.extra_sources:
-        current_dois_dblp: set[str] = set()
-        for r in raw_works:
-            d = _strip_doi(r.get("doi"))
-            if d:
-                current_dois_dblp.add(d.lower())
-        try:
-            dblp_candidates = await dblp_svc.search_authors(author_display_name)
-            for c in dblp_candidates[:3]:
-                if _names_match(c.get("name", ""), author_display_name):
-                    dblp_extra = await dblp_svc.get_works_by_author(c["authorId"])
-                    if dblp_extra:
-                        dblp_dois: set[str] = set()
-                        for r in dblp_extra:
-                            d = _strip_doi(r.get("doi"))
-                            if d:
-                                dblp_dois.add(d.lower())
-                        overlap = current_dois_dblp & dblp_dois
-                        if overlap:
-                            raw_works = raw_works + dblp_extra
-                            logger.info(
-                                "Cross-source: merged %d DBLP works for '%s' "
-                                "(%d DOI(s) overlap)",
-                                len(dblp_extra), author_display_name, len(overlap),
-                            )
-                    break
-        except Exception as exc:
-            logger.warning(
-                "DBLP cross-source fetch failed for '%s': %s — skipping",
-                author_display_name, exc,
-            )
-
-    seen_titles: dict[str, dict] = {}  # norm_title -> raw work dict
-    for raw in raw_works:
-        doi_raw = _strip_doi(raw.get("doi"))
-        if not doi_raw:
-            continue
-        doi_raw = doi_raw.lower()  # Normalise to lowercase — DOIs are case-insensitive
-        norm = _norm_title(raw.get("title") or "")
-        if not norm:
-            continue
-
-        # Check for an existing entry that is a near-duplicate.
-        matched_key = next(
-            (k for k in seen_titles if _is_near_duplicate(norm, k)), None
+        raw_works = raw_works + await _gather_cross_source_works(
+            primary_source=body.source,
+            extra_sources=body.extra_sources,
+            author_name=author_display_name,
+            primary_works=raw_works,
         )
-        if matched_key is None:
-            seen_titles[norm] = raw
-        else:
-            # Keep the non-arXiv (proceedings/journal) version.
-            stored_doi = _strip_doi(seen_titles[matched_key].get("doi"))
-            if _is_arxiv(stored_doi) and not _is_arxiv(doi_raw):
-                del seen_titles[matched_key]
-                seen_titles[norm] = raw
 
-    works_ref = db.collection("users").document(uid).collection("trackedWorks")
-    existing_ids = {doc.id for doc in works_ref.stream()}
+    works_ref = user_ref.collection("trackedWorks")
+    # Case-insensitive: older imports stored mixed-case DOI document IDs.
+    existing_ids = {doc.id.lower() for doc in works_ref.stream()}
+    dismissed = {d.lower() for d in (user_data.get("dismissed_work_ids") or [])}
 
     # Cap total tracked works at 500 per user to prevent runaway Firestore
     # writes and excessive citation-check workload.
-    _MAX_TRACKED_WORKS = 500
     remaining_capacity = max(0, _MAX_TRACKED_WORKS - len(existing_ids))
 
     imported = 0
     skipped = 0
     now = datetime.now(tz=timezone.utc)
+    batch = db.batch()
+    pending = 0
 
-    for raw in seen_titles.values():
-        doi: str | None = _strip_doi(raw.get("doi"))
-
-        if not doi:
+    # Keep one version per (near-)identical title, preferring journal or
+    # proceedings DOIs over arXiv preprints.
+    for raw in dedupe_works_by_title(raw_works):
+        doi = normalize_doi(raw.get("doi"))
+        work_id = doi_to_work_id(doi)  # type: ignore[arg-type]
+        if work_id in existing_ids or work_id in dismissed or imported >= remaining_capacity:
             skipped += 1
             continue
 
-        work_id = doi.replace("/", "__")
-        if work_id in existing_ids:
-            skipped += 1
-            continue
-
-        if imported >= remaining_capacity:
-            skipped += 1
-            continue
-
-        title: str = raw.get("title") or "Untitled"
-        authors: list[str] = [
-            a.get("author", {}).get("display_name", "").strip()
-            for a in raw.get("authorships", [])
-            if a.get("author", {}).get("display_name")
-        ]
-        year: int | None = raw.get("publication_year")
-        openalex_id: str | None = raw.get("id")
-        openalex_citation_count: int | None = raw.get("cited_by_count")
-
-        works_ref.document(work_id).set({
+        batch.set(works_ref.document(work_id), {
             "doi": doi,
-            "openalex_id": openalex_id,
-            "title": title,
-            "authors": authors,
-            "year": year,
+            "openalex_id": raw.get("id"),
+            "title": raw.get("title") or "Untitled",
+            "authors": [
+                a.get("author", {}).get("display_name", "").strip()
+                for a in raw.get("authorships", [])
+                if a.get("author", {}).get("display_name")
+            ],
+            "year": raw.get("publication_year"),
             "venue": extract_venue(raw),
             "work_type": raw.get("type"),
             "topics": extract_topics(raw),
             "added_at": now,
             "last_checked_at": None,
-            "openalex_citation_count": openalex_citation_count,
+            "openalex_citation_count": raw.get("cited_by_count"),
         })
+        pending += 1
+        if pending == 500:  # Firestore batch limit
+            batch.commit()
+            batch, pending = db.batch(), 0
         existing_ids.add(work_id)
         imported += 1
 
-    # Persist author linkage after a successful import.
+    if pending:
+        batch.commit()
+
+    # Persist author linkage and the import timestamp in one write.
+    user_updates: dict = {"last_import_at": now}
     if not stored_id:
-        # First-ever import: set the primary linked author.
-        link_data: dict = {"linked_author_id": incoming_short}
+        user_updates["linked_author_id"] = incoming_short
         if author_display_name:
-            link_data["linked_author_name"] = author_display_name
-        user_ref.set(link_data, merge=True)
+            user_updates["linked_author_name"] = author_display_name
         logger.info("Linked uid=%s to author %s (%s)", uid, incoming_short, author_display_name)
     elif is_new_author and body.confirm_merge:
-        # Merge-confirmed: append to additional_linked_authors.
-        new_entry = {"id": incoming_short, "name": author_display_name}
-        updated_additional = additional + [new_entry]
-        user_ref.set({"additional_linked_authors": updated_additional}, merge=True)
+        user_updates["additional_linked_authors"] = additional + [
+            {"id": incoming_short, "name": author_display_name}
+        ]
         logger.info(
             "Merged author %s (%s) into uid=%s additional linked authors",
             incoming_short, author_display_name, uid,
         )
+    user_ref.set(user_updates, merge=True)
 
-    # Stamp import time for rate limiting on the next call.
-    user_ref.set({"last_import_at": now}, merge=True)
     logger.info("Bulk import: %d imported, %d skipped for uid=%s", imported, skipped, uid)
     return {"imported": imported, "skipped": skipped}
 
 
+_MAX_TRACKED_WORKS = 500
+
+
+def _doi_set(works: list[dict]) -> set[str]:
+    return {d for d in (normalize_doi(w.get("doi")) for w in works) if d}
+
+
+async def _gather_cross_source_works(
+    primary_source: str,
+    extra_sources: list[str],
+    author_name: str,
+    primary_works: list[dict],
+) -> list[dict]:
+    """Search every requested extra source concurrently; return merged works."""
+    from app.services import dblp as dblp_svc
+    from app.services import inspire_hep as inspire_svc
+    from app.services import nasa_ads as ads_svc
+    from app.services import openalex as openalex_svc
+    from app.services import pubmed as pubmed_svc
+    from app.services import semantic_scholar as s2_svc
+
+    # source -> (service, candidate name key, candidate id key, candidates to try)
+    adapters = {
+        "openalex": (openalex_svc, "display_name", "id", 3),
+        "semantic_scholar": (s2_svc, "name", "authorId", 3),
+        "pubmed": (pubmed_svc, "name", "authorId", 1),
+        "nasa_ads": (ads_svc, "name", "authorId", 1),
+        "inspire": (inspire_svc, "name", "authorId", 3),
+        "dblp": (dblp_svc, "name", "authorId", 3),
+    }
+    primary_dois = _doi_set(primary_works)
+
+    async def fetch(source: str) -> list[dict]:
+        svc, name_key, id_key, limit = adapters[source]
+        try:
+            candidates = await svc.search_authors(author_name)
+            for cand in candidates[:limit]:
+                if not _names_match(cand.get(name_key, ""), author_name):
+                    continue
+                extra = await svc.get_works_by_author(cand[id_key])
+                overlap = primary_dois & _doi_set(extra or [])
+                if overlap:
+                    logger.info(
+                        "Cross-source: merged %d %s works for '%s' (%d DOI(s) overlap)",
+                        len(extra), source, author_name, len(overlap),
+                    )
+                    return extra
+                return []  # first name match decides; don't try weaker matches
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "%s cross-source fetch failed for '%s': %s; skipping",
+                source, author_name, exc,
+            )
+        return []
+
+    sources = [
+        s for s in dict.fromkeys(extra_sources)
+        if s in adapters and s != primary_source
+        # OpenAlex is only an "extra" when the primary was Semantic Scholar.
+        and not (s == "openalex" and primary_source != "semantic_scholar")
+    ]
+    results = await asyncio.gather(*(fetch(s) for s in sources))
+    return [w for works in results for w in works]
+
+
 @router.delete("/{work_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_work(
+def delete_work(
     work_id: str,
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> None:
-    """Remove a tracked work and all its notifications from the user's subcollection."""
+    """Remove a tracked work and all its notifications.
+
+    The work is also recorded as dismissed so the weekly publication sync
+    doesn't quietly add it back. Plain ``def``: FastAPI runs it in a worker
+    thread, so the blocking Firestore calls don't stall the event loop.
+    """
+    from firebase_admin import firestore
+
+    from app.services.citation_service import _commit_in_batches
+
     user_ref = db.collection("users").document(uid)
     ref = user_ref.collection("trackedWorks").document(work_id)
-    snapshot = ref.get()
-    if not snapshot.exists:
+    if not ref.get().exists:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tracked work not found.",
         )
-    ref.delete()
 
-    # Cascade-delete every notification that was triggered by this work.
-    notifs_ref = user_ref.collection("notifications")
-    for ndoc in notifs_ref.where("cited_work_id", "==", work_id).stream():
-        ndoc.reference.delete()
+    notif_refs = [
+        ndoc.reference
+        for ndoc in user_ref.collection("notifications").where("cited_work_id", "==", work_id).stream()
+    ]
+    _commit_in_batches(db, [("delete", r, None) for r in [ref, *notif_refs]])
+    user_ref.set({"dismissed_work_ids": firestore.ArrayUnion([work_id.lower()])}, merge=True)
 
-    logger.info("Deleted tracked work %s and its notifications for uid=%s", work_id, uid)
+    logger.info(
+        "Deleted tracked work %s and %d notification(s) for uid=%s",
+        work_id, len(notif_refs), uid,
+    )
 
 
 @router.get("", response_model=list[TrackedWork])
-async def list_works(
+def list_works(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> list[TrackedWork]:
@@ -884,7 +707,12 @@ async def list_works(
     total_counts: defaultdict[str, int] = defaultdict(int)
     recent_counts: defaultdict[str, int] = defaultdict(int)
 
-    for ndoc in db.collection("users").document(uid).collection("notifications").stream():
+    # Only the three fields we count with; avoids pulling whole documents.
+    notifs = (
+        db.collection("users").document(uid).collection("notifications")
+        .select(["cited_work_id", "citing_publication_date", "citing_year"])
+    )
+    for ndoc in notifs.stream():
         ndata = ndoc.to_dict() or {}
         work_id = ndata.get("cited_work_id", "")
         if not work_id:

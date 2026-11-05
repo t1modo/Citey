@@ -9,36 +9,51 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.services.normalize import dedupe_works_by_title, normalize_doi
 from app.services.publication_sync import (
-    _strip_doi,
     sync_new_publications_for_all_users,
     sync_new_publications_for_user,
 )
 
 
 # ---------------------------------------------------------------------------
-# _strip_doi
+# normalize_doi
 # ---------------------------------------------------------------------------
 
 
 def test_strip_doi_https_prefix() -> None:
-    assert _strip_doi("https://doi.org/10.1234/test") == "10.1234/test"
+    assert normalize_doi("https://doi.org/10.1234/test") == "10.1234/test"
 
 
 def test_strip_doi_http_prefix() -> None:
-    assert _strip_doi("http://doi.org/10.1234/test") == "10.1234/test"
+    assert normalize_doi("http://doi.org/10.1234/test") == "10.1234/test"
 
 
 def test_strip_doi_bare_doi() -> None:
-    assert _strip_doi("10.1234/test") == "10.1234/test"
+    assert normalize_doi("10.1234/test") == "10.1234/test"
 
 
 def test_strip_doi_none_returns_none() -> None:
-    assert _strip_doi(None) is None
+    assert normalize_doi(None) is None
 
 
 def test_strip_doi_empty_string_returns_none() -> None:
-    assert _strip_doi("") is None
+    assert normalize_doi("") is None
+
+
+def test_normalize_doi_lowercases_and_strips_dx_prefix() -> None:
+    assert normalize_doi("https://dx.doi.org/10.48550/arXiv.2101.0001") == "10.48550/arxiv.2101.0001"
+
+
+def test_dedupe_prefers_published_version_over_arxiv() -> None:
+    works = [
+        {"doi": "10.48550/arXiv.1", "title": "Deep Learning for Widgets"},
+        {"doi": "10.1000/journal.1", "title": "Deep learning for widgets."},
+        {"doi": "10.1000/other", "title": "Something else entirely"},
+        {"doi": None, "title": "No DOI"},
+    ]
+    kept = {w["doi"] for w in dedupe_works_by_title(works)}
+    assert kept == {"10.1000/journal.1", "10.1000/other"}
 
 
 # ---------------------------------------------------------------------------

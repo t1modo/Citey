@@ -51,7 +51,7 @@ def _doc_to_profile(uid: str, data: dict) -> UserProfile:
 
 
 @router.get("", response_model=UserProfile)
-async def get_profile(
+def get_profile(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> UserProfile:
@@ -198,8 +198,19 @@ def confirm_notification_email(
     return RedirectResponse(f"{settings.app_url}/settings?email={status_param}", status_code=303)
 
 
+def _delete_subcollections(db: Any, user_ref: Any) -> None:
+    from app.services.citation_service import _commit_in_batches
+
+    refs = [
+        doc.reference
+        for name in ("notifications", "trackedWorks")
+        for doc in user_ref.collection(name).stream()
+    ]
+    _commit_in_batches(db, [("delete", r, None) for r in refs])
+
+
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_account(
+def delete_account(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> None:
@@ -221,13 +232,8 @@ async def delete_account(
 
     user_ref = db.collection("users").document(uid)
 
-    # 1. Wipe notifications subcollection.
-    for ndoc in user_ref.collection("notifications").stream():
-        ndoc.reference.delete()
-
-    # 2. Wipe trackedWorks subcollection.
-    for wdoc in user_ref.collection("trackedWorks").stream():
-        wdoc.reference.delete()
+    # 1 + 2. Wipe notifications and trackedWorks in batched deletes.
+    _delete_subcollections(db, user_ref)
 
     # 3. Delete the profile document itself.
     user_ref.delete()
@@ -245,7 +251,7 @@ async def delete_account(
 
 
 @router.delete("/linked-author", status_code=status.HTTP_204_NO_CONTENT)
-async def unlink_author(
+def unlink_author(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> None:
@@ -255,13 +261,7 @@ async def unlink_author(
     """
     user_ref = db.collection("users").document(uid)
 
-    # Delete all notifications first.
-    for ndoc in user_ref.collection("notifications").stream():
-        ndoc.reference.delete()
-
-    # Delete all tracked works.
-    for wdoc in user_ref.collection("trackedWorks").stream():
-        wdoc.reference.delete()
+    _delete_subcollections(db, user_ref)
 
     # Remove linked-author fields and aliases from the user document.
     user_ref.update({
@@ -280,7 +280,7 @@ class UnsubscribeRequest(BaseModel):
 
 
 @router.post("/unsubscribe", status_code=status.HTTP_200_OK)
-async def unsubscribe(
+def unsubscribe(
     body: UnsubscribeRequest,
     db: Any = Depends(get_db),
 ) -> dict:

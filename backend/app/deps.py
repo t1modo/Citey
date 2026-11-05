@@ -45,3 +45,33 @@ async def get_current_user(
         )
 
     return uid
+
+
+def enforce_cooldown(
+    user_data: dict,
+    field: str,
+    seconds: int,
+    message: str,
+    *,
+    fallback_field: str | None = None,
+) -> None:
+    """Raise HTTP 429 if ``user_data[field]`` is more recent than *seconds* ago.
+
+    *fallback_field* (usually ``created_at``) closes the loophole where a brand
+    new account has no timestamp yet and could otherwise skip the limit.
+    """
+    from datetime import datetime, timezone
+
+    last = user_data.get(field)
+    if last is None and fallback_field:
+        last = user_data.get(fallback_field)
+    if not isinstance(last, datetime):
+        return
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    retry_after = int(seconds - (datetime.now(tz=timezone.utc) - last).total_seconds())
+    if retry_after > 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={"message": message, "retry_after_seconds": retry_after},
+        )

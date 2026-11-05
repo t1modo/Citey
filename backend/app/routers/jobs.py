@@ -7,10 +7,10 @@ Two approaches to trigger the citation-check job:
   3. POST /jobs/email-test   — requires Firebase Bearer token
 """
 
+import asyncio
 import hmac
 import logging
 from datetime import datetime, timezone
-from typing import Any
 
 # Minimum seconds between manual job triggers from the same user.
 _MANUAL_CHECK_COOLDOWN = 600      # /jobs/run       — 10 minutes
@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import Settings, get_settings
+from app.deps import enforce_cooldown
 from app.firebase_client import verify_token
 from app.models import JobRunRequest
 
@@ -81,6 +82,15 @@ async def _authorize_job_request(
     )
 
 
+async def _off_loop(job, /, **kwargs):
+    """Run an async job on a worker thread with its own event loop.
+
+    The jobs make many blocking Firestore calls; running them on the API's
+    event loop would stall every other request until the sweep finished.
+    """
+    return await asyncio.to_thread(lambda: asyncio.run(job(**kwargs)))
+
+
 async def _require_cron(caller_id: str = Depends(_authorize_job_request)) -> str:
     """Allow only the scheduled cron caller (X-Cron-Secret), never end users."""
     if caller_id != "cron":
@@ -113,7 +123,8 @@ async def run_job(
 
     if caller_id == "cron":
         from app.services.citation_service import run_job_for_all_users
-        summary = await run_job_for_all_users(
+        summary = await _off_loop(
+            run_job_for_all_users,
             db=_db,
             email_service=email_svc,
             dry_run=body.dry_run,
@@ -125,26 +136,17 @@ async def run_job(
         user_doc = _db.collection("users").document(caller_id).get()
         user_data: dict = user_doc.to_dict() or {} if user_doc.exists else {}
 
-        # Rate-limit manual checks: reject if last check was within the cooldown window.
-        # Fall back to account creation time so new accounts can't bypass the limit
-        # by simply not having a last_manual_check_at value yet.
+        # Rate-limit manual checks (account creation time counts, so new
+        # accounts can't skip the limit).
         now = datetime.now(tz=timezone.utc)
-        last_check = user_data.get("last_manual_check_at") or user_data.get("created_at")
-        if isinstance(last_check, datetime):
-            if last_check.tzinfo is None:
-                last_check = last_check.replace(tzinfo=timezone.utc)
-            elapsed = (now - last_check).total_seconds()
-            retry_after = int(_MANUAL_CHECK_COOLDOWN - elapsed)
-            if retry_after > 0:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail={
-                        "message": "You've run a citation check recently. Please wait before trying again.",
-                        "retry_after_seconds": retry_after,
-                    },
-                )
+        enforce_cooldown(
+            user_data, "last_manual_check_at", _MANUAL_CHECK_COOLDOWN,
+            "You've run a citation check recently. Please wait before trying again.",
+            fallback_field="created_at",
+        )
 
-        works_processed, new_notifications = await run_job_for_user(
+        works_processed, new_notifications = await _off_loop(
+            run_job_for_user,
             uid=caller_id,
             user_data=user_data,
             db=_db,
@@ -194,7 +196,7 @@ async def cleanup_notifications(
     )
 
     if caller_id == "cron":
-        summary = await cleanup_old_notifications(db=_db, dry_run=body.dry_run)
+        summary = await _off_loop(cleanup_old_notifications, db=_db, dry_run=body.dry_run)
     else:
         # Scoped to the requesting user only.
         from datetime import datetime, timedelta, timezone
@@ -250,7 +252,8 @@ async def sync_publications(
     )
 
     if caller_id == "cron":
-        summary = await sync_new_publications_for_all_users(
+        summary = await _off_loop(
+            sync_new_publications_for_all_users,
             db=_db,
             email_service=email_svc,
             dry_run=body.dry_run,
@@ -261,22 +264,14 @@ async def sync_publications(
         user_data: dict = user_doc.to_dict() or {} if user_doc.exists else {}
 
         now = datetime.now(tz=timezone.utc)
-        last_sync = user_data.get("last_manual_sync_at") or user_data.get("created_at")
-        if isinstance(last_sync, datetime):
-            if last_sync.tzinfo is None:
-                last_sync = last_sync.replace(tzinfo=timezone.utc)
-            elapsed = (now - last_sync).total_seconds()
-            retry_after = int(_MANUAL_SYNC_COOLDOWN - elapsed)
-            if retry_after > 0:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail={
-                        "message": "You've run a publication sync recently. Please wait before trying again.",
-                        "retry_after_seconds": retry_after,
-                    },
-                )
+        enforce_cooldown(
+            user_data, "last_manual_sync_at", _MANUAL_SYNC_COOLDOWN,
+            "You've run a publication sync recently. Please wait before trying again.",
+            fallback_field="created_at",
+        )
 
-        added = await sync_new_publications_for_user(
+        added = await _off_loop(
+            sync_new_publications_for_user,
             uid=caller_id,
             user_data=user_data,
             db=_db,
@@ -319,7 +314,7 @@ async def cleanup_orphan_users(
         caller_id,
         body.dry_run,
     )
-    summary = await _cleanup(db=_db, dry_run=body.dry_run)
+    summary = await _off_loop(_cleanup, db=_db, dry_run=body.dry_run)
     logger.info("Orphan cleanup complete: %s", summary)
     return summary
 
@@ -370,20 +365,10 @@ async def email_test(
     data = snapshot.to_dict() or {}
 
     now = datetime.now(tz=timezone.utc)
-    last_test = data.get("last_email_test_at")
-    if isinstance(last_test, datetime):
-        if last_test.tzinfo is None:
-            last_test = last_test.replace(tzinfo=timezone.utc)
-        elapsed = (now - last_test).total_seconds()
-        retry_after = int(_EMAIL_TEST_COOLDOWN - elapsed)
-        if retry_after > 0:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={
-                    "message": "You've sent a test email recently. Please wait before trying again.",
-                    "retry_after_seconds": retry_after,
-                },
-            )
+    enforce_cooldown(
+        data, "last_email_test_at", _EMAIL_TEST_COOLDOWN,
+        "You've sent a test email recently. Please wait before trying again.",
+    )
 
     to_email: str | None = resolve_recipient(data)
     if not to_email:

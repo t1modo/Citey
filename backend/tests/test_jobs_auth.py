@@ -69,3 +69,23 @@ def test_default_cron_secret_refused_in_production() -> None:
         headers={"X-Cron-Secret": "changeme"},
     )
     assert resp.status_code == 503
+
+
+def test_cron_run_executes_job_off_the_event_loop() -> None:
+    import threading
+
+    seen: dict = {}
+
+    async def fake_job(**kwargs):
+        # asyncio.to_thread workers are named "asyncio_N"; the request
+        # handler itself never runs on one of those.
+        seen["thread"] = threading.current_thread().name.startswith("asyncio_")
+        return {"users_processed": 0, "works_processed": 0, "new_notifications": 0}
+
+    client = _client()
+    with patch("app.firebase_client.get_db"), patch(
+        "app.services.citation_service.run_job_for_all_users", new=fake_job
+    ):
+        resp = client.post("/jobs/run", json={"dry_run": True}, headers={"X-Cron-Secret": "s3cret"})
+    assert resp.status_code == 200
+    assert seen["thread"] is True

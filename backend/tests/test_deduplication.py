@@ -98,12 +98,31 @@ class _FakeCollectionRef:
                 yield ref
 
 
+class _FakeBatch:
+    """Applies writes immediately; enough for code that uses db.batch()."""
+
+    def set(self, ref, data) -> None:
+        ref.set(data)
+
+    def update(self, ref, data) -> None:
+        ref.update(data)
+
+    def delete(self, ref) -> None:
+        ref.delete()
+
+    def commit(self) -> None:
+        pass
+
+
 class _FakeDB:
     def __init__(self) -> None:
         self._store: dict[str, Any] = {}
 
     def collection(self, name: str) -> _FakeCollectionRef:
         return _FakeCollectionRef(self._store, name)
+
+    def batch(self) -> _FakeBatch:
+        return _FakeBatch()
 
     def dump(self) -> dict:
         return dict(self._store)
@@ -234,6 +253,33 @@ async def test_second_run_does_not_duplicate(
 
     notification_keys = [k for k in fake_db.dump() if "/notifications/" in k]
     assert len(notification_keys) == 2
+
+
+async def test_pruned_notification_is_not_resent(
+    fake_db: _FakeDB,
+    tracked_work: TrackedWork,
+) -> None:
+    """Notifications are pruned after 30 days; the citing paper must not be
+    notified again just because its notification doc is gone."""
+    from datetime import datetime, timezone
+
+    work = tracked_work.model_copy(update={"last_checked_at": datetime(2026, 1, 1, tzinfo=timezone.utc)})
+    oa_patch, s2_patch, s2_counts_patch = _patch_both(oa_return=_CITING_WORKS_RAW)
+    with oa_patch, s2_patch, s2_counts_patch:
+        count1, _ = await process_tracked_work(uid="user_abc", work=work, db=fake_db)
+
+        # Simulate the daily prune deleting every notification doc.
+        for key in [k for k in fake_db.dump() if "/notifications/" in k]:
+            fake_db._store.pop(key)
+
+        work_doc = fake_db._store[f"users/user_abc/trackedWorks/{work.id}"]
+        count2, _ = await process_tracked_work(
+            uid="user_abc", work=work, db=fake_db,
+            notified_ids=set(work_doc.get("notified_ids") or []),
+        )
+
+    assert count1 == 2
+    assert count2 == 0
 
 
 async def test_dry_run_does_not_write_to_firestore(

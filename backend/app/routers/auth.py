@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from firebase_admin import auth as firebase_auth
 
 from app.config import Settings, get_settings
-from app.deps import get_current_user
+from app.deps import enforce_cooldown, get_current_user
 from app.firebase_client import get_db
 from app.services.email_service import send_verification_email
 
@@ -39,23 +39,11 @@ async def send_email_verification(
     # Rate-limit: enforce cooldown between resend attempts.
     user_ref = db.collection("users").document(uid)
     user_snap = user_ref.get()
-    if user_snap.exists:
-        user_data = user_snap.to_dict() or {}
-        last_sent = user_data.get("last_verification_email_at")
-        if isinstance(last_sent, datetime):
-            if last_sent.tzinfo is None:
-                last_sent = last_sent.replace(tzinfo=timezone.utc)
-            now = datetime.now(tz=timezone.utc)
-            elapsed = (now - last_sent).total_seconds()
-            retry_after = int(_VERIFICATION_COOLDOWN - elapsed)
-            if retry_after > 0:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail={
-                        "message": "Verification email sent recently. Please wait before resending.",
-                        "retry_after_seconds": retry_after,
-                    },
-                )
+    enforce_cooldown(
+        (user_snap.to_dict() or {}) if user_snap.exists else {},
+        "last_verification_email_at", _VERIFICATION_COOLDOWN,
+        "Verification email sent recently. Please wait before resending.",
+    )
 
     try:
         fb_user = firebase_auth.get_user(uid)

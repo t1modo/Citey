@@ -38,9 +38,16 @@ async def process_tracked_work(
     work: TrackedWork,
     db: Any,
     dry_run: bool = False,
+    notified_ids: set[str] | None = None,
 ) -> tuple[int, list[Notification]]:
     """
     Check for new citations of *work* and write Notification documents.
+
+    *notified_ids* is the work's permanent record of notification doc IDs
+    already sent (``notified_ids`` on the trackedWorks doc). Notifications
+    themselves are pruned after 30 days, so without this record a citing
+    paper that still passes the date filter (e.g. one with only a year)
+    would be re-notified every month.
 
     Returns (new_notification_count, list_of_new_notification_objects).
     """
@@ -180,6 +187,8 @@ async def process_tracked_work(
     #    format in the same pass, so they don't block new writes.
     existing_ids: set[str] = set()
     is_fresh_add = work.last_checked_at is None
+    if not is_fresh_add and notified_ids:
+        existing_ids |= notified_ids
 
     if not dry_run:
         stale_refs = []
@@ -221,6 +230,7 @@ async def process_tracked_work(
     new_count = 0
     skipped_count = 0
     new_notifications: list[Notification] = []
+    pending_writes: list[tuple[Any, dict]] = []
 
     for normalized in all_normalized:
         # Prefer DOI as the stable cross-source identifier; fall back to
@@ -270,11 +280,15 @@ async def process_tracked_work(
         if not dry_run:
             doc_data = notification.model_dump()
             doc_data["created_at"] = now
-            notifications_ref.document(doc_id).set(doc_data)
-            logger.info("Wrote notification %s for uid=%s", doc_id, uid)
+            pending_writes.append((notifications_ref.document(doc_id), doc_data))
 
+        existing_ids.add(doc_id)
         new_count += 1
         new_notifications.append(notification)
+
+    if pending_writes:
+        _commit_in_batches(db, [("set", ref, data) for ref, data in pending_writes])
+        logger.info("Wrote %d notification(s) for uid=%s", len(pending_writes), uid)
 
     logger.info(
         "Work %s (uid=%s): %d new notification(s), %d duplicate(s) skipped "
@@ -282,14 +296,17 @@ async def process_tracked_work(
         work.id, uid, new_count, skipped_count, len(all_normalized),
     )
 
-    # 7. Update last_checked_at on the tracked work.
+    # 7. Update last_checked_at and the permanent notified record.
     if not dry_run:
+        update: dict[str, Any] = {"last_checked_at": datetime.now(tz=timezone.utc)}
+        if existing_ids:
+            update["notified_ids"] = sorted(existing_ids)
         (
             db.collection("users")
             .document(uid)
             .collection("trackedWorks")
             .document(work.id)
-            .update({"last_checked_at": datetime.now(tz=timezone.utc)})
+            .update(update)
         )
 
     return new_count, new_notifications
@@ -323,9 +340,11 @@ async def run_job_for_user(
         db.collection("users").document(uid).collection("trackedWorks").stream()
     )
     works: list[TrackedWork] = []
+    notified_by_work: dict[str, set[str]] = {}
     for wdoc in works_docs:
         wdata = wdoc.to_dict() or {}
         works.append(_doc_to_tracked_work(wdoc.id, wdata))
+        notified_by_work[wdoc.id] = set(wdata.get("notified_ids") or [])
 
     user_new_notifications: list[Notification] = []
     works_processed = 0
@@ -334,7 +353,8 @@ async def run_job_for_user(
         works_processed += 1
         try:
             count, notifications = await process_tracked_work(
-                uid=uid, work=work, db=db, dry_run=dry_run
+                uid=uid, work=work, db=db, dry_run=dry_run,
+                notified_ids=notified_by_work.get(work.id),
             )
             user_new_notifications.extend(notifications)
         except Exception as exc:  # noqa: BLE001
@@ -568,6 +588,27 @@ async def cleanup_old_notifications(db: Any, dry_run: bool = False) -> dict:
     summary = {"users_processed": users_processed, "notifications_deleted": total_deleted}
     logger.info("Notification cleanup complete: %s", summary)
     return summary
+
+
+# ---------------------------------------------------------------------------
+# Firestore helpers
+# ---------------------------------------------------------------------------
+
+_BATCH_LIMIT = 500  # Firestore's max writes per batch
+
+
+def _commit_in_batches(db: Any, ops: list[tuple[str, Any, Any]]) -> None:
+    """Apply ("set"|"update"|"delete", ref, data) ops in chunks of 500."""
+    for i in range(0, len(ops), _BATCH_LIMIT):
+        batch = db.batch()
+        for op, ref, data in ops[i : i + _BATCH_LIMIT]:
+            if op == "set":
+                batch.set(ref, data)
+            elif op == "update":
+                batch.update(ref, data)
+            else:
+                batch.delete(ref)
+        batch.commit()
 
 
 # ---------------------------------------------------------------------------

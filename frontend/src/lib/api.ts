@@ -16,6 +16,12 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 // after a cold start return a 502/503 while the service is booting. Retrying
 // automatically means users never need to click "Look up" more than once.
 const COLD_START_STATUSES = new Set([502, 503, 504]);
+// A 502/503 from the host means the request never reached the app (it was
+// still booting), so even a POST is safe to resend. A 504 or a dropped
+// connection may mean the server already did the work, so those are only
+// retried for idempotent methods.
+const SAFE_TO_RESEND_STATUSES = new Set([502, 503]);
+const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "PUT", "DELETE", "OPTIONS"]);
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1500;
 
@@ -27,17 +33,19 @@ async function fetchWithRetry(
   url: string,
   init: RequestInit = {}
 ): Promise<Response> {
+  const idempotent = IDEMPOTENT_METHODS.has((init.method ?? "GET").toUpperCase());
+  const retryable = idempotent ? COLD_START_STATUSES : SAFE_TO_RESEND_STATUSES;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const res = await fetch(url, init);
-      if (COLD_START_STATUSES.has(res.status) && attempt < MAX_RETRIES) {
-        await sleep(RETRY_DELAY_MS);
+      if (retryable.has(res.status) && attempt < MAX_RETRIES) {
+        await sleep(RETRY_DELAY_MS * (attempt + 1));
         continue;
       }
       return res;
     } catch (err) {
-      if (attempt < MAX_RETRIES) {
-        await sleep(RETRY_DELAY_MS);
+      if (idempotent && attempt < MAX_RETRIES) {
+        await sleep(RETRY_DELAY_MS * (attempt + 1));
         continue;
       }
       throw err;
@@ -45,6 +53,31 @@ async function fetchWithRetry(
   }
   // unreachable, but TypeScript needs a return path
   throw new Error("Request failed after retries.");
+}
+
+/**
+ * Turn a FastAPI `detail` payload into a sentence a person can read.
+ * Handles plain strings, our {message, retry_after_seconds} rate limit
+ * objects, and Pydantic validation error lists.
+ */
+export function detailMessage(detail: unknown, fallback: string): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const first = detail[0] as { msg?: string } | undefined;
+    return first?.msg ? first.msg.replace(/^Value error, /, "") : fallback;
+  }
+  if (detail && typeof detail === "object") {
+    const d = detail as { message?: unknown; retry_after_seconds?: unknown };
+    if (typeof d.message === "string") {
+      const wait = Number(d.retry_after_seconds);
+      if (Number.isFinite(wait) && wait > 0) {
+        const mins = Math.ceil(wait / 60);
+        return `${d.message} You can try again in ${wait < 60 ? `${Math.ceil(wait)} seconds` : `${mins} minute${mins === 1 ? "" : "s"}`}.`;
+      }
+      return d.message;
+    }
+  }
+  return fallback;
 }
 
 async function authFetch(
@@ -74,9 +107,7 @@ async function authFetch(
     try {
       const data = await response.json();
       if (data?.detail) {
-        message = typeof data.detail === "string"
-          ? data.detail
-          : JSON.stringify(data.detail);
+        message = detailMessage(data.detail, message);
       }
     } catch {
       // ignore JSON parse errors
@@ -302,7 +333,7 @@ export async function importByAuthor(
 
   if (!res.ok) {
     const detail = (data as Record<string, unknown>)?.detail;
-    throw new Error(typeof detail === "string" ? detail : "Import failed.");
+    throw new Error(detailMessage(detail, "Import failed."));
   }
 
   return { status: "imported", ...data } as ImportByAuthorResult;

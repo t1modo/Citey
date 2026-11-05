@@ -60,7 +60,7 @@ _MAX_LIMIT = 100
 
 
 @router.get("", response_model=PaginatedNotifications)
-async def list_notifications(
+def list_notifications(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
     page: int = Query(default=1, ge=1),
@@ -140,7 +140,7 @@ def _notification_to_bibtex(n: Notification) -> str:
 
 
 @router.get("/export.bib", response_class=PlainTextResponse)
-async def export_bibtex(
+def export_bibtex(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> PlainTextResponse:
@@ -194,7 +194,7 @@ async def prune_notifications(
 
 
 @router.post("/seen/all", status_code=204)
-async def mark_all_seen(
+def mark_all_seen(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> None:
@@ -224,7 +224,7 @@ async def mark_all_seen(
 
 
 @router.post("/{notification_id}/seen", response_model=Notification)
-async def mark_seen(
+def mark_seen(
     notification_id: str,
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
@@ -246,5 +246,6 @@ async def mark_seen(
     ref.update({"seen": True})
     logger.info("Marked notification %s as seen for uid=%s", notification_id, uid)
 
-    updated = ref.get()
-    return _doc_to_notification(notification_id, updated.to_dict() or {})
+    data = snapshot.to_dict() or {}
+    data["seen"] = True
+    return _doc_to_notification(notification_id, data)
