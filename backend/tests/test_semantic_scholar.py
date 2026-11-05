@@ -364,3 +364,22 @@ def test_api_key_header_only_on_semantic_scholar_requests(monkeypatch) -> None:
         monkeypatch.delenv("S2_API_KEY")
         get_settings.cache_clear()
     assert "x-api-key" not in s2._build_headers()
+
+
+async def test_with_api_key_every_request_is_paced(monkeypatch, respx_mock) -> None:
+    """The keyed limit is 1 request/second across all endpoints, so even
+    unthrottled import calls must wait on the shared throttle."""
+    from app.services import semantic_scholar as s2
+
+    waits: list[float] = []
+
+    async def record(seconds: float) -> None:
+        waits.append(seconds)
+
+    monkeypatch.setattr(s2, "_HEADERS", {**s2._PLAIN_HEADERS, "x-api-key": "k"})
+    monkeypatch.setattr(s2, "_sleep", record)
+    respx_mock.get(_RE_S2).mock(return_value=Response(200, json={"data": []}))
+    async with s2._s2_client(timeout=5.0) as client:
+        await client.get("https://api.semanticscholar.org/graph/v1/author/search")
+        await client.get("https://api.semanticscholar.org/graph/v1/author/search")
+    assert waits and waits[0] > 0.9

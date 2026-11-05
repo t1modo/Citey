@@ -76,6 +76,26 @@ async def _throttle() -> None:
         state[1] = time.monotonic()
 
 
+def _has_key() -> bool:
+    return "x-api-key" in _HEADERS
+
+
+async def _pace_request(_request: httpx.Request) -> None:
+    await _throttle()
+
+
+def _s2_client(timeout: float) -> httpx.AsyncClient:
+    """An httpx client for Semantic Scholar.
+
+    With an API key the limit is one request per second across every
+    endpoint, imports and the nightly check together, so every request waits
+    its turn on the shared throttle. Without a key only the nightly check
+    paces itself (see _request_with_retry).
+    """
+    hooks = {"request": [_pace_request]} if _has_key() else {}
+    return httpx.AsyncClient(headers=_HEADERS, timeout=timeout, event_hooks=hooks)
+
+
 def _retry_after(response: httpx.Response, attempt: int) -> float:
     """Seconds to wait: Retry-After (seconds or HTTP date) or exponential backoff."""
     header = response.headers.get("Retry-After")
@@ -107,7 +127,7 @@ async def _request_with_retry(
     """
     response: httpx.Response | None = None
     for attempt in range(_MAX_RETRIES):
-        if throttle:
+        if throttle and not _has_key():  # with a key the client paces every request
             await _throttle()
         try:
             response = await client.request(method, url, **kwargs)
@@ -206,7 +226,7 @@ async def _resolve_s2_paper_id(doi: str) -> str | None:
     treating it as such silently skipped the paper's citations.
     """
     candidates = _candidate_ids(doi)
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
+    async with _s2_client(timeout=15.0) as client:
         response = await _post_with_retry(
             client,
             f"{_BASE_URL}/paper/batch",
@@ -271,7 +291,7 @@ async def get_citing_papers(
     results: list[dict] = []
     offset = 0
 
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=30.0) as client:
+    async with _s2_client(timeout=30.0) as client:
         while True:
             params = {
                 "fields": _CITATION_FIELDS,
@@ -1471,7 +1491,7 @@ async def _enrich_author_affiliations(papers: list[dict]) -> None:
     if not author_ids:
         return
 
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=20.0) as client:
+    async with _s2_client(timeout=20.0) as client:
         try:
             response = await client.post(
                 f"{_BASE_URL}/author/batch",
@@ -1648,7 +1668,7 @@ async def search_authors(query: str) -> list[dict]:
         "limit": 10,
     }
 
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
+    async with _s2_client(timeout=15.0) as client:
         response = await _get_with_retry(client, url, params, context=f"author-search:{query}")
 
     if response is None:
@@ -1667,7 +1687,7 @@ async def get_author_name(author_id: str) -> str | None:
     Used as a last-resort fallback when no name was supplied at import time.
     """
     bare_id = author_id[3:] if author_id.startswith("S2:") else author_id
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=10.0) as client:
+    async with _s2_client(timeout=10.0) as client:
         try:
             response = await client.get(
                 f"{_BASE_URL}/author/{bare_id}",
@@ -1699,7 +1719,7 @@ async def get_paper_with_authors(doi: str) -> dict | None:
     )
     candidates = _candidate_ids(doi)
 
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
+    async with _s2_client(timeout=15.0) as client:
         for candidate_id in candidates:
             response = await _get_with_retry(
                 client,
@@ -1743,7 +1763,7 @@ async def get_works_by_author(author_id: str) -> list[dict]:
     offset = 0
     limit = 1000
 
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=30.0) as client:
+    async with _s2_client(timeout=30.0) as client:
         while True:
             params: dict[str, Any] = {
                 "fields": _PAPER_FIELDS,
@@ -1799,7 +1819,7 @@ async def get_citation_counts(dois: list[str]) -> dict[str, int]:
             pairs.append((key, candidate))
 
     results: dict[str, int] = {}
-    async with httpx.AsyncClient(headers=_HEADERS, timeout=30.0) as client:
+    async with _s2_client(timeout=30.0) as client:
         for start in range(0, len(pairs), _BATCH_MAX):
             chunk = pairs[start : start + _BATCH_MAX]
             response = await _post_with_retry(
