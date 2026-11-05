@@ -3,13 +3,18 @@
 @tailwind utilities;
 
 body {
-  @apply bg-gray-950 text-white;
+  @apply bg-ink text-white;
+}
+
+::selection {
+  background: rgb(255 106 61 / 0.35);
+  color: #fff;
 }
 
 @layer base {
   :root {
     --scrollbar-thumb: #4b5563;
-    --scrollbar-track: #030712;
+    --scrollbar-track: #0c0d10;
   }
 
   * {

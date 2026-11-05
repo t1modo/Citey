@@ -6,6 +6,20 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Citey identity: warm ink background, paper-white text, and one
+        // signal color reserved for citations (the arcs in the hero).
+        ink: {
+          DEFAULT: "#0c0d10",
+          900: "#0c0d10",
+          800: "#121418",
+          700: "#1a1d22",
+          600: "#262a31",
+        },
+        paper: "#e8e2d6",
+        signal: {
+          DEFAULT: "#ff6a3d",
+          soft: "#ff8a66",
+        },
         brand: {
           50:  "#f0fdfa",
           100: "#ccfbf1",
@@ -22,6 +36,8 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-jakarta)", "ui-sans-serif", "system-ui", "sans-serif"],
         syne: ["var(--font-syne)", "ui-sans-serif", "sans-serif"],
+        serif: ["var(--font-serif)", "ui-serif", "Georgia", "serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       animation: {
         "aurora-1": "aurora1 12s ease-in-out infinite alternate",

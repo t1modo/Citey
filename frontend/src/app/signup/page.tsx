@@ -156,7 +156,7 @@ export default function SignUpPage() {
           <div className="mb-8 flex justify-center">
             <Link href="/" className="flex items-center gap-2">
               <Logo className="h-9 w-9" />
-              <span className="text-xl font-bold text-white" style={{ fontFamily: "var(--font-syne)" }}>
+              <span className="text-xl font-bold text-white" style={{ fontFamily: "var(--font-serif)", fontWeight: 400 }}>
                 Citey
               </span>
             </Link>

@@ -279,7 +279,7 @@ function FirstPaperInfoModal({ onClose }: { onClose: () => void }) {
         initial={{ opacity: 0, scale: 0.88, y: 24 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 380, damping: 28 }}
-        className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-gray-950 shadow-2xl shadow-black/60"
+        className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-ink shadow-2xl shadow-black/60"
       >
         {/* Top accent line */}
         <div className="h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />

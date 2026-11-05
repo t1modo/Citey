@@ -18,7 +18,7 @@ interface Star {
 }
 
 const NUM_STARS = 320;
-const BACKGROUND = "#030712";
+const BACKGROUND = "#0c0d10";
 const GLOW_SPRITE_SIZE = 64;
 
 /** Soft white glow drawn once, then stamped with drawImage each frame. */

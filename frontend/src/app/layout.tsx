@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Syne } from "next/font/google";
+import { Instrument_Serif, JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import Nav from "@/components/Nav";
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta" });
-const syne = Syne({ subsets: ["latin"], variable: "--font-syne" });
+const serif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-serif",
+});
+const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: {
@@ -27,7 +33,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${jakarta.variable} ${syne.variable} font-sans bg-gray-950 text-white antialiased`}>
+      <body
+        className={`${jakarta.variable} ${serif.variable} ${mono.variable} bg-ink font-sans text-white antialiased`}
+      >
         <AuthProvider>
           <NotificationsProvider>
             <Nav />

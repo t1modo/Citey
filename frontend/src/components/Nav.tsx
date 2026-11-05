@@ -35,7 +35,7 @@ export default function Nav() {
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-white/10 bg-gray-950/80 backdrop-blur-md">
+    <nav className="sticky top-0 z-50 border-b border-white/10 bg-ink/80 backdrop-blur-md">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
@@ -46,7 +46,7 @@ export default function Nav() {
             <Logo className="h-8 w-8" />
             <span
               className="text-xl font-bold tracking-tight text-white"
-              style={{ fontFamily: "var(--font-syne)" }}
+              style={{ fontFamily: "var(--font-serif)", fontWeight: 400 }}
             >
               Citey
             </span>
@@ -86,7 +86,7 @@ export default function Nav() {
             ) : (
               <Link
                 href="/signup"
-                className="rounded-md bg-white px-4 py-1.5 text-sm font-semibold text-gray-950 shadow-lg transition-opacity hover:opacity-90"
+                className="rounded-md border border-paper/20 px-4 py-1.5 text-sm font-medium text-paper transition-colors hover:border-paper/50"
               >
                 Sign In
               </Link>
@@ -117,7 +117,7 @@ export default function Nav() {
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div className="border-t border-white/10 bg-gray-950/95 px-4 pb-4 pt-2 md:hidden">
+        <div className="border-t border-white/10 bg-ink/95 px-4 pb-4 pt-2 md:hidden">
           <div className="flex flex-col gap-1">
             {navLinks.map((link) => (
               <Link

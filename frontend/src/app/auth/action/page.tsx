@@ -146,7 +146,7 @@ function AuthActionContent() {
               <Logo className="h-9 w-9" />
               <span
                 className="text-xl font-bold text-white"
-                style={{ fontFamily: "var(--font-syne)" }}
+                style={{ fontFamily: "var(--font-serif)", fontWeight: 400 }}
               >
                 Citey
               </span>

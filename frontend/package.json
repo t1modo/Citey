@@ -12,14 +12,16 @@
     "firebase": "^11.1.0",
     "framer-motion": "^11.12.0",
     "next": "^15.0.0",
-    "ogl": "^1.0.11",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "vgpu": "0.6.0"
   },
   "devDependencies": {
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vgpu/wgsl": "0.6.0",
+    "@webgpu/types": "0.1.74",
     "autoprefixer": "^10.0.1",
     "eslint": "^9",
     "eslint-config-next": "^15.0.0",

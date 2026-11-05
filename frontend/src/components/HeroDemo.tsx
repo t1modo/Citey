@@ -708,7 +708,7 @@ export default function HeroDemo() {
     >
       <div
         ref={cardRef}
-        className="relative overflow-hidden rounded-2xl border border-white/15 bg-gray-950/80 shadow-2xl shadow-black/50 backdrop-blur-xl"
+        className="relative overflow-hidden rounded-2xl border border-white/15 bg-ink/80 shadow-2xl shadow-black/50 backdrop-blur-xl"
         style={isScaled ? {
           width: DESIGN_WIDTH,
           position: "absolute",
@@ -728,7 +728,7 @@ export default function HeroDemo() {
           </div>
           <span
             className="text-xs font-semibold text-gray-400"
-            style={{ fontFamily: "var(--font-syne)" }}
+            style={{ fontFamily: "var(--font-serif)", fontWeight: 400 }}
           >
             Citey
           </span>
