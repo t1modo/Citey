@@ -385,7 +385,7 @@ export default function HeroDemo() {
   };
 
   return (
-    <div ref={rootRef} className="grid gap-10 lg:grid-cols-[5fr_7fr] lg:items-start">
+    <div ref={rootRef} className="grid grid-cols-1 gap-10 lg:grid-cols-[5fr_7fr] lg:items-start">
       <ol className="flex flex-col" aria-label="How Citey works">
         {STEPS.map((s, i) => {
           const active = i === step;
@@ -440,7 +440,7 @@ export default function HeroDemo() {
       </ol>
 
       <div
-        className="relative min-h-[27rem] rounded-lg border border-rule bg-sheet p-6 shadow-[0_1px_0_rgba(20,33,61,0.04),0_12px_32px_-12px_rgba(20,33,61,0.18)] sm:p-8"
+        className="relative min-h-[27rem] min-w-0 rounded-lg border border-rule bg-sheet p-6 shadow-[0_1px_0_rgba(20,33,61,0.04),0_12px_32px_-12px_rgba(20,33,61,0.18)] sm:p-8"
         role="region"
         aria-label={`Step ${step + 1}: ${STEPS[step].title}`}
       >
