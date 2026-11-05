@@ -12,6 +12,7 @@
     "firebase": "^11.1.0",
     "framer-motion": "^11.12.0",
     "next": "^15.0.0",
+    "posthog-js": "^1.446.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "vgpu": "0.6.0"

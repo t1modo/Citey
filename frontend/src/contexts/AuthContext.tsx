@@ -15,6 +15,7 @@ import {
   signOut as firebaseSignOut,
   UserCredential,
 } from "firebase/auth";
+import posthog from "posthog-js";
 import { auth } from "@/lib/firebase";
 
 interface AuthContextValue {
@@ -35,6 +36,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
+      // Tie analytics to the account (Firebase uid is the stable id). Only
+      // when PostHog was initialised, i.e. the token is configured.
+      if (firebaseUser && posthog.__loaded) {
+        posthog.identify(firebaseUser.uid, {
+          email: firebaseUser.email ?? undefined,
+          email_verified: firebaseUser.emailVerified,
+        });
+      }
     });
     return unsubscribe;
   }, []);
@@ -45,7 +54,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = (email: string, password: string) =>
     createUserWithEmailAndPassword(auth, email, password);
 
-  const signOut = () => firebaseSignOut(auth);
+  const signOut = async () => {
+    await firebaseSignOut(auth);
+    // Start a fresh anonymous identity so the next person on this browser
+    // isn't merged into the account that just signed out.
+    if (posthog.__loaded) posthog.reset();
+  };
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>

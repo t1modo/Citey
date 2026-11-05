@@ -8,6 +8,7 @@ import Logo from "@/components/Logo";
 import { sendVerificationEmail } from "@/lib/api";
 import { FirebaseError } from "firebase/app";
 import { auth } from "@/lib/firebase";
+import { track } from "@/lib/analytics";
 
 function firebaseErrorMessage(err: unknown): string {
   if (err instanceof FirebaseError) {
@@ -93,6 +94,7 @@ export default function SignUpPage() {
     try {
       if (mode === "signup") {
         await signUp(email, password);
+        track("signed_up");
         // Account created — attempt verification email but don't block progress on failure
         try {
           await sendVerificationEmail();

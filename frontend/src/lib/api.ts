@@ -1,4 +1,5 @@
 import { auth } from "@/lib/firebase";
+import { track } from "@/lib/analytics";
 import type {
   UserProfile,
   TrackedWork,
@@ -170,6 +171,7 @@ export async function addWorkChecked(
   });
 
   if (res.ok) {
+    track("paper_added", { method: "doi", author_check_skipped: force });
     return { status: "added", work: await res.json() };
   }
 
@@ -201,14 +203,17 @@ export async function addWorkChecked(
 
 export async function unlinkAuthor(): Promise<void> {
   await authFetch("/profile/linked-author", { method: "DELETE" });
+  track("author_unlinked");
 }
 
 export async function deleteAccount(): Promise<void> {
   await authFetch("/profile", { method: "DELETE" });
+  track("account_deleted");
 }
 
 export async function deleteWork(workId: string): Promise<void> {
   await authFetch(`/works/${workId}`, { method: "DELETE" });
+  track("paper_removed");
 }
 
 export async function getNotifications(
@@ -243,6 +248,7 @@ export async function downloadBibtex(): Promise<void> {
   const a = document.createElement("a");
   a.href = url;
   a.download = "citey-citations.bib";
+  track("citations_exported", { format: "bibtex" });
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -254,6 +260,7 @@ export async function runJob(dryRun: boolean = false): Promise<{ message: string
     method: "POST",
     body: JSON.stringify({ dry_run: dryRun }),
   });
+  if (!dryRun) track("citation_check_requested");
   return res.json();
 }
 
@@ -263,6 +270,7 @@ export async function sendVerificationEmail(): Promise<void> {
 
 export async function sendTestEmail(): Promise<{ message: string }> {
   const res = await authFetch("/jobs/email-test", { method: "POST" });
+  track("test_email_requested");
   return res.json();
 }
 
@@ -336,7 +344,17 @@ export async function importByAuthor(
     throw new Error(detailMessage(detail, "Import failed."));
   }
 
-  return { status: "imported", ...data } as ImportByAuthorResult;
+  const result = { status: "imported", ...data } as ImportByAuthorResult;
+  if (result.status === "imported") {
+    track("papers_imported", {
+      source,
+      imported: result.imported,
+      skipped: result.skipped,
+      extra_sources: extraSources,
+      merged_profiles: confirmMerge,
+    });
+  }
+  return result;
 }
 
 export async function unsubscribe(uid: string, token: string): Promise<{ message: string }> {
@@ -353,6 +371,7 @@ export async function unsubscribe(uid: string, token: string): Promise<{ message
     const detail = data?.detail;
     throw new Error(typeof detail === "string" ? detail : "Unsubscribe failed.");
   }
+  track("unsubscribed");
   return data as { message: string };
 }
 
