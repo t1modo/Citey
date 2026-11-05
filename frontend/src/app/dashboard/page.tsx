@@ -368,7 +368,7 @@ export default function DashboardPage() {
 
   const {
     unreadCount,
-    refresh: refreshContext,
+    syncCounts,
     markSeen: contextMarkSeen,
     markAllSeen,
   } = useNotifications();
@@ -409,15 +409,15 @@ export default function DashboardPage() {
       setCitationPage(data.page);
       setCitationPages(data.pages);
       setCitationTotal(data.total);
-      // Keep the context unread badge in sync.
-      refreshContext();
+      // Keep the context unread count in sync without a second request.
+      syncCounts(data.unseen, data.total);
     } catch (err) {
       setNotifsError(err instanceof Error ? err.message : "Failed to load notifications.");
     } finally {
       setNotifsLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [citationPage, refreshContext]);
+  }, [citationPage, syncCounts]);
 
   const [scholarUrl, setScholarUrl] = useState<string | null>(null);
   const [linkedAuthorId, setLinkedAuthorId] = useState<string | null>(null);

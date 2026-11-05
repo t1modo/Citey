@@ -140,6 +140,7 @@ _OA_HEADERS = {"User-Agent": "Citey/0.1 (mailto:support@citey.app)"}
 # Rate limiting — 10 requests per minute per user, in-memory
 # ---------------------------------------------------------------------------
 
+_CHAT_MODEL = "claude-haiku-5-5"
 _CHAT_RATE_LIMIT = 10          # max requests
 _CHAT_RATE_WINDOW = 60         # per N seconds
 _MAX_MESSAGE_LENGTH = 4000     # chars per individual message
@@ -268,7 +269,7 @@ async def chat(
         # Agentic loop — keep going until Claude stops requesting tools (max 5 rounds)
         for _ in range(5):
             response = await client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model=_CHAT_MODEL,
                 max_tokens=1024,
                 system=_SYSTEM_PROMPT,
                 tools=_TOOLS,

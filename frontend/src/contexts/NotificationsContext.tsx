@@ -15,6 +15,8 @@ interface NotificationsContextValue {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  /** Adopt counts from a page the caller already fetched (avoids a 2nd request). */
+  syncCounts: (unseen: number, total: number) => void;
   markSeen: (id: string) => Promise<void>;
   markAllSeen: () => Promise<void>;
 }
@@ -87,19 +89,25 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     }
   }, [unreadCount, notifications]);
 
+  const syncCounts = useCallback((unseen: number, total: number) => {
+    setUnreadCount(unseen);
+    setTotalCount(total);
+  }, []);
+
+  // No eager fetch here: the provider wraps every page, and only the
+  // dashboard reads these values. The dashboard calls syncCounts() with the
+  // page it loads, so each visit costs one request instead of two.
   useEffect(() => {
-    if (user) {
-      refresh();
-    } else {
+    if (!user) {
       setNotifications([]);
       setUnreadCount(0);
       setTotalCount(0);
     }
-  }, [user, refresh]);
+  }, [user]);
 
   return (
     <NotificationsContext.Provider
-      value={{ notifications, unreadCount, totalCount, loading, error, refresh, markSeen, markAllSeen }}
+      value={{ notifications, unreadCount, totalCount, loading, error, refresh, syncCounts, markSeen, markAllSeen }}
     >
       {children}
     </NotificationsContext.Provider>

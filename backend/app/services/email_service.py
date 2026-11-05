@@ -19,7 +19,6 @@ import resend
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.config import Settings
-from app.models import Notification
 
 logger = logging.getLogger(__name__)
 
@@ -120,68 +119,6 @@ def _get_jinja_env() -> Environment:
     )
     env.filters["safe_url"] = _safe_url
     return env
-
-
-async def send_citation_email(
-    to_email: str,
-    recipient_name: str,
-    notifications: list[Notification],
-    settings: Settings,
-) -> None:
-    """
-    Render and send the citation notification email.
-
-    Parameters
-    ----------
-    to_email:
-        Recipient email address.
-    recipient_name:
-        Human-readable name used in the email greeting.
-    notifications:
-        List of new Notification objects to include in the email body.
-    settings:
-        Application settings (used for API key, from address, etc.).
-    """
-    resend.api_key = settings.resend_api_key
-
-    env = _get_jinja_env()
-    context = {
-        "app_name": settings.app_name,
-        "app_url": settings.app_url,
-        "support_email": settings.support_email,
-        "recipient_name": recipient_name,
-        "notifications": notifications,
-        "notification_count": len(notifications),
-        "current_year": datetime.now(tz=timezone.utc).year,
-    }
-
-    html_template = env.get_template("citation.html")
-    text_template = env.get_template("citation.txt")
-
-    html_body = html_template.render(**context)
-    text_body = text_template.render(**context)
-
-    subject = (
-        f"[{settings.app_name}] {len(notifications)} "
-        f"new citation{'s' if len(notifications) != 1 else ''} for your work"
-    )
-
-    from_address = f"{settings.email_from_name} <{settings.email_from_address}>"
-
-    params: resend.Emails.SendParams = {
-        "from": from_address,
-        "to": [to_email],
-        "subject": subject,
-        "html": html_body,
-        "text": text_body,
-    }
-
-    result = await _send(params)
-    logger.info(
-        "Citation email sent to %s — Resend ID: %s",
-        to_email,
-        result.get("id", "<unknown>"),
-    )
 
 
 async def send_digest_email(
