@@ -8,8 +8,11 @@ on:
 
 # Never run two copies at once (e.g. a manual dispatch overlapping the
 # schedule); a second run waits for the first to finish.
+# The group name is versioned: run #184 (Nov 4) got stuck as a ghost that
+# GitHub can neither cancel nor start, and it held the old group's slot, so
+# every later run waited behind it. A new name sidesteps it.
 concurrency:
-  group: daily-citation-check
+  group: daily-citation-check-v2
   cancel-in-progress: false
 
 jobs:
