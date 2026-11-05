@@ -170,6 +170,13 @@ async def run_job(
             fallback_field="created_at",
         )
 
+        # Record the cooldown before running, so a second click while this
+        # check is still going is refused instead of starting a parallel one.
+        if not body.dry_run:
+            _db.collection("users").document(caller_id).set(
+                {"last_manual_check_at": now}, merge=True
+            )
+
         works_processed, new_notifications = await _off_loop(
             run_job_for_user,
             uid=caller_id,
@@ -179,10 +186,6 @@ async def run_job(
             dry_run=body.dry_run,
             settings=settings,
         )
-        if not body.dry_run:
-            _db.collection("users").document(caller_id).set(
-                {"last_manual_check_at": now}, merge=True
-            )
         summary = {
             "users_processed": 1,
             "works_processed": works_processed,

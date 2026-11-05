@@ -10,6 +10,7 @@ This module is responsible for:
 
 import asyncio
 import logging
+import threading
 import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -19,6 +20,7 @@ from typing import Any
 from firebase_admin import auth as firebase_auth
 
 from app.models import Notification, TrackedWork, is_openalex_work_id
+from app.services.citing_identity import is_junk, merge_records
 from app.services import openalex as openalex_svc
 from app.services import semantic_scholar as s2_svc
 
@@ -39,6 +41,8 @@ async def process_tracked_work(
     dry_run: bool = False,
     notified_ids: set[str] | None = None,
     source_failures: list[str] | None = None,
+    notified_keys: set[str] | None = None,
+    baseline_done: bool = False,
 ) -> tuple[int, list[Notification]]:
     """
     Check for new citations of *work* and write Notification documents.
@@ -97,25 +101,34 @@ async def process_tracked_work(
     )
 
     # 2. Fetch from OpenAlex and Semantic Scholar in parallel.
-    #    Only citing papers published within the last 30 days are considered.
-    #    The date filter is applied as early as possible:
-    #      - OpenAlex: passed as a server-side filter to avoid fetching stale pages.
-    #      - S2: applied after raw fetch but before expensive affiliation enrichment.
-    #    A final post-normalization filter acts as a strict backstop.
-    thirty_days_ago: str = (
-        datetime.now(tz=timezone.utc) - timedelta(days=30)
-    ).strftime("%Y-%m-%d")
+    #    Indexes can take weeks to list a new paper, so "new" means "not
+    #    reported before" (any identity key in notified_keys), not "published
+    #    in the last 30 days". Citing papers from the past year are considered.
+    now = datetime.now(tz=timezone.utc)
+    window_start = (now - timedelta(days=_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+    recent_start = (now - timedelta(days=_RECENT_DAYS)).strftime("%Y-%m-%d")
+    is_fresh_add = work.last_checked_at is None
+    known_keys: set[str] = set(notified_keys or ())
+    # The first complete check of a work (or of a work tracked before the
+    # wider window existed) records older citations silently instead of
+    # emailing a year of them at once.
+    baseline = not baseline_done
 
     async def _empty() -> list:
         return []
 
     oa_task = (
-        openalex_svc.get_citing_works(openalex_id, since_date=thirty_days_ago)
+        openalex_svc.get_citing_works(openalex_id, since_date=window_start)
         if openalex_id
         else _empty()
     )
     s2_task = (
-        s2_svc.get_citing_papers(work.doi, since_date=thirty_days_ago)
+        s2_svc.get_citing_papers(
+            work.doi,
+            since_date=window_start,
+            known_keys=known_keys,
+            enrich_since=recent_start if baseline else None,
+        )
         if work.doi
         else _empty()
     )
@@ -142,61 +155,26 @@ async def process_tracked_work(
         len(oa_results), len(s2_results), work.id, uid,
     )
 
-    # 4. Normalise both source lists to the same dict shape, then merge.
-    #    OpenAlex results take priority (richer metadata: affiliations, etc.).
-    #    A paper present in both is kept only once, keyed by DOI then title.
-    oa_normalized = [openalex_svc.normalize_citing_work(r) for r in oa_results]
-    s2_normalized = [s2_svc.normalize_citing_work(r) for r in s2_results]
-
-    merged: dict[str, dict] = {}
-    for n in oa_normalized:
-        key = _dedup_key(n)
-        if key:
-            merged[key] = n
-    for n in s2_normalized:
-        key = _dedup_key(n)
-        if key and key not in merged:
-            merged[key] = n
-
-    all_normalized = list(merged.values())
-
-    # 30-day backstop.
-    # Prefer publication_date for precise filtering.  When it's absent (common
-    # for papers that have been indexed but not yet dated by OA/S2), fall back
-    # to year: accept anything from the cutoff year or later so that recently
-    # published papers don't get silently dropped on the first job run and only
-    # appear once the API retroactively assigns a date.
-    before_date_filter = len(all_normalized)
-    cutoff_year = int(thirty_days_ago[:4])
-    all_normalized = [
-        n for n in all_normalized
-        if (n.get("publication_date") or "") >= thirty_days_ago
-        or (not n.get("publication_date") and (n.get("year") or 0) >= cutoff_year)
-    ]
-    date_filtered_count = before_date_filter - len(all_normalized)
+    # 3. Normalise, drop notices (errata, retractions), and merge every record
+    #    of the same paper across sources and versions. OpenAlex comes first,
+    #    so its richer metadata wins; S2 fills gaps.
+    normalized = [openalex_svc.normalize_citing_work(r) for r in oa_results]
+    normalized += [s2_svc.normalize_citing_work(r) for r in s2_results]
+    candidates = [n for n in normalized if not is_junk(n.get("title"), n.get("type"))]
+    junk_count = len(normalized) - len(candidates)
+    merged = [n for n in merge_records(candidates) if _published_since(n, window_start)]
 
     logger.info(
-        "Merged citing works for %s (uid=%s): %d unique after dedup "
-        "(%d OA + %d S2 before merge); %d dropped by 30-day date filter",
-        work.id, uid, len(all_normalized), len(oa_normalized), len(s2_normalized),
-        date_filtered_count,
+        "Citing works for %s (uid=%s): %d unique of %d records; %d notice(s) dropped; baseline=%s",
+        work.id, uid, len(merged), len(normalized), junk_count, baseline,
     )
 
     notifications_ref = db.collection("users").document(uid).collection("notifications")
 
-    # 5+6. Single Firestore pass: read all existing notifications for this work.
-    #
-    #  Fresh add (last_checked_at is None):
-    #    Any notifications are stale leftovers from a failed cascade-delete.
-    #    Delete them all so existing_ids stays empty.
-    #
-    #  Normal check:
-    #    Build existing_ids using the CANONICAL doc ID (DOI-keyed when a
-    #    citing_work_doi is available).  Old notifications stored with an
-    #    OpenAlex-URL-based doc ID are silently migrated to the DOI-keyed
-    #    format in the same pass, so they don't block new writes.
+    # 4. Existing notification documents for this work. On a fresh add they
+    #    are leftovers from a failed cascade delete and are wiped; otherwise
+    #    their IDs (migrated to the DOI form) also count as already reported.
     existing_ids: set[str] = set()
-    is_fresh_add = work.last_checked_at is None
     if not is_fresh_add and notified_ids:
         existing_ids |= notified_ids
 
@@ -205,85 +183,77 @@ async def process_tracked_work(
         for ndoc in notifications_ref.where("cited_work_id", "==", work.id).stream():
             if is_fresh_add:
                 stale_refs.append(ndoc.reference)
-            else:
-                data = ndoc.to_dict() or {}
-                citing_doi_stored = data.get("citing_work_doi") or ""
-                # Canonical ID: DOI-keyed if possible, otherwise keep as-is.
-                canonical_id = (
-                    f"{work.id}__{_safe_doc_id(citing_doi_stored)}"
-                    if citing_doi_stored
-                    else ndoc.id
-                )
-                if canonical_id != ndoc.id:
-                    # Legacy OA-ID-keyed doc — migrate to DOI-keyed.
-                    notifications_ref.document(canonical_id).set(data)
-                    ndoc.reference.delete()
-                    logger.info(
-                        "Migrated notification %s → %s (uid=%s)",
-                        ndoc.id, canonical_id, uid,
-                    )
-                existing_ids.add(canonical_id)
+                continue
+            data = ndoc.to_dict() or {}
+            citing_doi_stored = data.get("citing_work_doi") or ""
+            canonical_id = (
+                f"{work.id}__{_safe_doc_id(citing_doi_stored)}"
+                if citing_doi_stored
+                else ndoc.id
+            )
+            if canonical_id != ndoc.id:
+                notifications_ref.document(canonical_id).set(data)
+                ndoc.reference.delete()
+                logger.info("Migrated notification %s -> %s (uid=%s)", ndoc.id, canonical_id, uid)
+            existing_ids.add(canonical_id)
 
         if stale_refs:
             for ref in stale_refs:
                 ref.delete()
             logger.warning(
-                "Wiped %d stale notification(s) for freshly-added work %s (uid=%s).",
+                "Wiped %d stale notification(s) for freshly added work %s (uid=%s).",
                 len(stale_refs), work.id, uid,
             )
 
-        logger.info(
-            "%d existing notification(s) on record for work %s (uid=%s).",
-            len(existing_ids), work.id, uid,
-        )
-
     new_count = 0
     skipped_count = 0
+    baselined_count = 0
     new_notifications: list[Notification] = []
     pending_writes: list[tuple[Any, dict]] = []
 
-    for normalized in all_normalized:
-        # Prefer DOI as the stable cross-source identifier; fall back to
-        # source-specific ID (OpenAlex W-id or S2 paper ID).
-        # Lowercase the DOI for a consistent doc ID — DOIs are case-insensitive
-        # and mixed-case variants from different sources would otherwise create
-        # duplicate notification documents for the same citing paper.
-        citing_doi: str = (normalized.get("doi") or "").lower()
-        citing_id: str = citing_doi or normalized["id"] or ""
+    for item in merged:
+        keys: set[str] = item["_keys"]
+        # DOI is the stable document ID when there is one; DOIs are case
+        # insensitive, so lowercase them to avoid twin documents.
+        citing_doi: str = (item.get("doi") or "").lower()
+        citing_id: str = citing_doi or item.get("id") or ""
         if not citing_id:
-            logger.debug("Skipping citing work with no usable ID: %s", normalized.get("title"))
             continue
-
         doc_id = f"{work.id}__{_safe_doc_id(citing_id)}"
 
-        if not dry_run:
-            if doc_id in existing_ids:
-                logger.debug("Notification %s already exists — skipping.", doc_id)
-                skipped_count += 1
-                continue
-        else:
+        if keys & known_keys or doc_id in existing_ids:
+            known_keys |= keys
+            skipped_count += 1
+            continue
+
+        if baseline and not _published_since(item, recent_start):
+            known_keys |= keys
+            baselined_count += 1
+            continue
+
+        if dry_run:
             logger.info(
                 "[DRY RUN] Would write notification %s: '%s' cites '%s'",
-                doc_id, normalized["title"], work.title,
+                doc_id, item["title"], work.title,
             )
 
-        now = datetime.now(tz=timezone.utc)
         notification = Notification(
             id=doc_id,
             cited_work_id=work.id,
             cited_work_title=work.title,
             citing_work_id=citing_id,
-            citing_work_title=_truncate(normalized["title"], _TITLE_MAX_CHARS),
+            citing_work_title=_truncate(item["title"], _TITLE_MAX_CHARS),
             citing_work_doi=citing_doi or None,
-            citing_work_url=normalized.get("url"),
+            citing_work_url=item.get("url"),
             citing_authors=[
                 _truncate(a, _AUTHOR_NAME_MAX_CHARS)
-                for a in normalized.get("authors", [])
+                for a in item.get("authors", [])
             ],
-            citing_affiliations=normalized.get("affiliations", []),
-            citing_year=normalized.get("year"),
-            citing_publication_date=normalized.get("publication_date"),
+            citing_affiliations=item.get("affiliations", []),
+            citing_year=item.get("year"),
+            citing_publication_date=item.get("publication_date"),
             seen=False,
+            emailed=False,
             created_at=now,
         )
 
@@ -292,6 +262,7 @@ async def process_tracked_work(
             doc_data["created_at"] = now
             pending_writes.append((notifications_ref.document(doc_id), doc_data))
 
+        known_keys |= keys
         existing_ids.add(doc_id)
         new_count += 1
         new_notifications.append(notification)
@@ -301,20 +272,25 @@ async def process_tracked_work(
         logger.info("Wrote %d notification(s) for uid=%s", len(pending_writes), uid)
 
     logger.info(
-        "Work %s (uid=%s): %d new notification(s), %d duplicate(s) skipped "
-        "out of %d unique citing work(s).",
-        work.id, uid, new_count, skipped_count, len(all_normalized),
+        "Work %s (uid=%s): %d new, %d already reported, %d older recorded at baseline.",
+        work.id, uid, new_count, skipped_count, baselined_count,
     )
 
-    # 7. Update last_checked_at and the permanent notified record.
-    #    When every source failed nothing was actually checked, so the
-    #    timestamp stays as it was (a freshly added work stays "fresh").
+    # 5. Record what was checked. When every source failed nothing was
+    #    checked, so the timestamp stays (a fresh add stays fresh). The
+    #    baseline only counts as done when no source failed; otherwise a
+    #    source that comes back tomorrow would look like a year of new
+    #    citations.
     if not dry_run:
         update: dict[str, Any] = {"last_check_failed_sources": failed}
         if not all_sources_failed:
-            update["last_checked_at"] = datetime.now(tz=timezone.utc)
+            update["last_checked_at"] = now
         if existing_ids:
             update["notified_ids"] = sorted(existing_ids)
+        if known_keys:
+            update["notified_keys"] = sorted(known_keys)
+        if baseline and not failed:
+            update["citation_window"] = _CITATION_WINDOW_VERSION
         (
             db.collection("users")
             .document(uid)
@@ -326,9 +302,60 @@ async def process_tracked_work(
     return new_count, new_notifications
 
 
+_EMAIL_RETRY_DAYS = 7
+
+
+def _pending_email_notifications(uid: str, db: Any) -> list[tuple[Any, Notification]]:
+    """Notifications from the last week whose alert email has not gone out.
+
+    Only documents written with ``emailed: False`` match; older documents
+    have no such field and are never re-sent.
+    """
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=_EMAIL_RETRY_DAYS)
+    out: list[tuple[Any, Notification]] = []
+    ref = db.collection("users").document(uid).collection("notifications")
+    for doc in ref.where("emailed", "==", False).stream():
+        data = doc.to_dict() or {}
+        created = _firestore_dt(data.get("created_at"))
+        if created is not None and created < cutoff:
+            continue
+        try:
+            fields = {k: v for k, v in data.items() if k in Notification.model_fields and k != "id"}
+            fields["created_at"] = created
+            out.append((doc.reference, Notification(id=doc.id, **fields)))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Skipping unreadable notification %s (uid=%s): %s", doc.id, uid, exc)
+    out.sort(key=lambda pair: pair[1].created_at or datetime.min.replace(tzinfo=timezone.utc))
+    return out
+
+
+_LOOKBACK_DAYS = 365
+_RECENT_DAYS = 30
+# Bumped when the meaning of "already reported" changes and every work needs
+# one quiet baseline check (2 = identity keys over a one year window).
+_CITATION_WINDOW_VERSION = 2
+
+
+def _published_since(item: dict, date_str: str) -> bool:
+    """Published on or after *date_str*; undated papers fall back to year."""
+    pub = item.get("publication_date") or ""
+    if pub:
+        return pub >= date_str
+    return (item.get("year") or 0) >= int(date_str[:4])
+
+
 # ---------------------------------------------------------------------------
 # Full-user-sweep job
 # ---------------------------------------------------------------------------
+
+
+_user_locks: dict[str, threading.Lock] = {}
+_user_locks_guard = threading.Lock()
+
+
+def _user_lock(uid: str) -> threading.Lock:
+    with _user_locks_guard:
+        return _user_locks.setdefault(uid, threading.Lock())
 
 
 async def run_job_for_user(
@@ -345,7 +372,30 @@ async def run_job_for_user(
 
     Returns (works_processed, new_notifications). When *stats* is given it is
     filled with per-source failure counts for the run's health summary.
+
+    One check per user at a time: a manual "check now" during the nightly
+    sweep would otherwise find the same citations twice and email them twice.
+    The second caller skips the user instead of waiting.
     """
+    lock = _user_lock(uid)
+    if not lock.acquire(blocking=False):
+        logger.info("Skipping uid=%s: a citation check for this user is already running.", uid)
+        return 0, 0
+    try:
+        return await _run_job_for_user_locked(uid, user_data, db, email_service, dry_run, settings, stats)
+    finally:
+        lock.release()
+
+
+async def _run_job_for_user_locked(
+    uid: str,
+    user_data: dict,
+    db: Any,
+    email_service: ModuleType,
+    dry_run: bool,
+    settings: Any,
+    stats: dict[str, int] | None,
+) -> tuple[int, int]:
     if settings is None:
         from app.config import get_settings
         settings = get_settings()
@@ -357,6 +407,8 @@ async def run_job_for_user(
     )
     works: list[TrackedWork] = []
     notified_by_work: dict[str, set[str]] = {}
+    keys_by_work: dict[str, set[str]] = {}
+    baseline_by_work: dict[str, bool] = {}
     works_ref = db.collection("users").document(uid).collection("trackedWorks")
     for wdoc in works_docs:
         wdata = wdoc.to_dict() or {}
@@ -370,6 +422,8 @@ async def run_job_for_user(
                 works_ref.document(wdoc.id).update({"openalex_id": None, "openalex_citation_count": None})
         works.append(_doc_to_tracked_work(wdoc.id, wdata))
         notified_by_work[wdoc.id] = set(wdata.get("notified_ids") or [])
+        keys_by_work[wdoc.id] = set(wdata.get("notified_keys") or [])
+        baseline_by_work[wdoc.id] = wdata.get("citation_window") == _CITATION_WINDOW_VERSION
 
     user_new_notifications: list[Notification] = []
     works_processed = 0
@@ -382,6 +436,8 @@ async def run_job_for_user(
                 uid=uid, work=work, db=db, dry_run=dry_run,
                 notified_ids=notified_by_work.get(work.id),
                 source_failures=source_failures,
+                notified_keys=keys_by_work.get(work.id),
+                baseline_done=baseline_by_work.get(work.id, False),
             )
             user_new_notifications.extend(notifications)
         except Exception as exc:  # noqa: BLE001
@@ -458,36 +514,46 @@ async def run_job_for_user(
     except Exception as exc:
         logger.warning("Could not check email_verified for uid=%s: %s", uid, exc)
 
-    if user_new_notifications and to_email and not email_verified:
-        logger.info("Skipping citation email — uid=%s email not verified.", uid)
+    # What to email: every notification not yet emailed from the last week,
+    # which includes this run's and any whose earlier send failed (during the
+    # October domain outage those were marked sent and lost). They are marked
+    # emailed only after Resend accepts the message.
+    to_send: list[tuple[Any, Notification]] = (
+        [] if dry_run else _pending_email_notifications(uid, db)
+    )
+    if dry_run:
+        to_send = [(None, n) for n in user_new_notifications]
 
-    if user_new_notifications and to_email and notify_enabled and email_verified:
+    if to_send and to_email and not email_verified:
+        logger.info("Skipping citation email: uid=%s email not verified.", uid)
+
+    if to_send and to_email and notify_enabled and email_verified:
+        notifications = [n for _, n in to_send]
         if dry_run:
-            logger.info(
-                "[DRY RUN] Would email %s with %d new citation(s).",
-                to_email, len(user_new_notifications),
-            )
+            logger.info("[DRY RUN] Would email %s with %d new citation(s).", to_email, len(notifications))
         else:
             try:
-                citation_groups = _group_notifications(user_new_notifications)
+                citation_groups = _group_notifications(notifications)
                 recipient_name: str = user_data.get("display_name") or to_email
                 await email_service.send_digest_email(
                     to_email=to_email,
                     recipient_name=recipient_name,
                     citation_groups=citation_groups,
-                    total_citations=len(user_new_notifications),
+                    total_citations=len(notifications),
                     digest_date=datetime.now(tz=timezone.utc),
                     settings=settings,
                     uid=uid,
                 )
-                logger.info(
-                    "Citation email sent to %s (uid=%s): %d new citation(s) across %d paper(s).",
-                    to_email, uid, len(user_new_notifications), len(citation_groups),
-                )
             except Exception as exc:  # noqa: BLE001
                 logger.error(
-                    "Failed to send citation email to %s (uid=%s): %s",
-                    to_email, uid, exc, exc_info=True,
+                    "Failed to send citation email to %s (uid=%s); %d citation(s) stay pending: %s",
+                    to_email, uid, len(notifications), exc, exc_info=True,
+                )
+            else:
+                _commit_in_batches(db, [("update", ref, {"emailed": True}) for ref, _ in to_send])
+                logger.info(
+                    "Citation email sent to %s (uid=%s): %d citation(s) across %d paper(s).",
+                    to_email, uid, len(notifications), len(citation_groups),
                 )
 
     return works_processed, len(user_new_notifications)
@@ -559,30 +625,18 @@ async def prune_user_notifications(
     """
     Delete stale notification documents for a single user.
 
-    A notification is stale if EITHER:
-    - its ``created_at`` is older than ``_NOTIFICATION_TTL_DAYS`` days, OR
-    - its ``citing_publication_date`` is set and older than ``_NOTIFICATION_TTL_DAYS`` days.
-
-    The two criteria are merged so each document is only deleted once.
+    A notification is stale once Citey found it more than
+    ``_NOTIFICATION_TTL_DAYS`` days ago. The citing paper's publication date
+    does not matter: a late indexed citation stays visible for its 30 days.
     Returns the number of notifications deleted (or that would be deleted in
     dry-run mode).
     """
     cutoff_dt = datetime.now(tz=timezone.utc) - timedelta(days=_NOTIFICATION_TTL_DAYS)
-    cutoff_date_str = cutoff_dt.strftime("%Y-%m-%d")
 
     notifs_ref = db.collection("users").document(uid).collection("notifications")
 
-    # Gather unique doc references to delete (merge both criteria).
     to_delete: dict[str, Any] = {}
-
-    # 1. Stale by creation time (catches notifications without a publication date).
     for doc in notifs_ref.where("created_at", "<", cutoff_dt).stream():
-        to_delete[doc.id] = doc.reference
-
-    # 2. Stale by citing paper's publication date.  Firestore range queries on a
-    #    string field only match documents where the field *exists*, so this won't
-    #    accidentally catch notifications that have no publication date stored.
-    for doc in notifs_ref.where("citing_publication_date", "<", cutoff_date_str).stream():
         to_delete[doc.id] = doc.reference
 
     count = len(to_delete)

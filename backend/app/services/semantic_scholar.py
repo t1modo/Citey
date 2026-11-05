@@ -233,7 +233,12 @@ async def _resolve_s2_paper_id(doi: str) -> str | None:
     return None
 
 
-async def get_citing_papers(doi: str, since_date: str | None = None) -> list[dict]:
+async def get_citing_papers(
+    doi: str,
+    since_date: str | None = None,
+    known_keys: set[str] | None = None,
+    enrich_since: str | None = None,
+) -> list[dict]:
     """
     Fetch all papers that cite *doi* from Semantic Scholar.
 
@@ -316,9 +321,27 @@ async def get_citing_papers(doi: str, since_date: str | None = None) -> list[dic
             len(results), before, since_date, doi,
         )
 
-    if results:
-        await _enrich_author_affiliations(results)
-        await _enrich_affiliations_from_pdfs(results)
+    # Papers already reported need no affiliations: skip the author lookups
+    # and arXiv PDF downloads for them. Their identity keys are all the
+    # caller needs to recognise them.
+    if known_keys:
+        from app.services.citing_identity import keys_for_raw_s2
+
+        fresh = [p for p in results if not (keys_for_raw_s2(p) & known_keys)]
+    else:
+        fresh = results
+    # During a baseline check older papers are recorded silently, so only the
+    # ones that may be alerted need affiliations.
+    if enrich_since:
+        cutoff_year = int(enrich_since[:4])
+        fresh = [
+            p for p in fresh
+            if (p.get("publicationDate") or "") >= enrich_since
+            or (not p.get("publicationDate") and (p.get("year") or 0) >= cutoff_year)
+        ]
+    if fresh:
+        await _enrich_author_affiliations(fresh)
+        await _enrich_affiliations_from_pdfs(fresh)
 
     return results
 
@@ -1534,9 +1557,13 @@ def normalize_citing_work(raw: dict) -> dict[str, Any]:
     else:
         url = ""
 
+    from app.services.citing_identity import normalize_arxiv_id
+
     return {
         "id": f"S2:{paper_id}" if paper_id else "",
         "doi": doi,
+        "arxiv_id": normalize_arxiv_id(external.get("ArXiv")),
+        "type": None,
         "title": title,
         "authors": authors,
         "affiliations": affiliations,

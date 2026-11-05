@@ -713,15 +713,14 @@ def list_works(
     db: Any = Depends(get_db),
 ) -> list[TrackedWork]:
     """Return all tracked works with citation counts, sorted by publication year descending."""
-    thirty_days_ago = (datetime.now(tz=timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
-    cutoff_year = int(thirty_days_ago[:4])
+    found_since = datetime.now(tz=timezone.utc) - timedelta(days=30)
     total_counts: defaultdict[str, int] = defaultdict(int)
     recent_counts: defaultdict[str, int] = defaultdict(int)
 
     # Only the three fields we count with; avoids pulling whole documents.
     notifs = (
         db.collection("users").document(uid).collection("notifications")
-        .select(["cited_work_id", "citing_publication_date", "citing_year"])
+        .select(["cited_work_id", "created_at"])
     )
     for ndoc in notifs.stream():
         ndata = ndoc.to_dict() or {}
@@ -729,12 +728,16 @@ def list_works(
         if not work_id:
             continue
         total_counts[work_id] += 1
-        # Count as "recent" only when the citing paper was actually published
-        # within the last 30 days (mirrors the discovery and display filters).
-        pub_date: str = ndata.get("citing_publication_date") or ""
-        pub_year: int = ndata.get("citing_year") or 0
-        if pub_date >= thirty_days_ago or (not pub_date and pub_year >= cutoff_year):
+        # "New this month" = found in the last 30 days (matches the list
+        # endpoint), so a late indexed citation still counts as new.
+        found = ndata.get("created_at")
+        if found is None or not hasattr(found, "tzinfo"):
             recent_counts[work_id] += 1
+        else:
+            if found.tzinfo is None:
+                found = found.replace(tzinfo=timezone.utc)
+            if found >= found_since:
+                recent_counts[work_id] += 1
 
     works: list[TrackedWork] = []
     for doc in db.collection("users").document(uid).collection("trackedWorks").stream():

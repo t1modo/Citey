@@ -72,8 +72,7 @@ def list_notifications(
     Sorting is done in Python after streaming the full collection so that
     documents with a null/missing created_at are not silently excluded.
     """
-    thirty_days_ago = (datetime.now(tz=timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
-    cutoff_year = int(thirty_days_ago[:4])
+    found_since = datetime.now(tz=timezone.utc) - timedelta(days=30)
 
     docs = (
         db.collection("users")
@@ -83,14 +82,12 @@ def list_notifications(
     )
     all_notifications = [_doc_to_notification(doc.id, doc.to_dict() or {}) for doc in docs]
 
-    # Only surface citations where the citing paper was published within the last
-    # 30 days.  When an exact publication date is absent we fall back to year,
-    # accepting anything from the cutoff year or later so that papers that haven't
-    # yet been fully dated by OpenAlex/S2 are not silently excluded.
+    # Citations Citey found in the last 30 days. Found, not published: an
+    # index can list a paper weeks after it appears, and that citation is
+    # still news to the researcher.
     all_notifications = [
         n for n in all_notifications
-        if (n.citing_publication_date or "") >= thirty_days_ago
-        or (not n.citing_publication_date and (n.citing_year or 0) >= cutoff_year)
+        if n.created_at is None or n.created_at >= found_since
     ]
 
     all_notifications.sort(key=lambda n: n.created_at or _EPOCH, reverse=True)
@@ -180,9 +177,7 @@ async def prune_notifications(
     db: Any = Depends(get_db),
 ) -> dict:
     """
-    Delete the authenticated user's stale notifications — those whose citing
-    paper was published more than 30 days ago, or whose notification record is
-    itself more than 30 days old.
+    Delete the authenticated user's notifications found more than 30 days ago.
 
     Returns {deleted: <count>}.
     """

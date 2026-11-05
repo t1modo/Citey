@@ -97,6 +97,9 @@ class Notification(BaseModel):
     citing_year: Optional[int] = None
     citing_publication_date: Optional[str] = None
     seen: bool = False
+    # False until the alert email for it has actually been sent, so a failed
+    # send is retried on the next run instead of being lost.
+    emailed: bool = False
     created_at: Optional[datetime] = None
 
     @field_validator("cited_work_title", "citing_work_title")

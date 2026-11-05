@@ -32,6 +32,7 @@ _HEADERS = {
 _PER_PAGE = 200  # Maximum allowed by the API
 _MAILTO = "support@citey.email"
 _MAX_RETRIES = 4
+_JUNK_FILTER = "is_paratext:false,is_retracted:false,type:!erratum,type:!retraction,type:!paratext"
 # Indirection so tests can skip real waiting.
 _sleep = asyncio.sleep
 
@@ -168,7 +169,10 @@ async def get_citing_works(
     filters = [f"cites:{work_id}"]
     if since_date:
         filters.append(f"from_publication_date:{since_date}")
-    filter_str = ",".join(filters)
+    base_filter = ",".join(filters)
+    # Journal front matter, errata, retraction notices and retracted papers
+    # are not citations worth an alert.
+    filter_str = base_filter + "," + _JUNK_FILTER
 
     results: list[dict] = []
     cursor = "*"
@@ -187,6 +191,18 @@ async def get_citing_works(
             response = await _get_with_retry(
                 client, f"{_BASE_URL}/works", params, context=f"citing:{openalex_work_id}"
             )
+            if (
+                response is not None
+                and response.status_code == 400
+                and filter_str != base_filter
+                and cursor == "*"
+            ):
+                # Never let the optional junk filter block citation checks.
+                logger.warning(
+                    "OpenAlex rejected the junk filter for %s; retrying without it", openalex_work_id
+                )
+                filter_str = base_filter
+                continue
             # A failed page must not look like "no more citations": the caller
             # would record the work as checked and the missing citations
             # would never be looked for again.
@@ -501,9 +517,21 @@ def normalize_citing_work(raw: dict) -> dict[str, Any]:
     else:
         url = raw.get("landing_page_url") or None
 
+    # arXiv id from any location that is an arXiv page, so the preprint and
+    # the journal version are recognised as one paper.
+    from app.services.citing_identity import arxiv_id_from_doi, arxiv_id_from_url
+
+    arxiv_id = arxiv_id_from_doi(doi)
+    for loc in raw.get("locations") or []:
+        if arxiv_id:
+            break
+        arxiv_id = arxiv_id_from_url((loc or {}).get("landing_page_url"))
+
     return {
         "id": openalex_id,
         "doi": doi,
+        "arxiv_id": arxiv_id,
+        "type": raw.get("type"),
         "title": title,
         "authors": authors,
         "affiliations": affiliations,
