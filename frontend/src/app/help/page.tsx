@@ -150,7 +150,7 @@ export default function HelpPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
             <span className="flex-1 truncate font-mono text-sm text-ink">{IMPORT_EXAMPLES[0]}</span>
-            <span className="shrink-0 rounded-lg bg-ink/10 px-3 py-1 text-xs font-medium text-muted">
+            <span className="shrink-0 rounded-lg bg-ink/10 px-3 py-1 text-xs font-medium text-ink">
               Add
             </span>
           </div>

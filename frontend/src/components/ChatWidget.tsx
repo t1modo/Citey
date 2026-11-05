@@ -202,7 +202,7 @@ export default function ChatWidget() {
                   placeholder="Ask about DOIs, adding papers…"
                   rows={1}
                   disabled={loading}
-                  className="flex-1 resize-none rounded-xl border border-rule bg-sheet px-3.5 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20 disabled:opacity-50"
+                  className="flex-1 resize-none rounded-xl border border-control bg-sheet px-3.5 py-2.5 text-sm text-ink placeholder-muted outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20 disabled:opacity-50"
                   style={{ minHeight: "40px", maxHeight: "120px" }}
                 />
                 <button

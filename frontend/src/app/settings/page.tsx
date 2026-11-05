@@ -283,9 +283,10 @@ export default function SettingsPage() {
                   type="button"
                   role="switch"
                   aria-checked={notifyEnabled}
+                  aria-label="New citation alerts"
                   onClick={() => setNotifyEnabled((v) => !v)}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ink/20 focus:ring-offset-2 focus:ring-offset-paper ${
-                    notifyEnabled ? "bg-ink" : "bg-rule"
+                    notifyEnabled ? "bg-ink" : "bg-control"
                   }`}
                 >
                   <span
@@ -308,9 +309,10 @@ export default function SettingsPage() {
                   type="button"
                   role="switch"
                   aria-checked={notifyNewPublications}
+                  aria-label="New publication alerts"
                   onClick={() => setNotifyNewPublications((v) => !v)}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ink/20 focus:ring-offset-2 focus:ring-offset-paper ${
-                    notifyNewPublications ? "bg-ink" : "bg-rule"
+                    notifyNewPublications ? "bg-ink" : "bg-control"
                   }`}
                 >
                   <span
@@ -335,7 +337,7 @@ export default function SettingsPage() {
                   value={notificationEmail}
                   onChange={(e) => setNotificationEmail(e.target.value)}
                   placeholder={profile?.email ?? "your@email.com"}
-                  className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
+                  className="w-full rounded-lg border border-control bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                 />
                 <p className="mt-1.5 text-xs text-muted">
                   Leave blank to use your account email ({profile?.email}).
@@ -371,7 +373,7 @@ export default function SettingsPage() {
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Dr. Jane Smith"
-                  className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
+                  className="w-full rounded-lg border border-control bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                 />
               </div>
 
@@ -392,7 +394,7 @@ export default function SettingsPage() {
                     setScholarConfirmPending(false);
                   }}
                   placeholder="https://scholar.google.com/citations?user=..."
-                  className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
+                  className="w-full rounded-lg border border-control bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                 />
                 <p className="mt-1.5 text-xs text-muted">
                   Paste your Google Scholar profile URL to add a quick link on your dashboard.
@@ -723,7 +725,7 @@ export default function SettingsPage() {
                       value={deleteConfirmText}
                       onChange={(e) => setDeleteConfirmText(e.target.value)}
                       placeholder="DELETE"
-                      className="w-full rounded-lg border border-danger/40 bg-sheet px-3 py-2 font-mono text-sm text-ink placeholder-muted/70 outline-none focus:border-danger/40 focus:ring-1 focus:ring-danger/40"
+                      className="w-full rounded-lg border border-danger bg-sheet px-3 py-2 font-mono text-sm text-ink placeholder-muted outline-none focus:border-danger focus:ring-1 focus:ring-danger/40"
                     />
                   </div>
 

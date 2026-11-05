@@ -463,7 +463,7 @@ export default function ImportModal({
                       value={query}
                       onChange={(e) => { setQuery(e.target.value); setError(null); }}
                       placeholder="DOI, arXiv URL, author URL, or name…"
-                      className="w-full rounded-lg border border-rule bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted/70 outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
+                      className="w-full rounded-lg border border-control bg-sheet px-4 py-2.5 text-sm text-ink placeholder-muted outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink/20"
                       disabled={loading}
                       autoComplete="off"
                       spellCheck={false}

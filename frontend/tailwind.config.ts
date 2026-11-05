@@ -14,7 +14,8 @@ const config: Config = {
           soft: "#2A3A5E",
         },
         muted: "#5B6577", // secondary text (5.3:1 on paper)
-        rule: "#C9D0DA", // borders and dividers
+        rule: "#C9D0DA", // decorative borders and dividers
+        control: "#7E8899", // form field and switch outlines: 3:1 against paper and sheet (WCAG 1.4.11)
         mark: {
           DEFAULT: "#FFE45C", // highlighter
           soft: "#FFF3A8",
