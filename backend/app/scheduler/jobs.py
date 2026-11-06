@@ -1,8 +1,8 @@
 """
 APScheduler configuration for local development.
 
-In production you would replace this with a cron trigger (e.g. Cloud Scheduler
-hitting the /jobs/run endpoint).  For local dev, this module spins up a
+Production runs these jobs on Inngest (app/inngest_functions.py) and sets
+DISABLE_SCHEDULER=true. This module is an older alternative for local dev: a
 BackgroundScheduler that fires run_job_for_all_users at a configurable interval.
 """
 
