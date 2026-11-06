@@ -45,12 +45,16 @@ cd frontend && cp .env.example .env.local && npm install && npm run dev
 Fill `frontend/.env.local` with your Firebase web config. Run the backend
 tests with `cd backend && uv run pytest`.
 
-Add or upgrade a backend dependency with `uv add <package>`, then refresh
-the pip file Render installs from:
+Add or upgrade a backend dependency with `uv add <package>`, which updates
+`pyproject.toml` and `uv.lock`.
 
-```bash
-uv export --no-dev --no-hashes --no-emit-project -o requirements.txt
-```
+## Deploy on Render
+
+The backend has no `requirements.txt`; it installs from `uv.lock`. In the
+Render service settings (Root Directory `backend`):
+
+* **Build Command:** `pip install uv && uv sync --locked --no-dev`
+* **Start Command:** `.venv/bin/uvicorn main:app --host 0.0.0.0 --port $PORT`
 
 ## Deploy on Vercel
 
