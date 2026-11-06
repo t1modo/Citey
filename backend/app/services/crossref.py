@@ -223,3 +223,65 @@ async def resolve_doi(doi: str) -> dict[str, Any]:
         "url": message.get("URL", f"https://doi.org/{clean_doi}"),
         "openalex_id": None,  # Resolved separately via OpenAlex if needed.
     }
+
+
+def _date_from_parts(message: dict) -> str | None:
+    for key in ("published", "issued", "published-online", "published-print", "created"):
+        parts = (message.get(key) or {}).get("date-parts") or [[]]
+        if parts and parts[0] and parts[0][0]:
+            try:
+                nums = [int(x) for x in parts[0][:3]]
+            except (TypeError, ValueError):
+                continue
+            if len(nums) == 3:
+                return f"{nums[0]:04d}-{nums[1]:02d}-{nums[2]:02d}"
+            if len(nums) == 2:
+                return f"{nums[0]:04d}-{nums[1]:02d}"
+            return f"{nums[0]:04d}"
+    return None
+
+
+async def get_citing_metadata(doi: str) -> dict[str, Any] | None:
+    """
+    Metadata for a citing paper from Crossref, in the normalised citing work
+    shape, or ``None`` when Crossref does not have it or cannot answer.
+    """
+    from app.services.citing_identity import arxiv_id_from_doi
+
+    clean = doi.strip().lower()
+    try:
+        async with httpx.AsyncClient(headers=_HEADERS, timeout=15.0) as client:
+            response = await client.get(f"{_BASE_URL}{clean}")
+    except httpx.RequestError as exc:
+        logger.warning("Crossref request error for citing DOI %s: %s", clean, exc)
+        return None
+    if response.status_code != 200:
+        return None
+    message: dict = response.json().get("message", {})
+    title = " ".join(message.get("title") or []).strip()
+    if not title:
+        return None
+
+    affiliations: list[str] = []
+    for author in message.get("author", []):
+        for aff in author.get("affiliation") or []:
+            name = (aff.get("name") or "").strip()
+            if name and name not in affiliations:
+                affiliations.append(name)
+
+    date = _date_from_parts(message)
+    work_type = message.get("type")
+    if (message.get("subtype") or "") == "preprint":
+        work_type = "preprint"
+    return {
+        "id": f"crossref:{clean}",
+        "doi": clean,
+        "arxiv_id": arxiv_id_from_doi(clean),
+        "type": work_type,
+        "title": title,
+        "authors": _extract_authors(message),
+        "affiliations": affiliations,
+        "year": int(date[:4]) if date else None,
+        "publication_date": date if date and len(date) == 10 else None,
+        "url": f"https://doi.org/{clean}",
+    }

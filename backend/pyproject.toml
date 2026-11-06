@@ -1,3 +1,4 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = ["real_extra_sources: use the real OpenCitations and Europe PMC clients (mock HTTP yourself)"]
 testpaths = ["tests"]

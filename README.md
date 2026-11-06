@@ -5,7 +5,7 @@ Get an email when a new paper cites yours. Try it at [citey.email](https://www.c
 ## What it does
 
 * Add papers by DOI, or import your whole list from an OpenAlex, Semantic Scholar, INSPIRE or DBLP profile.
-* Every night Citey checks OpenAlex and Semantic Scholar for new citing papers and emails you the title, authors and affiliations.
+* Every night Citey checks OpenAlex, Semantic Scholar, OpenCitations and Europe PMC for new citing papers and emails you the title, authors and affiliations.
 * New papers on your linked profile are added automatically.
 * Export every citation as BibTeX.
 
@@ -41,4 +41,5 @@ Optional:
 
 * `S2_API_KEY`: Semantic Scholar key. Avoids night time rate limits. [Request one free](https://www.semanticscholar.org/product/api).
 * `OPENALEX_API_KEY`: OpenAlex key. Keyless use has a small daily allowance. Free from [openalex.org](https://openalex.org) after signing in.
+* `OPENCITATIONS_ACCESS_TOKEN`: OpenCitations token. Raises its rate limit. [Get one free](https://opencitations.net/accesstoken).
 * `ADS_API_KEY`: NASA ADS token for astronomy imports. [Get one free](https://ui.adsabs.harvard.edu/user/settings/token).

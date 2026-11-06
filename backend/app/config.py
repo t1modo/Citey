@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # allowance and later requests get 401. Free key from openalex.org (sign in, then API settings)
     openalex_api_key: str = ""
 
+    # OpenCitations. Optional; a free token raises the rate limit:
+    # https://opencitations.net/accesstoken
+    opencitations_access_token: str = ""
+
     # CORS
     allowed_origins: str = "*"
 

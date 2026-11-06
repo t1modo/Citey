@@ -3,7 +3,8 @@ Citation-checking orchestration service.
 
 This module is responsible for:
 1. Iterating a user's tracked works.
-2. Querying OpenAlex for new citing papers since the last check.
+2. Querying OpenAlex, Semantic Scholar, OpenCitations and Europe PMC for
+   new citing papers since the last check.
 3. Writing Notification documents to Firestore (deduplication via doc ID).
 4. Triggering email delivery for users who have notifications enabled.
 """
@@ -20,8 +21,11 @@ from typing import Any
 from firebase_admin import auth as firebase_auth
 
 from app.models import Notification, TrackedWork, is_openalex_work_id
-from app.services.citing_identity import is_junk, merge_records
+from app.services.citing_identity import is_junk, keys_for_normalized, merge_records
+from app.services import crossref as crossref_svc
+from app.services import europe_pmc as europe_pmc_svc
 from app.services import openalex as openalex_svc
+from app.services import opencitations as opencitations_svc
 from app.services import semantic_scholar as s2_svc
 
 from app.services.email_service import resolve_recipient
@@ -100,7 +104,7 @@ async def process_tracked_work(
         work.id, openalex_id, work.doi, uid,
     )
 
-    # 2. Fetch from OpenAlex and Semantic Scholar in parallel.
+    # 2. Fetch from every source in parallel.
     #    Indexes can take weeks to list a new paper, so "new" means "not
     #    reported before" (any identity key in notified_keys), not "published
     #    in the last 30 days". Citing papers from the past year are considered.
@@ -133,10 +137,25 @@ async def process_tracked_work(
         else _empty()
     )
 
-    oa_results, s2_results = await asyncio.gather(oa_task, s2_task, return_exceptions=True)
+    oc_task = (
+        opencitations_svc.get_citing_refs(work.doi, since_date=window_start)
+        if work.doi
+        else _empty()
+    )
+    epmc_task = (
+        europe_pmc_svc.get_citing_works(work.doi, since_date=window_start)
+        if work.doi
+        else _empty()
+    )
+
+    oa_results, s2_results, oc_refs, epmc_results = await asyncio.gather(
+        oa_task, s2_task, oc_task, epmc_task, return_exceptions=True
+    )
 
     # A source that failed is recorded as failed, never as "no citations".
-    attempted = (["openalex"] if openalex_id else []) + (["semantic_scholar"] if work.doi else [])
+    attempted = (["openalex"] if openalex_id else []) + (
+        ["semantic_scholar", "opencitations", "europe_pmc"] if work.doi else []
+    )
     failed: list[str] = []
     if isinstance(oa_results, BaseException):
         logger.warning("OpenAlex citation fetch failed for work %s: %s", work.id, oa_results)
@@ -146,20 +165,40 @@ async def process_tracked_work(
         logger.warning("S2 citation fetch failed for work %s: %s", work.id, s2_results)
         failed.append("semantic_scholar")
         s2_results = []
-    if source_failures is not None:
-        source_failures.extend(failed)
-    all_sources_failed = bool(attempted) and len(failed) == len(attempted)
+    if isinstance(oc_refs, BaseException):
+        logger.warning("OpenCitations fetch failed for work %s: %s", work.id, oc_refs)
+        failed.append("opencitations")
+        oc_refs = []
+    if isinstance(epmc_results, BaseException):
+        logger.warning("Europe PMC fetch failed for work %s: %s", work.id, epmc_results)
+        failed.append("europe_pmc")
+        epmc_results = []
 
     logger.info(
-        "OpenAlex: %d citing work(s) | S2: %d citing work(s) for %s (uid=%s)",
-        len(oa_results), len(s2_results), work.id, uid,
+        "OpenAlex: %d | S2: %d | OpenCitations: %d | Europe PMC: %d citing record(s) for %s (uid=%s)",
+        len(oa_results), len(s2_results), len(oc_refs), len(epmc_results), work.id, uid,
     )
 
     # 3. Normalise, drop notices (errata, retractions), and merge every record
     #    of the same paper across sources and versions. OpenAlex comes first,
-    #    so its richer metadata wins; S2 fills gaps.
+    #    so its richer metadata wins; the others fill gaps.
     normalized = [openalex_svc.normalize_citing_work(r) for r in oa_results]
     normalized += [s2_svc.normalize_citing_work(r) for r in s2_results]
+    epmc_normalized = [europe_pmc_svc.normalize_citing_work(r) for r in epmc_results]
+    hydrated, hydrate_failed = await _hydrate_extra_citations(
+        oc_refs, epmc_normalized, normalized, known_keys, work.id
+    )
+    if hydrate_failed and "opencitations" not in failed:
+        # Citing papers were found but could not be described; the baseline
+        # must not finish, or they would surface later as new.
+        failed.append("opencitations")
+    normalized += hydrated + epmc_normalized
+    if source_failures is not None:
+        source_failures.extend(failed)
+    # OpenCitations and Europe PMC only add to the two main sources; with
+    # both main sources down the work does not count as checked.
+    primary = [src for src in attempted if src in ("openalex", "semantic_scholar")]
+    all_sources_failed = bool(primary) and all(src in failed for src in primary)
     candidates = [n for n in normalized if not is_junk(n.get("title"), n.get("type"))]
     junk_count = len(normalized) - len(candidates)
     merged = [n for n in merge_records(candidates) if _published_since(n, window_start)]
@@ -334,8 +373,89 @@ _RECENT_DAYS = 30
 # Bumped when the meaning of "already reported" changes and every work needs
 # one quiet baseline check (2 = identity keys over a one year window,
 # 3 = ACL Anthology papers also looked up by DOI in Semantic Scholar, which
-# surfaces citations those papers never had before).
-_CITATION_WINDOW_VERSION = 3
+# surfaces citations those papers never had before, 4 = OpenCitations and
+# Europe PMC added as sources).
+_CITATION_WINDOW_VERSION = 4
+# Crossref is asked one DOI at a time, so cap how many it fills in per work.
+_MAX_CROSSREF_LOOKUPS = 25
+
+
+async def _hydrate_extra_citations(
+    oc_refs: list[dict],
+    epmc_normalized: list[dict],
+    normalized: list[dict],
+    known_keys: set[str],
+    work_id: str,
+) -> tuple[list[dict], bool]:
+    """
+    Full records for citing papers that OpenCitations reported by identifier
+    only, and OpenAlex records for papers only Europe PMC found (OpenAlex has
+    cleaner affiliations).
+
+    Papers another source already returned, or that were reported before,
+    are skipped, so this usually costs nothing. Returns the records and
+    whether a lookup failed.
+    """
+    already: set[str] = set(known_keys)
+    for item in normalized:
+        already |= keys_for_normalized(item)
+    seen = set(already)
+
+    def _ref_keys(ref: dict) -> set[str]:
+        doi, oa_id = ref.get("doi"), ref.get("openalex_id")
+        return ({f"doi:{doi}"} if doi else set()) | ({f"id:{oa_id.lower()}"} if oa_id else set())
+
+    want_ids: list[str] = []
+    want_dois: list[str] = []
+    new_refs: list[dict] = []
+    for ref in oc_refs:
+        keys = _ref_keys(ref)
+        if keys & seen:
+            continue
+        seen |= keys
+        new_refs.append(ref)
+        if ref.get("openalex_id"):
+            want_ids.append(ref["openalex_id"])
+        else:
+            want_dois.append(ref["doi"])
+    for item in epmc_normalized:
+        if item.get("doi") and not (keys_for_normalized(item) & seen):
+            want_dois.append(item["doi"])
+
+    if not want_ids and not want_dois:
+        return [], False
+
+    try:
+        raws = await openalex_svc.get_works_by_ids(openalex_ids=want_ids, dois=want_dois)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not look up %d extra citing paper(s) for %s: %s",
+                       len(want_ids) + len(want_dois), work_id, exc)
+        return [], True
+
+    records: list[dict] = []
+    found: set[str] = set()
+    for raw in raws:
+        rec = openalex_svc.normalize_citing_work(raw)
+        found |= keys_for_normalized(rec)
+        # Known to OpenAlex as front matter or retracted: not worth an alert,
+        # and not worth asking Crossref about either.
+        if not (raw.get("is_paratext") or raw.get("is_retracted")):
+            records.append(rec)
+    for item in epmc_normalized:
+        found |= keys_for_normalized(item)
+
+    # OpenCitations papers OpenAlex does not have at all: ask Crossref.
+    missing = [
+        ref["doi"] for ref in new_refs
+        if ref.get("doi") and not (_ref_keys(ref) & found)
+    ][:_MAX_CROSSREF_LOOKUPS]
+    for doi in missing:
+        rec = await crossref_svc.get_citing_metadata(doi)
+        if rec:
+            records.append(rec)
+
+    logger.info("Filled in %d extra citing paper(s) for %s", len(records), work_id)
+    return records, False
 
 
 def _published_since(item: dict, date_str: str) -> bool:
@@ -497,13 +617,18 @@ async def _run_job_for_user_locked(
 
     oa_failed = source_failures.count("openalex")
     s2_failed = source_failures.count("semantic_scholar")
+    oc_failed = source_failures.count("opencitations")
+    epmc_failed = source_failures.count("europe_pmc")
     logger.info(
-        "Check health uid=%s: %d work(s), OpenAlex failed on %d, Semantic Scholar failed on %d",
-        uid, works_processed, oa_failed, s2_failed,
+        "Check health uid=%s: %d work(s), failures: OpenAlex %d, Semantic Scholar %d, "
+        "OpenCitations %d, Europe PMC %d",
+        uid, works_processed, oa_failed, s2_failed, oc_failed, epmc_failed,
     )
     if stats is not None:
         stats["openalex_failures"] = stats.get("openalex_failures", 0) + oa_failed
         stats["semantic_scholar_failures"] = stats.get("semantic_scholar_failures", 0) + s2_failed
+        stats["opencitations_failures"] = stats.get("opencitations_failures", 0) + oc_failed
+        stats["europe_pmc_failures"] = stats.get("europe_pmc_failures", 0) + epmc_failed
 
     # Send an immediate email when new citations are found.
     to_email: str | None = resolve_recipient(user_data)
@@ -582,7 +707,12 @@ async def run_job_for_all_users(
     users_failed = 0
     works_processed = 0
     total_new_notifications = 0
-    stats: dict[str, int] = {"openalex_failures": 0, "semantic_scholar_failures": 0}
+    stats: dict[str, int] = {
+        "openalex_failures": 0,
+        "semantic_scholar_failures": 0,
+        "opencitations_failures": 0,
+        "europe_pmc_failures": 0,
+    }
 
     auth_uids = _get_auth_uids()
     # Read the whole list first: a Firestore stream left open while each

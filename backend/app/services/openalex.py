@@ -315,6 +315,41 @@ async def get_citation_counts(openalex_ids: list[str]) -> dict[str, int]:
     return counts
 
 
+async def get_works_by_ids(
+    openalex_ids: list[str] | None = None,
+    dois: list[str] | None = None,
+) -> list[dict]:
+    """
+    Full work records for the given OpenAlex IDs and DOIs, batched.
+
+    Used to fill in titles and authors for citing papers another source
+    reported by identifier only. Paratext and retracted works are included;
+    callers check ``is_paratext`` and ``is_retracted``. Raises :class:`SourceUnavailable` if a batch cannot be fetched.
+    """
+    def _short(oid: str) -> str:
+        return oid[len("https://openalex.org/"):] if oid.startswith("https://openalex.org/") else oid
+
+    ids = sorted({_short(o) for o in (openalex_ids or []) if _is_work_id(o)})
+    doi_list = sorted({d.strip().lower() for d in (dois or []) if d and "|" not in d and "," not in d})
+    batches: list[str] = []
+    size = 50  # OpenAlex allows at most 100 values in one OR filter
+    for i in range(0, len(ids), size):
+        batches.append("ids.openalex:" + "|".join(ids[i : i + size]))
+    for i in range(0, len(doi_list), size):
+        batches.append("doi:" + "|".join(doi_list[i : i + size]))
+
+    results: list[dict] = []
+    async with _oa_client(timeout=30.0) as client:
+        for filter_str in batches:
+            params: dict[str, Any] = {"filter": filter_str, "per_page": size, "mailto": _MAILTO}
+            response = await _get_with_retry(client, f"{_BASE_URL}/works", params, context="works_by_ids")
+            if response is None or response.status_code != 200:
+                status = response.status_code if response is not None else "no response"
+                raise SourceUnavailable("openalex", f"works by id: {status}")
+            results.extend(response.json().get("results", []))
+    return results
+
+
 async def get_authors_by_ids(author_ids: list[str]) -> list[dict]:
     """Batch-fetch full OpenAlex author records by their IDs.
 
