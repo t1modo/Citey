@@ -20,9 +20,12 @@ MAX_ATTEMPTS=3               # per batch, for timeouts and 5xx
 : "${CRON_SECRET:?CRON_SECRET must be set}"
 
 cursor=""
+# Papers checked since the run started are skipped when a batch resumes a
+# user who ran out of time mid way.
+RUN_START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 for batch in $(seq 1 "$MAX_BATCHES"); do
-  body=$(jq -nc --arg c "$cursor" --argjson b "$BUDGET" \
-    '{dry_run: false, time_budget_seconds: $b} + (if $c == "" then {} else {cursor: $c} end)')
+  body=$(jq -nc --arg c "$cursor" --argjson b "$BUDGET" --arg since "$RUN_START" \
+    '{dry_run: false, time_budget_seconds: $b, checked_since: $since} + (if $c == "" then {} else {cursor: $c} end)')
 
   for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
     # A timed out curl prints "000"; "|| true" keeps it a retry under -e.
@@ -44,8 +47,11 @@ for batch in $(seq 1 "$MAX_BATCHES"); do
     sleep 10
   done
 
-  cursor=$(echo "$reply" | jq -r '.next_cursor // empty')
-  if [ -z "$cursor" ]; then
+  # An empty string is a real cursor (resume from the first user); only a
+  # missing or null next_cursor means every user is done.
+  if [ "$(echo "$reply" | jq -r 'has("next_cursor") and .next_cursor != null')" = "true" ]; then
+    cursor=$(echo "$reply" | jq -r '.next_cursor')
+  else
     echo "$JOB_PATH finished in $batch batch(es)."
     exit 0
   fi

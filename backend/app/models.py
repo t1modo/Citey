@@ -186,3 +186,6 @@ class JobRunRequest(BaseModel):
     # Without a budget one request covers every user.
     cursor: str | None = None
     time_budget_seconds: float | None = Field(default=None, gt=0, le=3600)
+    # When the run started. A user whose own papers outlast a batch resumes
+    # in the next batch, skipping papers already checked since this time.
+    checked_since: datetime | None = None

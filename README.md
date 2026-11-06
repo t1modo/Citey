@@ -50,8 +50,10 @@ Add or upgrade a backend dependency with `uv add <package>`, which updates
 
 ## Deploy on Render
 
-The backend has no `requirements.txt`; it installs from `uv.lock`. In the
-Render service settings (Root Directory `backend`):
+The backend installs from `uv.lock`. `backend/requirements.txt` mirrors the
+direct dependencies only so the existing Render service, whose build runs
+`pip install -r requirements.txt`, keeps deploying until it is retired; delete
+it then. To install from the lock on Render instead (Root Directory `backend`):
 
 * **Build Command:** `pip install uv && uv sync --locked --no-dev`
 * **Start Command:** `.venv/bin/uvicorn main:app --host 0.0.0.0 --port $PORT`

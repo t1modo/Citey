@@ -489,12 +489,19 @@ async def run_job_for_user(
     dry_run: bool = False,
     settings: Any = None,
     stats: dict[str, int] | None = None,
+    deadline: float | None = None,
+    checked_since: datetime | None = None,
 ) -> tuple[int, int]:
     """
     Run citation checks for all tracked works belonging to a single user.
 
     Returns (works_processed, new_notifications). When *stats* is given it is
     filled with per-source failure counts for the run's health summary.
+
+    *deadline* (``time.monotonic()``) stops starting new works once passed;
+    the user's email then waits for the call that finishes them, and
+    ``stats["incomplete"]`` is set to 1. *checked_since* skips works checked
+    at or after that time, so the next call carries on from there.
 
     One check per user at a time: a manual "check now" during the nightly
     sweep would otherwise find the same citations twice and email them twice.
@@ -505,7 +512,9 @@ async def run_job_for_user(
         logger.info("Skipping uid=%s: a citation check for this user is already running.", uid)
         return 0, 0
     try:
-        return await _run_job_for_user_locked(uid, user_data, db, email_service, dry_run, settings, stats)
+        return await _run_job_for_user_locked(
+            uid, user_data, db, email_service, dry_run, settings, stats, deadline, checked_since
+        )
     finally:
         lock.release()
 
@@ -518,6 +527,8 @@ async def _run_job_for_user_locked(
     dry_run: bool,
     settings: Any,
     stats: dict[str, int] | None,
+    deadline: float | None = None,
+    checked_since: datetime | None = None,
 ) -> tuple[int, int]:
     if settings is None:
         from app.config import get_settings
@@ -551,8 +562,20 @@ async def _run_job_for_user_locked(
     user_new_notifications: list[Notification] = []
     works_processed = 0
     source_failures: list[str] = []
+    incomplete = False
 
-    for work in works:
+    to_check = [
+        w for w in works
+        if not (checked_since and w.last_checked_at and w.last_checked_at >= checked_since)
+    ]
+    for work in to_check:
+        if deadline is not None and time.monotonic() >= deadline:
+            incomplete = True
+            logger.info(
+                "Time budget reached for uid=%s after %d work(s); %d left for the next batch.",
+                uid, works_processed, len(to_check) - works_processed,
+            )
+            break
         works_processed += 1
         try:
             count, notifications = await process_tracked_work(
@@ -630,6 +653,11 @@ async def _run_job_for_user_locked(
         stats["semantic_scholar_failures"] = stats.get("semantic_scholar_failures", 0) + s2_failed
         stats["opencitations_failures"] = stats.get("opencitations_failures", 0) + oc_failed
         stats["europe_pmc_failures"] = stats.get("europe_pmc_failures", 0) + epmc_failed
+        stats["incomplete"] = 1 if incomplete else 0
+    if incomplete:
+        # The email goes out with the batch that finishes this user, so the
+        # digest is one message, not one per batch.
+        return works_processed, len(user_new_notifications)
 
     # Send an immediate email when new citations are found.
     to_email: str | None = resolve_recipient(user_data)
@@ -718,12 +746,15 @@ async def run_job_for_all_users(
     settings: Any = None,
     cursor: str | None = None,
     time_budget_seconds: float | None = None,
+    checked_since: datetime | None = None,
 ) -> dict[str, Any]:
     """
     Run citation checks for every user in Firestore, in uid order.
 
     *cursor* resumes after that uid. With *time_budget_seconds*, no new user
-    is started once the budget is used; the user already running finishes.
+    is started once the budget is used, and the user already running stops
+    before their next paper. That user is then the next batch's first, and
+    *checked_since* (the run's start) lets it skip papers already checked.
 
     Returns a summary dict:
         {users_processed, works_processed, new_notifications, next_cursor, ...}
@@ -749,18 +780,22 @@ async def run_job_for_all_users(
     last_done: str | None = cursor
 
     auth_uids = _get_auth_uids()
+    deadline = started + time_budget_seconds if time_budget_seconds is not None else None
+    if checked_since is not None and checked_since.tzinfo is None:
+        checked_since = checked_since.replace(tzinfo=timezone.utc)
     for user_doc in users_after(db, cursor):
         if out_of_time(started, time_budget_seconds):
             next_cursor = last_done
             break
         uid: str = user_doc.id
-        last_done = uid
+        previous_done, last_done = last_done, uid
         if uid not in auth_uids:
             logger.warning("Skipping orphaned Firestore user uid=%s in citation job", uid)
             continue
         user_data: dict = user_doc.to_dict() or {}
         users_processed += 1
 
+        user_stats: dict[str, int] = {}
         try:
             wp, nn = await run_job_for_user(
                 uid=uid,
@@ -769,7 +804,9 @@ async def run_job_for_all_users(
                 email_service=email_service,
                 dry_run=dry_run,
                 settings=settings,
-                stats=stats,
+                stats=user_stats,
+                deadline=deadline,
+                checked_since=checked_since,
             )
         except Exception as exc:  # noqa: BLE001
             # One user's failure (a Firestore timeout, a bad document) must
@@ -779,6 +816,16 @@ async def run_job_for_all_users(
             continue
         works_processed += wp
         total_new_notifications += nn
+        incomplete = user_stats.pop("incomplete", 0)
+        for key, value in user_stats.items():
+            stats[key] = stats.get(key, 0) + value
+        if incomplete:
+            # Resume this same user next batch. Without checked_since the
+            # next batch would start their papers over and never finish.
+            if checked_since is None:
+                logger.warning("uid=%s ran out of time with no checked_since; it may not finish.", uid)
+            next_cursor = previous_done or ""
+            break
 
     summary = {
         "users_processed": users_processed,
