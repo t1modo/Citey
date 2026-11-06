@@ -55,6 +55,6 @@ def test_preflight_on_an_old_path_is_answered_by_cors_not_redirected() -> None:
 
 def test_confirmation_links_point_at_the_api_route() -> None:
     url = make_confirm_email_url(
-        "u1", "a@b.c", "https://api.citey.email/", Settings(cron_secret="x")
+        "u1", "a@b.c", "https://www.citey.email/", Settings(cron_secret="x")
     )
-    assert url.startswith("https://api.citey.email/api/profile/confirm-notification-email?")
+    assert url.startswith("https://www.citey.email/api/profile/confirm-notification-email?")

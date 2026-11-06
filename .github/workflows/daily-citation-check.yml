@@ -61,16 +61,16 @@ jobs:
       - name: Wake Render instance
         if: steps.time_check.outputs.skip != 'true'
         run: |
-          echo "Resolving api.citey.email..."
-          nslookup api.citey.email || { echo "ERROR: DNS resolution failed for api.citey.email"; exit 1; }
+          echo "Resolving www.citey.email..."
+          nslookup www.citey.email || { echo "ERROR: DNS resolution failed for www.citey.email"; exit 1; }
 
-          echo "Pinging https://api.citey.email/api/health ..."
+          echo "Pinging https://www.citey.email/api/health ..."
           for i in $(seq 1 8); do
             # -s silences the progress meter; -S still prints errors to the log.
             # On a failed connection -w prints "000". A cold start on Render's free plan takes about a minute. The job
             # runs with bash -e, so a timed out curl used to end the job on the
             # first attempt; "|| true" keeps it a retry.
-            STATUS=$(curl -s -S -o /dev/null -w "%{http_code}" --max-time 90 https://api.citey.email/api/health) || true
+            STATUS=$(curl -s -S -o /dev/null -w "%{http_code}" --max-time 90 https://www.citey.email/api/health) || true
             echo "  attempt $i — HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then
               echo "Instance is awake."
@@ -96,7 +96,7 @@ jobs:
         if: steps.time_check.outputs.skip != 'true'
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: .github/scripts/run-batched-job.sh https://api.citey.email /api/jobs/run
+        run: .github/scripts/run-batched-job.sh https://www.citey.email /api/jobs/run
 
       # ── Step 4: Delete notifications older than 30 days ───────────────────
       # Formerly an in-process APScheduler job (01:00 PT), which rarely fired
@@ -109,7 +109,7 @@ jobs:
             -H "Content-Type: application/json" \
             -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
             -d '{"dry_run": false}' \
-            https://api.citey.email/api/jobs/cleanup-notifications)
+            https://www.citey.email/api/jobs/cleanup-notifications)
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           echo "HTTP status: $HTTP_CODE"
           echo "Response body: $(echo "$RESPONSE" | head -n -1)"
@@ -128,4 +128,4 @@ jobs:
             echo "Not Sunday in Pacific time (day $DOW). Skipping publication sync."
             exit 0
           fi
-          .github/scripts/run-batched-job.sh https://api.citey.email /api/jobs/sync-publications
+          .github/scripts/run-batched-job.sh https://www.citey.email /api/jobs/sync-publications

@@ -65,19 +65,18 @@ The site and the API deploy as one Vercel project using
 The root `vercel.json` builds `frontend/` with Next.js and `backend/` with
 FastAPI, then routes:
 
-* `/api/*` to the API. Every backend route lives under `/api`.
-* everything on `api.citey.email` to the API, so the nightly workflow and
-  links in emails keep working.
+* `/api/*` to the API. Every backend route lives under `/api`, on the
+  same domain as the site: `https://www.citey.email/api/...`.
 * everything else to the site.
 
 Project settings:
 
 * **Root Directory:** the repository root, not `frontend`.
-* **Domains:** `citey.email`, `www.citey.email` and `api.citey.email`.
+* **Domains:** `citey.email` and `www.citey.email`.
 * **Environment variables:** `NEXT_PUBLIC_API_URL=/api` for the site, plus
   the backend settings below and `FIREBASE_SERVICE_ACCOUNT_JSON`. Set
-  `API_URL` to the public origin without `/api` (for example
-  `https://api.citey.email`); the backend adds the prefix to links.
+  `API_URL=https://www.citey.email` (no `/api`); the backend adds the prefix
+  to links.
 
 The API runs as one function with Hobby's 300 s limit. The nightly job
 stays under it by running in batches: `.github/scripts/run-batched-job.sh`
@@ -85,8 +84,10 @@ calls `/api/jobs/run` repeatedly, each call checking users for about 200 s
 and returning a `next_cursor` for the next call. The in-app scheduler
 switches itself off on Vercel.
 
-Requests to the old paths without `/api` (for example in emails sent before
-the move) are redirected to `/api` with a 308.
+While the API still runs on its own host, requests to its old paths without
+`/api` get a 308 to the `/api` path, so a site build still calling the old
+address keeps working during the move. Links in emails sent before the move
+point at `api.citey.email` and stop working once that domain is retired.
 
 ## Backend settings
 
