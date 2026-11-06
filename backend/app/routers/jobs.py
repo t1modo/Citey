@@ -1,13 +1,13 @@
 """
 Jobs router.
 
-Two approaches to trigger the citation-check job:
-  1. POST /jobs/run          — protected by X-Cron-Secret header (for cron/Cloud Scheduler)
-  2. POST /jobs/run          — also accepts a valid Firebase Bearer token (for manual triggers)
+The nightly and weekly schedules run as Inngest functions
+(app/inngest_functions.py). These endpoints are for checks run by hand:
+  1. POST /jobs/run          — X-Cron-Secret header: checks every user
+  2. POST /jobs/run          — Firebase Bearer token: checks only that user
   3. POST /jobs/email-test   — requires Firebase Bearer token
 """
 
-import asyncio
 import hmac
 import logging
 import threading
@@ -21,6 +21,7 @@ _EMAIL_TEST_COOLDOWN   = 3600     # /jobs/email-test — 60 minutes
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.async_utils import run_off_loop
 from app.config import Settings, get_settings
 from app.deps import enforce_cooldown
 from app.firebase_client import verify_token
@@ -106,13 +107,7 @@ async def _run_exclusive(name: str, job, /, **kwargs):
         lock.release()
 
 
-async def _off_loop(job, /, **kwargs):
-    """Run an async job on a worker thread with its own event loop.
-
-    The jobs make many blocking Firestore calls; running them on the API's
-    event loop would stall every other request until the sweep finished.
-    """
-    return await asyncio.to_thread(lambda: asyncio.run(job(**kwargs)))
+_off_loop = run_off_loop
 
 
 async def _require_cron(caller_id: str = Depends(_authorize_job_request)) -> str:

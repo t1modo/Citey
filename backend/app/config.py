@@ -69,14 +69,21 @@ class Settings(BaseSettings):
     # CORS
     allowed_origins: str = "*"
 
-    # Scheduler. Production sets DISABLE_SCHEDULER=true and the GitHub
-    # workflow calls the /jobs/* endpoints instead; APScheduler only runs
-    # locally. It defaults to off on Vercel (which sets VERCEL=1), where a
-    # background thread is frozen between requests and would never fire.
+    # Scheduler. Production sets DISABLE_SCHEDULER=true and Inngest runs the
+    # scheduled jobs instead; APScheduler only runs locally. It defaults to
+    # off on Vercel (which sets VERCEL=1), where a background thread is
+    # frozen between requests and would never fire.
     disable_scheduler: bool = Field(
         default_factory=lambda: bool(os.environ.get("VERCEL"))
     )
 
+    # Inngest runs the nightly and weekly jobs by calling /api/inngest.
+    # Production needs the signing key (verifies Inngest's requests) and the
+    # event key (the jobs send one event per user). INNGEST_DEV=1, or the Dev
+    # Server's URL, uses a local Dev Server instead and needs neither key.
+    inngest_signing_key: str = ""
+    inngest_event_key: str = ""
+    inngest_dev: str = ""
 
     @field_validator("app_url", "api_url")
     @classmethod

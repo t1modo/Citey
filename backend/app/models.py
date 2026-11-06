@@ -179,10 +179,11 @@ class PaginatedNotifications(BaseModel):
 
 class JobRunRequest(BaseModel):
     dry_run: bool = False
-    # Batching for the scheduled all-users runs (ignored for a user's own
-    # check). cursor: resume after this uid, taken from the previous batch's
-    # next_cursor. time_budget_seconds: start no new user after this long, so
-    # each request ends inside the host's limit (300 s on Vercel Hobby).
+    # Batching for all-users runs called with X-Cron-Secret, for example by
+    # hand on Vercel (ignored for a user's own check). cursor: resume after
+    # this uid, taken from the previous batch's next_cursor.
+    # time_budget_seconds: start no new user after this long, so each
+    # request ends inside the host's limit (300 s on Vercel Hobby).
     # Without a budget one request covers every user.
     cursor: str | None = None
     time_budget_seconds: float | None = Field(default=None, gt=0, le=3600)
