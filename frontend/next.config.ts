@@ -11,6 +11,9 @@ const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "";
 const posthogAssets = posthogHost.replace(/^https:\/\/(\w+)\.i\./, "https://$1-assets.i.");
 
 const nextConfig: NextConfig = {
+  // The Docker image sets NEXT_OUTPUT=standalone to ship a self-contained
+  // server. Vercel builds without it and is unaffected.
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   // PostHog's API paths end in a slash; don't redirect them.
   skipTrailingSlashRedirect: true,
   async rewrites() {

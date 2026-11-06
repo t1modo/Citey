@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+# Env files reach the build only as a build secret (see Dockerfile).
+.env
+.env.*
+!.env.example
+Dockerfile
+.dockerignore
+*.log
+scripts/citation-field.png
