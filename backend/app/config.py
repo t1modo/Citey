@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # the incoming request's base URL when unset.
     api_url: str = ""
     support_email: str = "support@citey.email"
+    # Where contact form messages go. support@citey.email reaches the owner
+    # through a forwarder, which can hold or drop mail; set this to the inbox
+    # itself to skip it. Empty means SUPPORT_EMAIL.
+    support_inbox: str = ""
     cron_secret: str = "changeme"
     # Secret for signing unsubscribe / RSS links. Kept separate from
     # cron_secret so rotating one never invalidates or exposes the other.

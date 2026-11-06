@@ -138,3 +138,24 @@ def test_client_ip_on_vercel_ignores_a_spoofed_cloudflare_header(monkeypatch) ->
     assert _client_ip(req({})) == "10.0.0.1"
     monkeypatch.delenv("VERCEL")
     assert _client_ip(req(spoofed)) == "1.2.3.4"
+
+
+async def test_contact_form_goes_to_support_inbox_when_set():
+    from unittest.mock import AsyncMock, patch
+
+    from app.config import Settings
+    from app.services import email_service
+
+    send = AsyncMock(return_value={"id": "x"})
+    with patch.object(email_service, "_send", send):
+        await email_service.send_support_message(
+            "a@b.co", "Ann", "Hi", "Hello there", None,
+            Settings(support_inbox="owner@example.com"),
+        )
+        await email_service.send_support_message(
+            "a@b.co", "Ann", "Hi", "Hello there", None, Settings(),
+        )
+    first, second = (c.args[0] for c in send.await_args_list)
+    assert first["to"] == ["owner@example.com"]
+    assert first["reply_to"] == ["a@b.co"]
+    assert second["to"] == ["support@citey.email"]

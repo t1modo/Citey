@@ -313,7 +313,7 @@ async def send_support_message(
     resend.api_key = settings.resend_api_key
     params: resend.Emails.SendParams = {
         "from": f"{settings.app_name} contact form <{settings.email_from_address}>",
-        "to": [settings.support_email],
+        "to": [settings.support_inbox or settings.support_email],
         "reply_to": [sender_email],
         "subject": f"[{settings.app_name} support] {topic}",
         "text": "\n".join(lines),

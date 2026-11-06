@@ -2,8 +2,8 @@
 Contact form: the only public way to reach support.
 
 A published email address cannot be rate limited, so the site sends people
-here instead. Each message is emailed to SUPPORT_EMAIL with Reply-To set to
-the sender. Limits live in Firestore so they survive restarts:
+here instead. Each message is emailed to SUPPORT_INBOX (or SUPPORT_EMAIL when
+that is unset) with Reply-To set to the sender. Limits live in Firestore so they survive restarts:
 
 * per connection: 3 messages per hour
 * per sender address: 3 messages per day
