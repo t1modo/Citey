@@ -203,11 +203,11 @@ const DEMO_POOL: DemoEntry[] = [
 
 
 // The indexes the nightly check reads.
-const SOURCES = ["OpenAlex", "Semantic Scholar"];
+const SOURCES = ["OpenAlex", "Semantic Scholar", "OpenCitations", "Europe PMC"];
 
 const STEPS = [
   { title: "Add a paper", body: "Paste a DOI or arXiv link. Citey fills in the rest." },
-  { title: "Citey checks overnight", body: "Every tracked paper is looked up in OpenAlex and Semantic Scholar." },
+  { title: "Citey checks overnight", body: "Every tracked paper is looked up in four citation indexes." },
   { title: "The email arrives", body: "New citing papers, with authors, affiliations and a link." },
 ] as const;
 

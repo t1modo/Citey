@@ -9,6 +9,8 @@ import { useAuth } from "@/contexts/AuthContext";
 const SOURCES: [string, string][] = [
   ["OpenAlex", "https://openalex.org"],
   ["Semantic Scholar", "https://www.semanticscholar.org"],
+  ["OpenCitations", "https://opencitations.net"],
+  ["Europe PMC", "https://europepmc.org"],
   ["Crossref", "https://www.crossref.org"],
   ["PubMed", "https://pubmed.ncbi.nlm.nih.gov"],
   ["INSPIRE-HEP", "https://inspirehep.net"],
@@ -59,8 +61,8 @@ export default function HomePage() {
               Know when your work is cited.
             </h1>
             <p className="mb-9 max-w-md text-lg leading-relaxed text-muted">
-              Citey checks OpenAlex and Semantic Scholar every night and emails you when a new
-              paper references yours.
+              Citey checks four citation indexes every night and emails you when a new paper
+              references yours.
             </p>
             <div className="flex flex-wrap items-center gap-x-7 gap-y-4">
               <Link

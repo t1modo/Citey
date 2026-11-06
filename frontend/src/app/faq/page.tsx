@@ -14,7 +14,7 @@ const faqItems: FaqItem[] = [
     answer: (
       <>
         <p>
-          Citey uses seven scholarly databases in two roles:
+          Citey uses nine scholarly databases in two roles:
         </p>
         <p className="mt-3 text-xs font-semibold text-muted">
           Checked for new citations every night
@@ -32,6 +32,18 @@ const faqItems: FaqItem[] = [
             strong additional coverage for computer science, AI/ML, and biomedical
             literature. Learn more at{" "}
             <a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">semanticscholar.org</a>.
+          </li>
+          <li>
+            <strong className="text-ink">OpenCitations</strong>: an open index of
+            the reference lists publishers deposit with Crossref and other registries.
+            It often has journal citations the other indexes are slow to pick up. Learn more at{" "}
+            <a href="https://opencitations.net" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">opencitations.net</a>.
+          </li>
+          <li>
+            <strong className="text-ink">Europe PMC</strong>: citations between
+            PubMed, PubMed Central and life science preprints, linked from full text.
+            Used for biomedical papers. Learn more at{" "}
+            <a href="https://europepmc.org" target="_blank" rel="noopener noreferrer" className="text-muted underline hover:text-ink">europepmc.org</a>.
           </li>
         </ul>
         <p className="mt-4 text-xs font-semibold text-muted">
@@ -79,13 +91,13 @@ const faqItems: FaqItem[] = [
       <>
         <p>
           Citey runs a citation scan job <strong className="text-ink">once per day</strong>.
-          It looks up every tracked paper in OpenAlex and Semantic Scholar and records
-          any citing papers it hasn't seen before.
+          It looks up every tracked paper in OpenAlex, Semantic Scholar, OpenCitations
+          and Europe PMC and records any citing papers it hasn't seen before.
         </p>
         <p className="mt-3">
           Email notifications are dispatched immediately after new citations are found, so
-          you should receive an alert within a day of a citing paper appearing in OpenAlex
-          or Semantic Scholar. New citations appear automatically on your{" "}
+          you should receive an alert within a day of a citing paper appearing in any of
+          them. New citations appear automatically on your{" "}
           <Link href="/dashboard" className="text-muted underline hover:text-ink">
             Dashboard
           </Link>
@@ -101,8 +113,8 @@ const faqItems: FaqItem[] = [
         <p>There are several reasons a citation might not appear in Citey:</p>
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>
-            <strong className="text-ink">Indexing lag.</strong> OpenAlex, Crossref, and
-            Semantic Scholar rely on publishers depositing metadata and their own crawling
+            <strong className="text-ink">Indexing lag.</strong> OpenAlex, Crossref,
+            Semantic Scholar and the other indexes rely on publishers depositing metadata and their own crawling
             pipelines. Newly published papers may take days to weeks to be fully indexed.
           </li>
           <li>

@@ -120,7 +120,7 @@ export default function HelpPage() {
               n: 3,
               title: "Receive citation alerts",
               body:
-                "Every night Citey checks OpenAlex and Semantic Scholar and emails you as soon as a new paper cites your work.",
+                "Every night Citey checks OpenAlex, Semantic Scholar, OpenCitations and Europe PMC and emails you as soon as a new paper cites your work.",
             },
           ].map(({ n, title, body }, i) => (
             <div key={n}>
@@ -228,6 +228,18 @@ export default function HelpPage() {
               scale: "~200M works",
               tags: ["Primary", "CS, AI, biology"],
               body: "Strong on CS, AI/ML, and biomedical literature. Also used to resolve arXiv papers.",
+            },
+            {
+              name: "OpenCitations",
+              scale: "~2B citations",
+              tags: ["Open references", "All fields"],
+              body: "Open reference lists from Crossref and other registries. Catches journal citations the other indexes miss.",
+            },
+            {
+              name: "Europe PMC",
+              scale: "~45M records",
+              tags: ["Life sciences"],
+              body: "Citations between PubMed, PubMed Central and biomedical preprints. Only used for papers it indexes.",
             },
           ].map(({ name, scale, tags, body }, i) => (
             <div key={name}>
