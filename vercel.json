@@ -17,6 +17,30 @@
       "framework": "nextjs"
     }
   },
+  "redirects": [
+    {
+      "source": "/api/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "api.citey.email"
+        }
+      ],
+      "destination": "https://www.citey.email/api/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "api.citey.email"
+        }
+      ],
+      "destination": "https://www.citey.email/api/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",
