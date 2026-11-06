@@ -22,7 +22,7 @@ const SOURCES: [string, string][] = [
 const questions = [
   {
     q: "Where does Citey look?",
-    a: "OpenAlex and Semantic Scholar, every night, the two largest open citation indexes. A citing paper often appears in one weeks before the other; Citey merges them so you hear about it once. Crossref, PubMed, NASA ADS, INSPIRE and DBLP help find your papers when you import them.",
+    a: "Four indexes, every night: OpenAlex and Semantic Scholar, the two largest open citation indexes, plus OpenCitations for publisher reference lists and Europe PMC for biomedical papers. A citing paper often appears in one weeks before the others; Citey merges them so you hear about it once. Crossref, PubMed, NASA ADS, INSPIRE and DBLP help find your papers when you import them.",
   },
   {
     q: "What's in the email?",

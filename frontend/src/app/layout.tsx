@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: "%s · Citey",
   },
   description:
-    "Citey monitors citations to your published works and sends you instant email alerts when a new paper cites your research. Track any DOI, powered by OpenAlex, Crossref, and Semantic Scholar.",
+    "Citey monitors citations to your published works and sends you instant email alerts when a new paper cites your research. Track any DOI, checked nightly in OpenAlex, Semantic Scholar, OpenCitations and Europe PMC.",
   icons: {
     icon: "/logo.svg",
   },
