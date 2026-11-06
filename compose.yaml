@@ -5,6 +5,7 @@
 #   docker compose up --build
 #
 # Site: http://localhost:3000   API: http://localhost:8000/api
+# Inngest Dev Server (scheduled jobs): http://localhost:8288
 
 services:
   backend:
@@ -15,8 +16,26 @@ services:
       APP_URL: http://localhost:3000
       API_URL: http://localhost:8000
       ALLOWED_ORIGINS: http://localhost:3000
+      # Jobs run through the Dev Server below, never Inngest Cloud. Over the
+      # Compose network it is at inngest:8288, not localhost.
+      INNGEST_DEV: "1"
+      INNGEST_BASE_URL: http://inngest:8288
     ports:
       - "8000:8000"
+    restart: unless-stopped
+
+  # Runs the nightly and weekly jobs locally. Crons fire on their schedule;
+  # to run one now, open http://localhost:8288, pick the function and
+  # Invoke it. The functions use whatever Firestore backend/.env points at.
+  inngest:
+    image: inngest/inngest
+    command: inngest dev -u http://backend:8000/api/inngest
+    ports:
+      - "8288:8288"
+      - "8289:8289"
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:

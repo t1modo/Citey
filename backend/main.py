@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
+from app import inngest_functions
 from app.config import API_PREFIX, get_settings
 from app.routers import auth, chat, health, jobs, notifications, profile, support, works
 
@@ -42,8 +43,8 @@ if not settings.token_secret and not settings.is_local:
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Start APScheduler on startup (local dev only) and shut it down on teardown.
 
-    In production on Cloud Run, DISABLE_SCHEDULER=true so APScheduler never
-    starts — Cloud Scheduler calls the /jobs/* HTTP endpoints instead.
+    In production DISABLE_SCHEDULER=true so APScheduler never starts; Inngest
+    runs the scheduled jobs through /api/inngest instead.
     """
     from app.firebase_client import get_db
     from app.services import email_service
@@ -65,7 +66,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         logger.info(
             "APScheduler disabled (DISABLE_SCHEDULER=true); "
-            "Cloud Scheduler will call /jobs/* HTTP endpoints."
+            "Inngest runs the scheduled jobs through /api/inngest."
         )
 
     yield
@@ -131,6 +132,9 @@ def create_app() -> FastAPI:
     # ---- Routers -------------------------------------------------------------
     for module in (health, auth, profile, works, notifications, jobs, chat, support):
         application.include_router(module.router, prefix=API_PREFIX)
+
+    # ---- Scheduled jobs: Inngest calls /api/inngest ------------------------
+    inngest_functions.serve(application)
 
     # ---- Root (Render health check hits "/" by default) ----------------------
     @application.get("/", include_in_schema=False)
