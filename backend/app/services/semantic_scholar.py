@@ -195,9 +195,9 @@ def _candidate_ids(doi: str) -> list[str]:
     For arXiv preprints (10.48550/arxiv.*) S2 indexes them under ARXIV:{id},
     so we try that first.
 
-    For ACL Anthology DOIs (10.18653/v1/*) S2 indexes them under ACL:{id}
-    (e.g. ACL:2024.acl-long.206).  Passing these as DOI:{full-doi} causes a
-    400 from S2's batch endpoint because of the multiple path segments.
+    For ACL Anthology DOIs (10.18653/v1/*) S2 knows some papers as
+    ACL:{id} (e.g. ACL:2024.acl-long.206), but newer workshop papers often
+    resolve only by DOI, so both are tried.
 
     All papers also get a DOI:{doi} attempt as a final fallback.
     """
@@ -207,12 +207,7 @@ def _candidate_ids(doi: str) -> list[str]:
         arxiv_id = clean[clean.lower().index("/arxiv.") + len("/arxiv."):]
         ids.append(f"ARXIV:{arxiv_id}")
     if clean.lower().startswith("10.18653/v1/"):
-        acl_id = clean[len("10.18653/v1/"):]
-        ids.append(f"ACL:{acl_id}")
-        # ACL Anthology DOIs have multiple slashes that cause S2's batch
-        # endpoint to return 400 when passed as DOI:{doi}.  The ACL: prefix
-        # is the authoritative lookup for these papers, so skip the DOI form.
-        return ids
+        ids.append(f"ACL:{clean[len('10.18653/v1/'):]}")
     ids.append(f"DOI:{clean}")
     return ids
 

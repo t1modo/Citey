@@ -332,8 +332,10 @@ def _pending_email_notifications(uid: str, db: Any) -> list[tuple[Any, Notificat
 _LOOKBACK_DAYS = 365
 _RECENT_DAYS = 30
 # Bumped when the meaning of "already reported" changes and every work needs
-# one quiet baseline check (2 = identity keys over a one year window).
-_CITATION_WINDOW_VERSION = 2
+# one quiet baseline check (2 = identity keys over a one year window,
+# 3 = ACL Anthology papers also looked up by DOI in Semantic Scholar, which
+# surfaces citations those papers never had before).
+_CITATION_WINDOW_VERSION = 3
 
 
 def _published_since(item: dict, date_str: str) -> bool:

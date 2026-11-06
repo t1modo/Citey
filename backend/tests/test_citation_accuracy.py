@@ -13,7 +13,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.models import TrackedWork
-from app.services.citation_service import process_tracked_work, run_job_for_user
+from app.services.citation_service import (
+    _CITATION_WINDOW_VERSION,
+    process_tracked_work,
+    run_job_for_user,
+)
 from app.services.citing_identity import identity_keys, is_junk, merge_records, title_key
 
 _NOW = datetime.now(tz=timezone.utc)
@@ -212,7 +216,7 @@ async def test_baseline_records_older_citations_without_alerting() -> None:
     assert count == 1 and notes[0].citing_work_doi == "10.1/new"
     stored = db.store[WORK_PATH]
     assert "doi:10.1/old" in stored["notified_keys"]
-    assert stored["citation_window"] == 2
+    assert stored["citation_window"] == _CITATION_WINDOW_VERSION
 
 
 async def test_after_baseline_a_late_indexed_citation_is_reported() -> None:
@@ -277,7 +281,7 @@ def _user_db() -> _DB:
     db = _DB()
     db.store["users/u1"] = {"email": "r@example.com"}
     db.store[WORK_PATH] = {"doi": "10.1000/mine", "openalex_id": "W1", "title": "My paper",
-                           "last_checked_at": _NOW - timedelta(days=1), "citation_window": 2}
+                           "last_checked_at": _NOW - timedelta(days=1), "citation_window": _CITATION_WINDOW_VERSION}
     return db
 
 
@@ -330,3 +334,28 @@ def test_identity_keys_cover_every_identifier() -> None:
     keys = identity_keys(doi="10.48550/arXiv.1234.5678", title=LONG, source_ids=["S2:abc"])
     assert {"doi:10.48550/arxiv.1234.5678", "arxiv:1234.5678", "id:s2:abc"} <= keys
     assert any(k.startswith("title:") for k in keys)
+
+
+# ACL Anthology papers: S2 often knows newer workshop papers only by DOI.
+
+def test_acl_papers_are_looked_up_by_acl_id_and_doi():
+    from app.services.semantic_scholar import _candidate_ids
+
+    assert _candidate_ids("10.18653/v1/2025.uncertainlp-main.23") == [
+        "ACL:2025.uncertainlp-main.23",
+        "DOI:10.18653/v1/2025.uncertainlp-main.23",
+    ]
+
+
+async def test_acl_count_comes_from_doi_when_acl_id_is_unknown():
+    import respx
+    from httpx import Response
+
+    from app.services.semantic_scholar import get_citation_counts
+
+    with respx.mock:
+        respx.post(url__regex=r".*/paper/batch.*").mock(
+            return_value=Response(200, json=[None, {"paperId": "x", "citationCount": 8}])
+        )
+        counts = await get_citation_counts(["10.18653/v1/2025.uncertainlp-main.23"])
+    assert counts == {"10.18653/v1/2025.uncertainlp-main.23": 8}
