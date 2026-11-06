@@ -28,7 +28,7 @@ def test_orphan_cleanup_rejects_signed_in_users() -> None:
     with patch("app.routers.jobs.verify_token", return_value={"uid": "user1"}), \
          patch("app.services.citation_service.cleanup_orphan_users", new=AsyncMock()) as job:
         resp = client.post(
-            "/jobs/cleanup-orphan-users",
+            "/api/jobs/cleanup-orphan-users",
             json={"dry_run": True},
             headers={"Authorization": "Bearer token"},
         )
@@ -43,7 +43,7 @@ def test_orphan_cleanup_accepts_cron_secret() -> None:
         new=AsyncMock(return_value={"deleted": 0}),
     ) as job:
         resp = client.post(
-            "/jobs/cleanup-orphan-users",
+            "/api/jobs/cleanup-orphan-users",
             json={"dry_run": True},
             headers={"X-Cron-Secret": "s3cret"},
         )
@@ -54,7 +54,7 @@ def test_orphan_cleanup_accepts_cron_secret() -> None:
 def test_wrong_cron_secret_is_forbidden() -> None:
     client = _client()
     resp = client.post(
-        "/jobs/cleanup-orphan-users",
+        "/api/jobs/cleanup-orphan-users",
         json={"dry_run": True},
         headers={"X-Cron-Secret": "nope"},
     )
@@ -64,7 +64,7 @@ def test_wrong_cron_secret_is_forbidden() -> None:
 def test_default_cron_secret_refused_in_production() -> None:
     client = _client(cron_secret="changeme")
     resp = client.post(
-        "/jobs/cleanup-orphan-users",
+        "/api/jobs/cleanup-orphan-users",
         json={"dry_run": True},
         headers={"X-Cron-Secret": "changeme"},
     )
@@ -86,7 +86,7 @@ def test_cron_run_executes_job_off_the_event_loop() -> None:
     with patch("app.firebase_client.get_db"), patch(
         "app.services.citation_service.run_job_for_all_users", new=fake_job
     ):
-        resp = client.post("/jobs/run", json={"dry_run": True}, headers={"X-Cron-Secret": "s3cret"})
+        resp = client.post("/api/jobs/run", json={"dry_run": True}, headers={"X-Cron-Secret": "s3cret"})
     assert resp.status_code == 200
     assert seen["thread"] is True
 
@@ -108,13 +108,13 @@ def test_overlapping_cron_runs_are_refused() -> None:
     ):
         def first():
             results["first"] = client.post(
-                "/jobs/run", json={"dry_run": True}, headers={"X-Cron-Secret": "s3cret"}
+                "/api/jobs/run", json={"dry_run": True}, headers={"X-Cron-Secret": "s3cret"}
             ).status_code
 
         t = threading.Thread(target=first)
         t.start()
         assert started.wait(5)
-        second = client.post("/jobs/run", json={"dry_run": True}, headers={"X-Cron-Secret": "s3cret"})
+        second = client.post("/api/jobs/run", json={"dry_run": True}, headers={"X-Cron-Secret": "s3cret"})
         release.set()
         t.join(5)
 

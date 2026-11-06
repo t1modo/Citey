@@ -11,7 +11,9 @@ import type {
   PaperAuthorsResult,
 } from "@/lib/types";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Every backend route is under /api. On Vercel the site and API share a
+// domain, so this is just "/api"; locally it is the API container's address.
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
 // Render free-tier instances spin down after inactivity. The first request(s)
 // after a cold start return a 502/503 while the service is booting. Retrying

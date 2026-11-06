@@ -26,7 +26,7 @@ cp frontend/.env.example frontend/.env.local   # Firebase web config
 docker compose up --build
 ```
 
-Site on http://localhost:3000, API on http://localhost:8000. The site's
+Site on http://localhost:3000, API on http://localhost:8000/api. The site's
 Firebase config is compiled in at build time, so rebuild after editing
 `frontend/.env.local`.
 
@@ -60,19 +60,33 @@ it then. To install from the lock on Render instead (Root Directory `backend`):
 
 ## Deploy on Vercel
 
-The site and the API deploy as two Vercel projects from this repo:
+The site and the API deploy as one Vercel project using
+[Services](https://vercel.com/docs/services) (beta, available on Hobby).
+The root `vercel.json` builds `frontend/` with Next.js and `backend/` with
+FastAPI, then routes:
 
-* **Site:** Root Directory `frontend`. Next.js is detected automatically.
-* **API:** Root Directory `backend`. Vercel finds the FastAPI `app` in
-  `main.py` and installs from `uv.lock`. `backend/vercel.json` allows each
-  request the Hobby maximum of 300 s. Set the backend settings below as
-  environment variables, plus `FIREBASE_SERVICE_ACCOUNT_JSON`. The in-app
-  scheduler switches itself off on Vercel.
+* `/api/*` to the API. Every backend route lives under `/api`.
+* everything on `api.citey.email` to the API, so the nightly workflow and
+  links in emails keep working.
+* everything else to the site.
 
-The nightly job runs in batches so no request reaches the 300 s limit:
-`.github/scripts/run-batched-job.sh` calls `/jobs/run` repeatedly, each
-call checking users for about 200 s and returning a `next_cursor` for the
-next call.
+Project settings:
+
+* **Root Directory:** the repository root, not `frontend`.
+* **Domains:** `citey.email`, `www.citey.email` and `api.citey.email`.
+* **Environment variables:** `NEXT_PUBLIC_API_URL=/api` for the site, plus
+  the backend settings below and `FIREBASE_SERVICE_ACCOUNT_JSON`. Set
+  `API_URL` to the public origin without `/api` (for example
+  `https://api.citey.email`); the backend adds the prefix to links.
+
+The API runs as one function with Hobby's 300 s limit. The nightly job
+stays under it by running in batches: `.github/scripts/run-batched-job.sh`
+calls `/api/jobs/run` repeatedly, each call checking users for about 200 s
+and returning a `next_cursor` for the next call. The in-app scheduler
+switches itself off on Vercel.
+
+Requests to the old paths without `/api` (for example in emails sent before
+the move) are redirected to `/api` with a 308.
 
 ## Backend settings
 

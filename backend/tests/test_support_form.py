@@ -70,7 +70,7 @@ def _msg(**kw):
 
 
 def _post(c, body, ip="1.1.1.1"):
-    return c.post("/support", json=body, headers={"cf-connecting-ip": ip})
+    return c.post("/api/support", json=body, headers={"cf-connecting-ip": ip})
 
 
 def test_valid_message_is_delivered_with_reply_to_sender(client):

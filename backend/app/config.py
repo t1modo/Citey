@@ -5,6 +5,12 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Every backend route is served under this prefix, locally, on Render and on
+# Vercel, where one project sends /api/* to the backend and the rest to the
+# site.
+API_PREFIX = "/api"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
