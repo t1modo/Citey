@@ -12,6 +12,7 @@ This module is responsible for:
 import asyncio
 import logging
 import threading
+import time
 import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -686,18 +687,47 @@ async def _run_job_for_user_locked(
     return works_processed, len(user_new_notifications)
 
 
+def users_after(db: Any, cursor: str | None) -> list[Any]:
+    """Every user document ordered by uid, keeping only those after *cursor*.
+
+    The all-users jobs run in batches so each request fits a host's time
+    limit (Vercel Hobby stops a request after 300 s). A batch returns the
+    last uid it finished as its cursor and the next batch starts after it.
+
+    The whole list is read first: a Firestore stream left open while each
+    user is processed (minutes) times out with "Deadline Exceeded".
+    """
+    docs = sorted(db.collection("users").stream(), key=lambda d: d.id)
+    if cursor is None:
+        return docs
+    return [d for d in docs if d.id > cursor]
+
+
+def out_of_time(started: float, time_budget_seconds: float | None) -> bool:
+    """True once a batch has used its budget. No budget means no limit."""
+    return (
+        time_budget_seconds is not None
+        and time.monotonic() - started >= time_budget_seconds
+    )
+
+
 async def run_job_for_all_users(
     db: Any,
     email_service: ModuleType,
     dry_run: bool = False,
     settings: Any = None,
-) -> dict[str, int]:
+    cursor: str | None = None,
+    time_budget_seconds: float | None = None,
+) -> dict[str, Any]:
     """
-    Iterate every user in Firestore and run citation checks for all their
-    tracked works.
+    Run citation checks for every user in Firestore, in uid order.
+
+    *cursor* resumes after that uid. With *time_budget_seconds*, no new user
+    is started once the budget is used; the user already running finishes.
 
     Returns a summary dict:
-        {users_processed, works_processed, new_notifications}
+        {users_processed, works_processed, new_notifications, next_cursor, ...}
+    next_cursor is the uid to resume after, or None when every user is done.
     """
     if settings is None:
         from app.config import get_settings
@@ -714,11 +744,17 @@ async def run_job_for_all_users(
         "europe_pmc_failures": 0,
     }
 
+    started = time.monotonic()
+    next_cursor: str | None = None
+    last_done: str | None = cursor
+
     auth_uids = _get_auth_uids()
-    # Read the whole list first: a Firestore stream left open while each
-    # user is processed (minutes) times out with "Deadline Exceeded".
-    for user_doc in list(db.collection("users").stream()):
+    for user_doc in users_after(db, cursor):
+        if out_of_time(started, time_budget_seconds):
+            next_cursor = last_done
+            break
         uid: str = user_doc.id
+        last_done = uid
         if uid not in auth_uids:
             logger.warning("Skipping orphaned Firestore user uid=%s in citation job", uid)
             continue
@@ -750,8 +786,9 @@ async def run_job_for_all_users(
         "works_processed": works_processed,
         "new_notifications": total_new_notifications,
         **stats,
+        "next_cursor": next_cursor,
     }
-    logger.info("Job complete: %s", summary)
+    logger.info("Job batch complete: %s", summary)
     return summary
 
 

@@ -154,6 +154,8 @@ async def run_job(
             email_service=email_svc,
             dry_run=body.dry_run,
             settings=settings,
+            cursor=body.cursor,
+            time_budget_seconds=body.time_budget_seconds,
         )
     else:
         # Manual trigger by an authenticated user — scope to their papers only.
@@ -289,6 +291,8 @@ async def sync_publications(
             email_service=email_svc,
             dry_run=body.dry_run,
             settings=settings,
+            cursor=body.cursor,
+            time_budget_seconds=body.time_budget_seconds,
         )
     else:
         user_doc = _db.collection("users").document(caller_id).get()
