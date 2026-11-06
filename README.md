@@ -11,9 +11,10 @@ Get an email when a new paper cites yours. Try it at [citey.email](https://www.c
 
 ## Stack
 
-* **Frontend:** Next.js, Tailwind, Firebase Auth, PostHog analytics. Hosted on Vercel.
-* **Backend:** FastAPI, Firestore, Resend for email. Hosted on Render.
-* **Nightly job:** GitHub Actions calls `/jobs/run`.
+* **Frontend:** Next.js, Tailwind, Firebase Auth, PostHog analytics.
+* **Backend:** FastAPI, Firestore, Resend for email. Served at `/api` on the same domain.
+* **Hosting:** one Vercel project builds both (see [Deploy on Vercel](#deploy-on-vercel)).
+* **Nightly job:** GitHub Actions calls `/api/jobs/run`.
 * **Data:** OpenAlex and Semantic Scholar for citations. Crossref, PubMed, NASA ADS, INSPIRE and DBLP for imports and DOI lookups.
 
 ## Run locally
@@ -26,7 +27,7 @@ cp frontend/.env.example frontend/.env.local   # Firebase web config
 docker compose up --build
 ```
 
-Site on http://localhost:3000, API on http://localhost:8000. The site's
+Site on http://localhost:3000, API on http://localhost:8000/api. The site's
 Firebase config is compiled in at build time, so rebuild after editing
 `frontend/.env.local`.
 
@@ -48,31 +49,35 @@ tests with `cd backend && uv run pytest`.
 Add or upgrade a backend dependency with `uv add <package>`, which updates
 `pyproject.toml` and `uv.lock`.
 
-## Deploy on Render
-
-The backend installs from `uv.lock`. `backend/requirements.txt` mirrors the
-direct dependencies only so the existing Render service, whose build runs
-`pip install -r requirements.txt`, keeps deploying until it is retired; delete
-it then. To install from the lock on Render instead (Root Directory `backend`):
-
-* **Build Command:** `pip install uv && uv sync --locked --no-dev`
-* **Start Command:** `.venv/bin/uvicorn main:app --host 0.0.0.0 --port $PORT`
-
 ## Deploy on Vercel
 
-The site and the API deploy as two Vercel projects from this repo:
+The site and the API deploy as one Vercel project using
+[Services](https://vercel.com/docs/services) (beta, available on Hobby).
+The root `vercel.json` builds `frontend/` with Next.js and `backend/` with
+FastAPI, then routes:
 
-* **Site:** Root Directory `frontend`. Next.js is detected automatically.
-* **API:** Root Directory `backend`. Vercel finds the FastAPI `app` in
-  `main.py` and installs from `uv.lock`. `backend/vercel.json` allows each
-  request the Hobby maximum of 300 s. Set the backend settings below as
-  environment variables, plus `FIREBASE_SERVICE_ACCOUNT_JSON`. The in-app
-  scheduler switches itself off on Vercel.
+* `/api/*` to the API. Every backend route lives under `/api`, on the
+  same domain as the site: `https://www.citey.email/api/...`.
+* everything else to the site.
 
-The nightly job runs in batches so no request reaches the 300 s limit:
-`.github/scripts/run-batched-job.sh` calls `/jobs/run` repeatedly, each
-call checking users for about 200 s and returning a `next_cursor` for the
-next call.
+Project settings:
+
+* **Root Directory:** the repository root, not `frontend`.
+* **Domains:** `citey.email` and `www.citey.email`.
+* **Environment variables:** `NEXT_PUBLIC_API_URL=/api` for the site, plus
+  the backend settings below and `FIREBASE_SERVICE_ACCOUNT_JSON`. Set
+  `API_URL=https://www.citey.email` (no `/api`); the backend adds the prefix
+  to links.
+
+The API runs as one function with Hobby's 300 s limit. The nightly job
+stays under it by running in batches: `.github/scripts/run-batched-job.sh`
+calls `/api/jobs/run` repeatedly, each call checking users for about 200 s
+and returning a `next_cursor` for the next call. The in-app scheduler
+switches itself off on Vercel.
+
+Requests to old backend paths without `/api` get a 308 to the `/api` path.
+Links in emails sent before the move point at `api.citey.email`, which is
+retired with Render, so those stop working.
 
 ## Backend settings
 

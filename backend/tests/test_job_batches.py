@@ -147,7 +147,7 @@ def test_run_endpoint_passes_the_batch_through() -> None:
         "app.services.citation_service.run_job_for_all_users", new=job
     ):
         resp = TestClient(app).post(
-            "/jobs/run",
+            "/api/jobs/run",
             json={"dry_run": True, "cursor": "u4", "time_budget_seconds": 200},
             headers={"X-Cron-Secret": "s3cret"},
         )

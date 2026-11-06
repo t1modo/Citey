@@ -4,7 +4,7 @@
 #   cp frontend/.env.example frontend/.env.local   # Firebase web config
 #   docker compose up --build
 #
-# Site: http://localhost:3000   API: http://localhost:8000
+# Site: http://localhost:3000   API: http://localhost:8000/api
 
 services:
   backend:
@@ -33,7 +33,7 @@ services:
 
 secrets:
   # NEXT_PUBLIC_* values are compiled into the site, so the build reads them.
-  # Keep NEXT_PUBLIC_API_URL=http://localhost:8000: the browser calls the API
-  # through the published port, not the Compose network.
+  # Keep NEXT_PUBLIC_API_URL=http://localhost:8000/api: the browser calls the
+  # API through the published port, not the Compose network.
   frontend_env:
     file: ./frontend/.env.local

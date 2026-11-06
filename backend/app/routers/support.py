@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import os
 import re
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -71,7 +72,15 @@ class SupportMessage(BaseModel):
 
 
 def _client_ip(request: Request) -> str:
-    """The caller's address behind Cloudflare and Render's proxy."""
+    """The caller's address, as the hosting proxy reports it."""
+    if os.environ.get("VERCEL"):
+        # Vercel overwrites X-Forwarded-For with the client's address and
+        # passes other headers through untouched, so a client could set
+        # CF-Connecting-IP itself to dodge the per-address limit.
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return request.client.host if request.client else "unknown"
     cf = request.headers.get("cf-connecting-ip")
     if cf:
         return cf.strip()

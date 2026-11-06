@@ -18,7 +18,7 @@ from urllib.parse import urlencode
 import resend
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from app.config import Settings
+from app.config import API_PREFIX, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ def make_confirm_email_url(uid: str, email: str, api_base_url: str, settings: Se
     """Signed link that confirms *email* as *uid*'s notification address."""
     token = _make_signed_token(f"confirm_email:{email.lower()}", uid, settings)
     qs = urlencode({"uid": uid, "email": email, "token": token})
-    return f"{api_base_url.rstrip('/')}/profile/confirm-notification-email?{qs}"
+    return f"{api_base_url.rstrip('/')}{API_PREFIX}/profile/confirm-notification-email?{qs}"
 
 
 def make_unsubscribe_url(uid: str, settings: Settings) -> str:
