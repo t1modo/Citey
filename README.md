@@ -14,7 +14,7 @@ Get an email when a new paper cites yours. Try it at [citey.email](https://www.c
 * **Frontend:** Next.js, Tailwind, Firebase Auth, PostHog analytics.
 * **Backend:** FastAPI, Firestore, Resend for email. Served at `/api` on the same domain.
 * **Hosting:** one Vercel project builds both (see [Deploy on Vercel](#deploy-on-vercel)).
-* **Nightly job:** GitHub Actions calls `/api/jobs/run`.
+* **Scheduled jobs:** [Inngest](https://www.inngest.com/) calls `/api/inngest`. See [Scheduled jobs](#scheduled-jobs).
 * **Data:** OpenAlex and Semantic Scholar for citations. Crossref, PubMed, NASA ADS, INSPIRE and DBLP for imports and DOI lookups.
 
 ## Run locally
@@ -27,9 +27,9 @@ cp frontend/.env.example frontend/.env.local   # Firebase web config
 docker compose up --build
 ```
 
-Site on http://localhost:3000, API on http://localhost:8000/api. The site's
-Firebase config is compiled in at build time, so rebuild after editing
-`frontend/.env.local`.
+Site on http://localhost:3000, API on http://localhost:8000/api, Inngest
+Dev Server on http://localhost:8288. The site's Firebase config is compiled
+in at build time, so rebuild after editing `frontend/.env.local`.
 
 ### Without Docker
 
@@ -45,6 +45,13 @@ cd frontend && cp .env.example .env.local && npm install && npm run dev
 
 Fill `frontend/.env.local` with your Firebase web config. Run the backend
 tests with `cd backend && uv run pytest`.
+
+To run the scheduled jobs, keep `INNGEST_DEV=1` in `backend/.env` and start
+the Inngest Dev Server next to the API:
+
+```bash
+npx --ignore-scripts=false inngest-cli@latest dev -u http://localhost:8000/api/inngest
+```
 
 Add or upgrade a backend dependency with `uv add <package>`, which updates
 `pyproject.toml` and `uv.lock`.
@@ -69,26 +76,74 @@ Project settings:
   `API_URL=https://www.citey.email` (no `/api`); the backend adds the prefix
   to links.
 
-The API runs as one function with Hobby's 300 s limit. The nightly job
-stays under it by running in batches: `.github/scripts/run-batched-job.sh`
-calls `/api/jobs/run` repeatedly, each call checking users for about 200 s
-and returning a `next_cursor` for the next call. The in-app scheduler
-switches itself off on Vercel.
+The API runs as one function with Hobby's 300 s limit. The scheduled jobs
+stay under it because Inngest checks one user per request (see
+[Scheduled jobs](#scheduled-jobs)). The in-app scheduler switches itself off
+on Vercel.
 
 Requests to old backend paths without `/api` get a 308 to the `/api` path.
 Links in emails sent before the move point at `api.citey.email`, which is
 retired with Render, so those stop working.
 
+## Scheduled jobs
+
+[Inngest](https://www.inngest.com/) runs the jobs by calling
+`/api/inngest`; the functions are in `backend/app/inngest_functions.py`.
+Schedules are in Pacific time and follow daylight saving time.
+
+| Job | When | How |
+| --- | --- | --- |
+| Citation check | Every day, 00:00 | A sweep lists every user with an account and sends one event per user. Each event runs that user's check as its own run, retried up to 3 times if it fails. |
+| Notification cleanup | Every day, 01:00 | Deletes notifications older than 30 days. |
+| Publication sync | Sundays, 00:00 | Like the citation check, for users with a linked OpenAlex author. |
+
+Every request checks one user, so it stays well inside Vercel Hobby's
+300 s limit. At most 2 users are checked at once, across both jobs, to stay
+inside the citation sources' rate limits. One user is never checked twice at
+once. A sweep that starts while another is running is skipped. Each event ID
+names the user and the day, so if the sweep runs again the same night, nobody
+is checked or emailed twice.
+
+To run a job now, open the function in the Inngest dashboard (or the Dev
+Server at http://localhost:8288) and choose **Invoke**. To check one user,
+send `citey/citation-check.requested` with `{"uid": "...", "dry_run": true}`.
+The `/api/jobs/*` endpoints still work for checks run by hand: a user's own
+check uses their Firebase token, and an all-users run uses `X-Cron-Secret`.
+
+### Production setup
+
+1. In the [Inngest dashboard](https://app.inngest.com), production
+   environment, copy the signing key and create an event key.
+2. In the Vercel project (the site and API deploy together), set
+   `INNGEST_SIGNING_KEY`, `INNGEST_EVENT_KEY` and
+   `INNGEST_SERVE_ORIGIN=https://www.citey.email`. Leave `INNGEST_DEV` unset.
+   Redeploy. Without the signing key the API still serves everything else
+   but leaves `/api/inngest` out and logs an error.
+3. In the dashboard choose **Apps > Sync new app** and enter
+   `https://www.citey.email/api/inngest`. Five functions should appear.
+   Resync after a deploy that changes the functions: use **Resync** in the
+   dashboard, or run `curl -X PUT https://www.citey.email/api/inngest`.
+4. Delete the `CRON_SECRET` secret from the GitHub repository (Settings >
+   Secrets and variables > Actions); no workflow uses it now. Keep
+   `CRON_SECRET` on the API host for the `/api/jobs/*` endpoints.
+
+Sync only after the change that removes the GitHub workflows is on `main`.
+That way the GitHub workflows and Inngest never both run the same night.
+
 ## Backend settings
 
 Required in production:
 
-* `CRON_SECRET`: shared secret the nightly job sends.
+* `INNGEST_SIGNING_KEY`, `INNGEST_EVENT_KEY`: from the Inngest dashboard; see [Production setup](#production-setup).
+* `CRON_SECRET`: secret for running the all-users `/api/jobs/*` endpoints by hand (`X-Cron-Secret` header).
 * `TOKEN_SECRET`: signs unsubscribe and confirmation links.
-* `API_URL`: public API address used in email links.
+* `API_URL`: `https://www.citey.email`, the public origin used in email links (the backend adds `/api`).
 * `ALLOWED_ORIGINS`: comma separated site addresses allowed to call the API.
 
 Optional:
+
+* `INNGEST_SERVE_ORIGIN`: public origin Inngest calls, `https://www.citey.email`.
+* `INNGEST_DEV`: `1` (or the Dev Server URL) to use a local Inngest Dev Server. Local only.
 
 * `S2_API_KEY`: Semantic Scholar key. Avoids night time rate limits. [Request one free](https://www.semanticscholar.org/product/api).
 * `OPENALEX_API_KEY`: OpenAlex key. Keyless use has a small daily allowance. Free from [openalex.org](https://openalex.org) after signing in.
