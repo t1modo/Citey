@@ -313,6 +313,69 @@ def test_user_check_runs_off_the_event_loop_thread(firestore, monkeypatch):
     assert threads and threads[0] != threading.get_ident()
 
 
+def test_a_long_user_check_continues_in_more_parts(firestore, monkeypatch):
+    """Each part is one request; a user who outlasts it carries on in the
+    next part, skipping papers checked since the run started."""
+    firestore(_user("a"))
+    calls: list[dict] = []
+
+    async def fake_run(**kwargs):
+        calls.append(kwargs)
+        if len(calls) < 3:
+            kwargs["stats"]["incomplete"] = 1
+        return 5, 1
+
+    monkeypatch.setattr(fns, "run_job_for_user", fake_run)
+
+    res = mocked.trigger(
+        fns.citation_check_user, _user_event(fns.CITATION_CHECK_EVENT, "a"), _RecordingClient()
+    )
+
+    assert res.status is mocked.Status.COMPLETED
+    assert res.output == {"uid": "a", "works_processed": 15, "new_notifications": 3}
+    assert len(calls) == 3
+    since = {c["checked_since"] for c in calls}
+    assert len(since) == 1 and None not in since  # one run start, shared by every part
+    assert all(c["deadline"] is not None for c in calls)
+
+
+def test_a_user_check_gives_up_after_its_part_limit(firestore, monkeypatch):
+    firestore(_user("a"))
+
+    async def never_done(**kwargs):
+        kwargs["stats"]["incomplete"] = 1
+        return 1, 0
+
+    monkeypatch.setattr(fns, "run_job_for_user", never_done)
+
+    res = mocked.trigger(
+        fns.citation_check_user, _user_event(fns.CITATION_CHECK_EVENT, "a"), _RecordingClient()
+    )
+
+    assert res.status is mocked.Status.COMPLETED
+    assert res.output["unfinished"] is True
+    assert res.output["works_processed"] == fns.MAX_PARTS
+
+
+def test_a_dry_run_user_check_is_one_part(firestore, monkeypatch):
+    firestore(_user("a"))
+    run = AsyncMock(return_value=(1, 0))
+
+    async def incomplete(**kwargs):
+        kwargs["stats"]["incomplete"] = 1
+        return await run(**kwargs)
+
+    monkeypatch.setattr(fns, "run_job_for_user", incomplete)
+
+    mocked.trigger(
+        fns.citation_check_user,
+        _user_event(fns.CITATION_CHECK_EVENT, "a", dry_run=True),
+        _RecordingClient(),
+    )
+
+    assert run.await_count == 1
+
+
 # ---------------------------------------------------------------------------
 # Weekly publication sync
 # ---------------------------------------------------------------------------

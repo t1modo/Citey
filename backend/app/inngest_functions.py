@@ -18,7 +18,8 @@ saving time. Midnight and 01:00 are clear of the 02:00 US DST switch.
 """
 
 import logging
-from datetime import datetime
+import time
+from datetime import datetime, timezone
 from typing import Any
 
 import inngest
@@ -66,6 +67,13 @@ FAN_OUT_CHUNK = 100
 
 USER_RETRIES = 3
 SWEEP_RETRIES = 3
+
+# A user's check runs as a series of steps, each one request. A step starts
+# no new paper after this many seconds, leaving room under Vercel Hobby's
+# 300 s limit for the paper in progress, the count refresh and the email.
+# The next step skips papers already checked in this run.
+PART_BUDGET_SECONDS = 200.0
+MAX_PARTS = 20
 
 
 def _is_dev(value: str) -> bool:
@@ -146,12 +154,21 @@ def _load_user(db: Any, uid: str) -> dict | None:
     return snapshot.to_dict() or {}
 
 
-async def check_user_citations(uid: str, dry_run: bool = False) -> dict:
+async def check_user_citations(
+    uid: str,
+    dry_run: bool = False,
+    checked_since: str | None = None,
+    time_budget_seconds: float | None = None,
+) -> dict:
+    """One part of a user's check. ``done`` is False when the time budget ran
+    out with papers left; the next part, given the same *checked_since*,
+    carries on from there."""
     db = get_db()
     user_data = _load_user(db, uid)
     if user_data is None:
         logger.info("Skipping citation check for uid=%s: user document is gone.", uid)
-        return {"uid": uid, "skipped": "no user document"}
+        return {"uid": uid, "skipped": "no user document", "done": True}
+    stats: dict[str, int] = {}
     works_processed, new_notifications = await run_job_for_user(
         uid=uid,
         user_data=user_data,
@@ -159,11 +176,15 @@ async def check_user_citations(uid: str, dry_run: bool = False) -> dict:
         email_service=email_service,
         dry_run=dry_run,
         settings=get_settings(),
+        stats=stats,
+        deadline=(time.monotonic() + time_budget_seconds) if time_budget_seconds else None,
+        checked_since=datetime.fromisoformat(checked_since) if checked_since else None,
     )
     return {
         "uid": uid,
         "works_processed": works_processed,
         "new_notifications": new_notifications,
+        "done": not stats.get("incomplete"),
     }
 
 
@@ -247,10 +268,36 @@ async def citation_check_user(ctx: inngest.Context) -> dict:
     uid = str(ctx.event.data["uid"])
     dry_run = bool(ctx.event.data.get("dry_run", False))
 
-    async def check() -> dict:
-        return await run_off_loop(check_user_citations, uid=uid, dry_run=dry_run)
+    async def started_at() -> str:
+        return datetime.now(timezone.utc).isoformat()
 
-    return await ctx.step.run("check-citations", check)
+    # Recorded once and replayed on every later request of this run, so each
+    # part skips the papers earlier parts checked.
+    since = await ctx.step.run("start", started_at)
+
+    totals = {"uid": uid, "works_processed": 0, "new_notifications": 0}
+    # A dry run records nothing, so a later part could not tell which
+    # papers were done; it checks what fits in one part.
+    parts = 1 if dry_run else MAX_PARTS
+    for part in range(parts):
+        async def check(part: int = part) -> dict:
+            return await run_off_loop(
+                check_user_citations,
+                uid=uid,
+                dry_run=dry_run,
+                checked_since=since,
+                time_budget_seconds=PART_BUDGET_SECONDS,
+            )
+
+        result = await ctx.step.run("check-citations" if part == 0 else f"check-citations-{part}", check)
+        if "skipped" in result:
+            return {k: v for k, v in result.items() if k != "done"}
+        totals["works_processed"] += result["works_processed"]
+        totals["new_notifications"] += result["new_notifications"]
+        if result.get("done", True):
+            return totals
+    ctx.logger.warning("uid=%s still had papers left after %d parts.", uid, parts)
+    return {**totals, "unfinished": True}
 
 
 @inngest_client.create_function(
