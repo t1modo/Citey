@@ -1,3 +1,37 @@
+[project]
+name = "citey-backend"
+version = "0.1.0"
+description = "Citey API: emails researchers when a new paper cites theirs."
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic==2.5.0",
+    "apscheduler==3.10.4",
+    "cachetools==5.5.2",
+    "fastapi==0.115.5",
+    "firebase-admin==6.6.0",
+    "httpx==0.28.1",
+    "jinja2==3.1.4",
+    "pydantic==2.10.3",
+    "pydantic-settings==2.6.1",
+    "pypdf==4.3.1",
+    "python-dotenv==1.0.1",
+    "pytz==2024.2",
+    "resend==2.4.0",
+    "uvicorn[standard]==0.32.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.24.0",
+    "respx==0.22.0",
+]
+
+# An app, not a library: uv installs the dependencies but never builds or
+# installs the project itself.
+[tool.uv]
+package = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 markers = ["real_extra_sources: use the real OpenCitations and Europe PMC clients (mock HTTP yourself)"]

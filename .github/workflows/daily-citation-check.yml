@@ -49,6 +49,12 @@ jobs:
             echo "skip=true" >> $GITHUB_OUTPUT
           fi
 
+      - name: Check out the batch runner script
+        if: steps.time_check.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
       # ── Step 1: Wake the Render instance ──────────────────────────────────
       # Render free tier spins down after inactivity. Ping the health endpoint
       # first and wait up to 90 s for a 200 before proceeding.
@@ -82,31 +88,15 @@ jobs:
         if: steps.time_check.outputs.skip != 'true'
         run: sleep 5
 
-      # ── Step 3: Trigger the citation-check job ────────────────────────────
+      # ── Step 3: Run the citation check in batches ─────────────────────────
+      # Each request checks users for at most ~200 s and returns a cursor;
+      # the script repeats until every user is done. That keeps each request
+      # inside Vercel Hobby's 300 s limit (Render has no such limit).
       - name: Run citation check
         if: steps.time_check.outputs.skip != 'true'
-        run: |
-          echo "POSTing to https://api.citey.email/jobs/run ..."
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            --max-time 1800 \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
-            -d '{"dry_run": false}' \
-            https://api.citey.email/jobs/run)
-
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
-
-          echo "HTTP status: $HTTP_CODE"
-          echo "Response body: $BODY"
-
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "ERROR: Job request failed with HTTP $HTTP_CODE"
-            exit 1
-          fi
-
-          echo "Citation check completed successfully."
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: .github/scripts/run-batched-job.sh https://api.citey.email /jobs/run
 
       # ── Step 4: Delete notifications older than 30 days ───────────────────
       # Formerly an in-process APScheduler job (01:00 PT), which rarely fired
@@ -130,18 +120,12 @@ jobs:
       # dispatches run it too so it can be triggered on demand.
       - name: Sync new publications
         if: steps.time_check.outputs.skip != 'true'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           DOW=$(TZ="America/Los_Angeles" date +%u)   # 7 = Sunday
           if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "$DOW" != "7" ]; then
             echo "Not Sunday in Pacific time (day $DOW). Skipping publication sync."
             exit 0
           fi
-          RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 900 -X POST \
-            -H "Content-Type: application/json" \
-            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
-            -d '{"dry_run": false}' \
-            https://api.citey.email/jobs/sync-publications)
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          echo "HTTP status: $HTTP_CODE"
-          echo "Response body: $(echo "$RESPONSE" | head -n -1)"
-          [ "$HTTP_CODE" = "200" ] || { echo "ERROR: publication sync failed"; exit 1; }
+          .github/scripts/run-batched-job.sh https://api.citey.email /jobs/sync-publications

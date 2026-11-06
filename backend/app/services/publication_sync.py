@@ -10,6 +10,7 @@ the S2 works API does not provide a reliable full publication list.
 """
 
 import logging
+import time
 from datetime import datetime, timezone
 from types import ModuleType
 from typing import Any
@@ -155,20 +156,32 @@ async def sync_new_publications_for_all_users(
     email_service: ModuleType,
     dry_run: bool,
     settings: Settings,
+    cursor: str | None = None,
+    time_budget_seconds: float | None = None,
 ) -> dict:
     """
-    Run publication sync for every user that has a linked author.
-    Returns a summary dict.
+    Run publication sync for every user that has a linked author, in uid
+    order. *cursor* and *time_budget_seconds* batch the run the same way as
+    run_job_for_all_users.
+
+    Returns {users_processed, works_added, next_cursor}; next_cursor is None
+    when every user is done.
     """
+    from app.services.citation_service import _get_auth_uids, out_of_time, users_after
+
     users_processed = 0
     total_added = 0
+    started = time.monotonic()
+    next_cursor: str | None = None
+    last_done: str | None = cursor
 
-    from app.services.citation_service import _get_auth_uids
     auth_uids = _get_auth_uids()
-    # Read the whole list first: a Firestore stream left open while each
-    # user is processed (minutes) times out with "Deadline Exceeded".
-    for user_doc in list(db.collection("users").stream()):
+    for user_doc in users_after(db, cursor):
+        if out_of_time(started, time_budget_seconds):
+            next_cursor = last_done
+            break
         uid: str = user_doc.id
+        last_done = uid
         if uid not in auth_uids:
             logger.warning("Skipping orphaned Firestore user uid=%s in publication sync", uid)
             continue
@@ -192,4 +205,5 @@ async def sync_new_publications_for_all_users(
     return {
         "users_processed": users_processed,
         "works_added": total_added,
+        "next_cursor": next_cursor,
     }

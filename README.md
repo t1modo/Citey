@@ -18,15 +18,59 @@ Get an email when a new paper cites yours. Try it at [citey.email](https://www.c
 
 ## Run locally
 
+### With Docker
+
+```bash
+cp backend/.env.example backend/.env           # Firebase service account JSON, secrets
+cp frontend/.env.example frontend/.env.local   # Firebase web config
+docker compose up --build
+```
+
+Site on http://localhost:3000, API on http://localhost:8000. The site's
+Firebase config is compiled in at build time, so rebuild after editing
+`frontend/.env.local`.
+
+### Without Docker
+
+The backend uses [uv](https://docs.astral.sh/uv/).
+
 ```bash
 # API on :8000
-cd backend && pip install -r requirements.txt && uvicorn main:app
+cd backend && uv sync && uv run uvicorn main:app --reload
 
 # Site on :3000
 cd frontend && cp .env.example .env.local && npm install && npm run dev
 ```
 
-Fill `frontend/.env.local` with your Firebase web config.
+Fill `frontend/.env.local` with your Firebase web config. Run the backend
+tests with `cd backend && uv run pytest`.
+
+Add or upgrade a backend dependency with `uv add <package>`, which updates
+`pyproject.toml` and `uv.lock`.
+
+## Deploy on Render
+
+The backend has no `requirements.txt`; it installs from `uv.lock`. In the
+Render service settings (Root Directory `backend`):
+
+* **Build Command:** `pip install uv && uv sync --locked --no-dev`
+* **Start Command:** `.venv/bin/uvicorn main:app --host 0.0.0.0 --port $PORT`
+
+## Deploy on Vercel
+
+The site and the API deploy as two Vercel projects from this repo:
+
+* **Site:** Root Directory `frontend`. Next.js is detected automatically.
+* **API:** Root Directory `backend`. Vercel finds the FastAPI `app` in
+  `main.py` and installs from `uv.lock`. `backend/vercel.json` allows each
+  request the Hobby maximum of 300 s. Set the backend settings below as
+  environment variables, plus `FIREBASE_SERVICE_ACCOUNT_JSON`. The in-app
+  scheduler switches itself off on Vercel.
+
+The nightly job runs in batches so no request reaches the 300 s limit:
+`.github/scripts/run-batched-job.sh` calls `/jobs/run` repeatedly, each
+call checking users for about 200 s and returning a `next_cursor` for the
+next call.
 
 ## Backend settings
 

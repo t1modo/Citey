@@ -1,0 +1,15 @@
+# Only main.py, app/, templates/ and the uv files are needed in the image.
+.venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+tests
+scripts
+# Secrets reach the container as environment variables, never baked in.
+.env
+.env.*
+*.json
+Dockerfile
+.dockerignore
+.vercelignore
+vercel.json

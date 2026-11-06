@@ -1,6 +1,7 @@
+import os
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -63,9 +64,13 @@ class Settings(BaseSettings):
     # CORS
     allowed_origins: str = "*"
 
-    # Scheduler — set DISABLE_SCHEDULER=true on Cloud Run (Cloud Scheduler
-    # calls the HTTP endpoints instead; APScheduler only runs locally)
-    disable_scheduler: bool = False
+    # Scheduler. Production sets DISABLE_SCHEDULER=true and the GitHub
+    # workflow calls the /jobs/* endpoints instead; APScheduler only runs
+    # locally. It defaults to off on Vercel (which sets VERCEL=1), where a
+    # background thread is frozen between requests and would never fire.
+    disable_scheduler: bool = Field(
+        default_factory=lambda: bool(os.environ.get("VERCEL"))
+    )
 
 
     @field_validator("app_url", "api_url")
