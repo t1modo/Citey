@@ -48,6 +48,12 @@ def _oa_client(timeout: float) -> httpx.AsyncClient:
     )
 
 
+# A rate limit asking for a longer wait than this means the daily budget is
+# spent. Waiting would stall the whole nightly run, so the source is treated
+# as unavailable and the work is checked again the next night.
+_MAX_RETRY_WAIT = 60.0
+
+
 def _retry_after(response: httpx.Response, attempt: int) -> float:
     """Seconds to wait before retrying, from Retry-After or exponential backoff.
 
@@ -93,6 +99,12 @@ async def _get_with_retry(
             continue
         if response.status_code == 429:
             wait = _retry_after(response, attempt)
+            if wait > _MAX_RETRY_WAIT:
+                logger.error(
+                    "OpenAlex rate limited (429) [%s] with a %.0fs wait; giving up for now",
+                    context, wait,
+                )
+                return None
             logger.warning(
                 "OpenAlex rate limited (429) [%s]; waiting %.0fs (attempt %d/%d)",
                 context, wait, attempt + 1, _MAX_RETRIES,

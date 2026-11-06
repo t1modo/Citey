@@ -359,3 +359,28 @@ async def test_acl_count_comes_from_doi_when_acl_id_is_unknown():
         )
         counts = await get_citation_counts(["10.18653/v1/2025.uncertainlp-main.23"])
     assert counts == {"10.18653/v1/2025.uncertainlp-main.23": 8}
+
+
+# A rate limit that asks for hours (a spent daily budget) must not stall the run.
+
+@pytest.mark.parametrize("module", ["openalex", "semantic_scholar"])
+async def test_long_retry_after_gives_up_instead_of_sleeping(module):
+    import importlib
+
+    import httpx
+    import respx
+    from httpx import Response
+
+    svc = importlib.import_module(f"app.services.{module}")
+    sleep = AsyncMock()
+    with respx.mock, patch.object(svc, "_sleep", sleep):
+        respx.route().mock(return_value=Response(429, headers={"Retry-After": "78890"}))
+        async with httpx.AsyncClient() as client:
+            if module == "openalex":
+                result = await svc._get_with_retry(client, "https://api.openalex.org/works", {})
+            else:
+                result = await svc._request_with_retry(
+                    client, "GET", "https://api.semanticscholar.org/x", "t", throttle=False
+                )
+    assert result is None
+    sleep.assert_not_awaited()

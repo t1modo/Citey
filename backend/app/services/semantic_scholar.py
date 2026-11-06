@@ -97,6 +97,12 @@ def _s2_client(timeout: float) -> httpx.AsyncClient:
     return httpx.AsyncClient(headers=_HEADERS, timeout=timeout, event_hooks=hooks)
 
 
+# A rate limit asking for a longer wait than this means the daily budget is
+# spent. Waiting would stall the whole nightly run, so the source is treated
+# as unavailable and the work is checked again the next night.
+_MAX_RETRY_WAIT = 60.0
+
+
 def _retry_after(response: httpx.Response, attempt: int) -> float:
     """Seconds to wait: Retry-After (seconds or HTTP date) or exponential backoff."""
     header = response.headers.get("Retry-After")
@@ -140,6 +146,12 @@ async def _request_with_retry(
             continue
         if response.status_code == 429:
             wait = _retry_after(response, attempt)
+            if wait > _MAX_RETRY_WAIT:
+                logger.error(
+                    "S2 rate limited (429) [%s] with a %.0fs wait; giving up for now",
+                    context, wait,
+                )
+                return None
             logger.warning(
                 "S2 rate limited (429) [%s]; waiting %.0fs (attempt %d/%d)",
                 context, wait, attempt + 1, _MAX_RETRIES,
