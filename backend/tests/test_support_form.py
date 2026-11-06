@@ -121,3 +121,20 @@ def test_invalid_input_is_rejected(client, body):
     c, deliver = client
     assert _post(c, body).status_code == 422
     deliver.assert_not_awaited()
+
+
+def test_client_ip_on_vercel_ignores_a_spoofed_cloudflare_header(monkeypatch) -> None:
+    from starlette.requests import Request
+
+    from app.routers.support import _client_ip
+
+    def req(headers: dict) -> Request:
+        raw = [(k.encode(), v.encode()) for k, v in headers.items()]
+        return Request({"type": "http", "headers": raw, "client": ("10.0.0.1", 1234)})
+
+    spoofed = {"cf-connecting-ip": "1.2.3.4", "x-forwarded-for": "203.0.113.7"}
+    monkeypatch.setenv("VERCEL", "1")
+    assert _client_ip(req(spoofed)) == "203.0.113.7"
+    assert _client_ip(req({})) == "10.0.0.1"
+    monkeypatch.delenv("VERCEL")
+    assert _client_ip(req(spoofed)) == "1.2.3.4"

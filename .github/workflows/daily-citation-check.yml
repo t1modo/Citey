@@ -55,10 +55,10 @@ jobs:
         with:
           sparse-checkout: .github/scripts
 
-      # ── Step 1: Wake the Render instance ──────────────────────────────────
-      # Render free tier spins down after inactivity. Ping the health endpoint
-      # first and wait up to 90 s for a 200 before proceeding.
-      - name: Wake Render instance
+      # ── Step 1: Check the API is up ───────────────────────────────────────
+      # Ping the health endpoint and wait for a 200 before starting, so a
+      # deploy in progress delays the run instead of failing it.
+      - name: Check the API is up
         if: steps.time_check.outputs.skip != 'true'
         run: |
           echo "Resolving www.citey.email..."
@@ -67,7 +67,7 @@ jobs:
           echo "Pinging https://www.citey.email/api/health ..."
           for i in $(seq 1 8); do
             # -s silences the progress meter; -S still prints errors to the log.
-            # On a failed connection -w prints "000". A cold start on Render's free plan takes about a minute. The job
+            # On a failed connection -w prints "000". The job
             # runs with bash -e, so a timed out curl used to end the job on the
             # first attempt; "|| true" keeps it a retry.
             STATUS=$(curl -s -S -o /dev/null -w "%{http_code}" --max-time 90 https://www.citey.email/api/health) || true
@@ -91,7 +91,7 @@ jobs:
       # ── Step 3: Run the citation check in batches ─────────────────────────
       # Each request checks users for at most ~200 s and returns a cursor;
       # the script repeats until every user is done. That keeps each request
-      # inside Vercel Hobby's 300 s limit (Render has no such limit).
+      # inside Vercel Hobby's 300 s limit.
       - name: Run citation check
         if: steps.time_check.outputs.skip != 'true'
         env:
@@ -100,7 +100,7 @@ jobs:
 
       # ── Step 4: Delete notifications older than 30 days ───────────────────
       # Formerly an in-process APScheduler job (01:00 PT), which rarely fired
-      # because the free Render instance sleeps. Production now runs with
+      # because the server slept between requests. Production now runs with
       # DISABLE_SCHEDULER=true, so every scheduled job is driven from here.
       - name: Clean up old notifications
         if: steps.time_check.outputs.skip != 'true'

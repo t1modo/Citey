@@ -11,9 +11,10 @@ Get an email when a new paper cites yours. Try it at [citey.email](https://www.c
 
 ## Stack
 
-* **Frontend:** Next.js, Tailwind, Firebase Auth, PostHog analytics. Hosted on Vercel.
-* **Backend:** FastAPI, Firestore, Resend for email. Hosted on Render.
-* **Nightly job:** GitHub Actions calls `/jobs/run`.
+* **Frontend:** Next.js, Tailwind, Firebase Auth, PostHog analytics.
+* **Backend:** FastAPI, Firestore, Resend for email. Served at `/api` on the same domain.
+* **Hosting:** one Vercel project builds both (see [Deploy on Vercel](#deploy-on-vercel)).
+* **Nightly job:** GitHub Actions calls `/api/jobs/run`.
 * **Data:** OpenAlex and Semantic Scholar for citations. Crossref, PubMed, NASA ADS, INSPIRE and DBLP for imports and DOI lookups.
 
 ## Run locally
@@ -48,16 +49,6 @@ tests with `cd backend && uv run pytest`.
 Add or upgrade a backend dependency with `uv add <package>`, which updates
 `pyproject.toml` and `uv.lock`.
 
-## Deploy on Render
-
-The backend installs from `uv.lock`. `backend/requirements.txt` mirrors the
-direct dependencies only so the existing Render service, whose build runs
-`pip install -r requirements.txt`, keeps deploying until it is retired; delete
-it then. To install from the lock on Render instead (Root Directory `backend`):
-
-* **Build Command:** `pip install uv && uv sync --locked --no-dev`
-* **Start Command:** `.venv/bin/uvicorn main:app --host 0.0.0.0 --port $PORT`
-
 ## Deploy on Vercel
 
 The site and the API deploy as one Vercel project using
@@ -84,10 +75,9 @@ calls `/api/jobs/run` repeatedly, each call checking users for about 200 s
 and returning a `next_cursor` for the next call. The in-app scheduler
 switches itself off on Vercel.
 
-While the API still runs on its own host, requests to its old paths without
-`/api` get a 308 to the `/api` path, so a site build still calling the old
-address keeps working during the move. Links in emails sent before the move
-point at `api.citey.email` and stop working once that domain is retired.
+Requests to old backend paths without `/api` get a 308 to the `/api` path.
+Links in emails sent before the move point at `api.citey.email`, which is
+retired with Render, so those stop working.
 
 ## Backend settings
 
