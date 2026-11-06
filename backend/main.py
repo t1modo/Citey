@@ -18,6 +18,9 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
 )
+from app import log_redaction  # noqa: E402
+
+log_redaction.install()
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
