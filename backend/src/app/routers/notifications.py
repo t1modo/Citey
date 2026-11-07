@@ -2,112 +2,47 @@ import logging
 import math
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.core.concurrency import run_blocking, run_off_loop
+from app.core.db import get_session
 from app.deps import get_current_user
-from app.firebase_client import get_db
 from app.schemas import Notification, PaginatedNotifications
+from app.services import alert_service
+from app.store import AlertStore
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
-
-def _doc_to_notification(doc_id: str, data: dict) -> Notification:
-    """Convert a Firestore document dict to a Notification model."""
-
-    def _to_dt(val: Any) -> datetime | None:
-        if val is None:
-            return None
-        if isinstance(val, datetime):
-            return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
-        if hasattr(val, "timestamp"):
-            # Firestore DatetimeWithNanoseconds
-            return val.replace(tzinfo=timezone.utc) if val.tzinfo is None else val
-        if isinstance(val, str):
-            # Stored as an ISO string (Pydantic serialisation path)
-            try:
-                dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
-                return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-            except ValueError:
-                return None
-        return None
-
-    return Notification(
-        id=doc_id,
-        cited_work_id=data.get("cited_work_id", ""),
-        cited_work_title=data.get("cited_work_title", ""),
-        citing_work_id=data.get("citing_work_id", ""),
-        citing_work_title=data.get("citing_work_title", ""),
-        citing_work_doi=data.get("citing_work_doi"),
-        citing_work_url=data.get("citing_work_url"),
-        citing_authors=data.get("citing_authors", []),
-        citing_affiliations=data.get("citing_affiliations", []),
-        citing_year=data.get("citing_year"),
-        citing_publication_date=data.get("citing_publication_date"),
-        seen=data.get("seen", False),
-        created_at=_to_dt(data.get("created_at")),
-    )
-
-
-_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
-
-
 _MAX_LIMIT = 100
+# Alerts Citey found in the last 30 days. Found, not published: an index can
+# list a paper weeks after it appears, and that citation is still news.
+_WINDOW_DAYS = 30
+_EXPORT_CAP = 5_000
 
 
 @router.get("", response_model=PaginatedNotifications)
 async def list_notifications(
     uid: str = Depends(get_current_user),
-    db: Any = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=_MAX_LIMIT),
 ) -> PaginatedNotifications:
-    """
-    Return paginated notifications for the authenticated user, newest first.
-
-    Sorting is done in Python after streaming the full collection so that
-    documents with a null/missing created_at are not silently excluded.
-    """
-    return await run_blocking(_list_notifications_sync, uid=uid, db=db, page=page, limit=limit)
-
-
-def _list_notifications_sync(uid: str, db: Any, page: int, limit: int) -> PaginatedNotifications:
-    """The blocking (Firestore) part of list_notifications, run on a worker thread."""
-    found_since = datetime.now(tz=timezone.utc) - timedelta(days=30)
-
-    docs = (
-        db.collection("users")
-        .document(uid)
-        .collection("notifications")
-        .stream()
-    )
-    all_notifications = [_doc_to_notification(doc.id, doc.to_dict() or {}) for doc in docs]
-
-    # Citations Citey found in the last 30 days. Found, not published: an
-    # index can list a paper weeks after it appears, and that citation is
-    # still news to the researcher.
-    all_notifications = [
-        n for n in all_notifications
-        if n.created_at is None or n.created_at >= found_since
-    ]
-
-    all_notifications.sort(key=lambda n: n.created_at or _EPOCH, reverse=True)
+    """Return the user's alerts from the last 30 days, newest first, a page at a time."""
+    found_since = datetime.now(tz=timezone.utc) - timedelta(days=_WINDOW_DAYS)
+    all_notifications = await alert_service.notifications(session, uid, since=found_since)
 
     total = len(all_notifications)
     unseen = sum(1 for n in all_notifications if not n.seen)
     pages = max(1, math.ceil(total / limit))
     page = min(page, pages)  # clamp to valid range
-
     offset = (page - 1) * limit
-    items = all_notifications[offset : offset + limit]
 
     return PaginatedNotifications(
-        items=items,
+        items=all_notifications[offset : offset + limit],
         total=total,
         unseen=unseen,
         page=page,
@@ -145,29 +80,13 @@ def _notification_to_bibtex(n: Notification) -> str:
 @router.get("/export.bib", response_class=PlainTextResponse)
 async def export_bibtex(
     uid: str = Depends(get_current_user),
-    db: Any = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> PlainTextResponse:
     """
-    Export all of the authenticated user's citation notifications as a BibTeX
-    file.  Unlike the paginated list endpoint this returns the full history
-    (no 30-day window) so researchers can build a complete reference list.
+    Export the user's citation alerts as a BibTeX file. Unlike the list,
+    this has no 30-day window, so researchers can build a reference list.
     """
-    return await run_blocking(_export_bibtex_sync, uid=uid, db=db)
-
-
-def _export_bibtex_sync(uid: str, db: Any) -> PlainTextResponse:
-    """The blocking (Firestore) part of export_bibtex, run on a worker thread."""
-    _EXPORT_CAP = 5_000
-
-    docs = (
-        db.collection("users")
-        .document(uid)
-        .collection("notifications")
-        .stream()
-    )
-    notifications = [_doc_to_notification(doc.id, doc.to_dict() or {}) for doc in docs]
-    notifications.sort(key=lambda n: n.created_at or _EPOCH, reverse=True)
-    notifications = notifications[:_EXPORT_CAP]
+    notifications = await alert_service.notifications(session, uid, limit=_EXPORT_CAP)
 
     if not notifications:
         body = "% No citation notifications found.\n"
@@ -185,17 +104,12 @@ def _export_bibtex_sync(uid: str, db: Any) -> PlainTextResponse:
 @router.post("/prune", status_code=200)
 async def prune_notifications(
     uid: str = Depends(get_current_user),
-    db: Any = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """
-    Delete the authenticated user's notifications found more than 30 days ago.
-
-    Returns {deleted: <count>}.
-    """
-    from app.services.citation_service import prune_user_notifications
-
-    # The prune makes blocking Firestore calls: run it on its own loop.
-    deleted = await run_off_loop(prune_user_notifications, uid=uid, db=db, dry_run=False)
+    """Delete the user's alerts found more than 30 days ago. Returns {deleted: <count>}."""
+    before = datetime.now(tz=timezone.utc) - timedelta(days=_WINDOW_DAYS)
+    deleted = await AlertStore(session).prune(before, uid=uid)
+    await session.commit()
     logger.info("Manual prune for uid=%s: %d notification(s) deleted.", uid, deleted)
     return {"deleted": deleted}
 
@@ -203,66 +117,30 @@ async def prune_notifications(
 @router.post("/seen/all", status_code=204)
 async def mark_all_seen(
     uid: str = Depends(get_current_user),
-    db: Any = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> None:
-    """Mark every unseen notification as seen for the authenticated user."""
-    return await run_blocking(_mark_all_seen_sync, uid=uid, db=db)
-
-
-def _mark_all_seen_sync(uid: str, db: Any) -> None:
-    """The blocking (Firestore) part of mark_all_seen, run on a worker thread."""
-    unseen_docs = list(
-        db.collection("users")
-        .document(uid)
-        .collection("notifications")
-        .where("seen", "==", False)
-        .stream()
-    )
-
-    if not unseen_docs:
-        return
-
-    # Firestore batch is capped at 500 writes — chunk if needed.
-    batch_size = 500
-    for i in range(0, len(unseen_docs), batch_size):
-        batch = db.batch()
-        for doc in unseen_docs[i : i + batch_size]:
-            batch.update(doc.reference, {"seen": True})
-        batch.commit()
-
-    logger.info(
-        "Bulk-marked %d notifications as seen for uid=%s", len(unseen_docs), uid
-    )
+    """Mark every unseen alert as seen for the user."""
+    count = await AlertStore(session).mark_all_seen(uid)
+    await session.commit()
+    if count:
+        logger.info("Bulk-marked %d notifications as seen for uid=%s", count, uid)
 
 
 @router.post("/{notification_id}/seen", response_model=Notification)
 async def mark_seen(
     notification_id: str,
     uid: str = Depends(get_current_user),
-    db: Any = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> Notification:
-    """Mark a single notification as seen."""
-    return await run_blocking(_mark_seen_sync, notification_id=notification_id, uid=uid, db=db)
-
-
-def _mark_seen_sync(notification_id: str, uid: str, db: Any) -> Notification:
-    """The blocking (Firestore) part of mark_seen, run on a worker thread."""
-    ref = (
-        db.collection("users")
-        .document(uid)
-        .collection("notifications")
-        .document(notification_id)
-    )
-    snapshot = ref.get()
-    if not snapshot.exists:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification not found.",
-        )
-
-    ref.update({"seen": True})
+    """Mark a single alert as seen."""
+    not_found = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found.")
+    if not notification_id.isdigit():
+        raise not_found
+    alert_id = int(notification_id)
+    if not await AlertStore(session).mark_seen(uid, alert_id):
+        raise not_found
+    await session.commit()
     logger.info("Marked notification %s as seen for uid=%s", notification_id, uid)
-
-    data = snapshot.to_dict() or {}
-    data["seen"] = True
-    return _doc_to_notification(notification_id, data)
+    marked = await alert_service.notification(session, uid, alert_id)
+    assert marked is not None
+    return marked

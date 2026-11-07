@@ -1,20 +1,30 @@
 """The Inngest functions that run the nightly and weekly jobs.
 
 Runs use the SDK's in-memory simulator (inngest.experimental.mocked), so no
-Inngest server, Firestore or network is involved.
+Inngest server or network is involved. Tests that read or write users,
+papers or alerts use the test database (marked ``needs_db``; set
+TEST_DATABASE_URL, see tests/conftest.py); the rest need none.
 """
 
-import threading
-from unittest.mock import AsyncMock, MagicMock
+import asyncio
+import time
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock
 
 import inngest
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from inngest.experimental import mocked
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import inngest_functions as fns
 from app.config import Settings
+from app.models import Alert
+from app.services import tracking_service
+from app.store import AlertStore, CitationStore, UserStore
+from tests.conftest import TEST_DATABASE_URL, needs_db
 
 
 class _RecordingClient(mocked.Inngest):
@@ -30,33 +40,6 @@ class _RecordingClient(mocked.Inngest):
         return await super().send(events, skip_middleware=skip_middleware)
 
 
-def _user(uid: str, **data) -> MagicMock:
-    doc = MagicMock()
-    doc.id = uid
-    doc.to_dict.return_value = data
-    return doc
-
-
-def _db(*users: MagicMock) -> MagicMock:
-    """A Firestore stand-in: collection("users") streams *users*, and
-    document(uid).get() returns the matching one (or a missing document)."""
-    by_id = {u.id: u for u in users}
-    db = MagicMock()
-    users_ref = db.collection.return_value
-    users_ref.stream.return_value = list(users)
-
-    def document(uid):
-        ref = MagicMock()
-        snapshot = MagicMock()
-        snapshot.exists = uid in by_id
-        snapshot.to_dict.return_value = by_id[uid].to_dict() if uid in by_id else None
-        ref.get.return_value = snapshot
-        return ref
-
-    users_ref.document.side_effect = document
-    return db
-
-
 @pytest.fixture(autouse=True)
 def _no_inngest_env(monkeypatch: pytest.MonkeyPatch):
     """The SDK falls back to INNGEST_* env vars; keep the shell's out."""
@@ -65,17 +48,46 @@ def _no_inngest_env(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture
-def firestore(monkeypatch: pytest.MonkeyPatch):
-    """Point the functions at a fake Firestore and Firebase Auth."""
+async def app_db(pg_session, monkeypatch: pytest.MonkeyPatch):
+    """Point the functions' own sessions at the test database.
 
-    def install(*users: MagicMock, auth_uids: set[str] | None = None) -> MagicMock:
-        db = _db(*users)
-        monkeypatch.setattr(fns, "get_db", lambda: db)
-        uids = {u.id for u in users} if auth_uids is None else auth_uids
-        monkeypatch.setattr(fns, "_get_auth_uids", lambda: set(uids))
-        return db
+    The step helpers open sessions with app.core.db.session_scope(). That is
+    left real; only the URL its cached engine is built from changes. Patching
+    session_scope to hand out pg_session would not work here: a run happens
+    on another thread's event loop (see _trigger), and a session's
+    connection belongs to the loop that opened it. Seed and inspect through
+    the returned pg_session, and commit before a run, which reads over its
+    own connection.
+    """
+    from app.core import db as core_db
+
+    monkeypatch.setattr(core_db, "get_settings", lambda: Settings(database_url=TEST_DATABASE_URL))
+    core_db.get_engine.cache_clear()
+    yield pg_session
+    core_db.get_engine.cache_clear()
+
+
+@pytest.fixture
+def seed(app_db, monkeypatch: pytest.MonkeyPatch):
+    """Create user rows (uid -> column values) and the Firebase Auth
+    accounts; by default every seeded user has one."""
+
+    async def install(users: dict[str, dict] | None = None, *, auth_uids: set[str] | None = None) -> None:
+        users = users or {}
+        for uid, fields in users.items():
+            await UserStore(app_db).create(uid, email=f"{uid}@example.com", **fields)
+        await app_db.commit()
+        uids = set(users) if auth_uids is None else auth_uids
+        monkeypatch.setattr(fns, "_get_auth_uids", AsyncMock(return_value=set(uids)))
 
     return install
+
+
+async def _trigger(fn: inngest.Function, event: inngest.Event, client: mocked.Inngest):
+    """mocked.trigger drives an event loop of its own (run_until_complete),
+    which cannot happen inside the test's running loop, so the run goes on a
+    worker thread, where the SDK makes a fresh loop."""
+    return await asyncio.to_thread(mocked.trigger, fn, event, client)
 
 
 def _cron_event() -> inngest.Event:
@@ -162,12 +174,13 @@ def test_every_function_is_served():
 # ---------------------------------------------------------------------------
 
 
-def test_citation_sweep_sends_one_event_per_user(firestore, monkeypatch):
-    firestore(_user("b"), _user("a"), _user("c"))
+@needs_db
+async def test_citation_sweep_sends_one_event_per_user(seed, monkeypatch):
+    await seed({"b": {}, "a": {}, "c": {}})
     monkeypatch.setattr(fns, "_pacific_date", lambda: "2026-11-06")
     client = _RecordingClient()
 
-    res = mocked.trigger(fns.nightly_citation_sweep, _cron_event(), client)
+    res = await _trigger(fns.nightly_citation_sweep, _cron_event(), client)
 
     assert res.status is mocked.Status.COMPLETED
     assert res.output == {"day": "2026-11-06", "users_queued": 3}
@@ -178,18 +191,20 @@ def test_citation_sweep_sends_one_event_per_user(firestore, monkeypatch):
     ]
 
 
-def test_citation_sweep_skips_orphaned_users(firestore):
-    firestore(_user("a"), _user("orphan"), _user("b"), auth_uids={"a", "b"})
+@needs_db
+async def test_citation_sweep_skips_orphaned_users(seed):
+    await seed({"a": {}, "orphan": {}, "b": {}}, auth_uids={"a", "b"})
     client = _RecordingClient()
 
-    mocked.trigger(fns.nightly_citation_sweep, _cron_event(), client)
+    await _trigger(fns.nightly_citation_sweep, _cron_event(), client)
 
     assert [e.data["uid"] for e in client.sent] == ["a", "b"]
 
 
-def test_citation_sweep_sends_large_lists_in_chunks(firestore, monkeypatch):
+@needs_db
+async def test_citation_sweep_sends_large_lists_in_chunks(seed, monkeypatch):
     monkeypatch.setattr(fns, "FAN_OUT_CHUNK", 2)
-    firestore(*[_user(f"u{i}") for i in range(5)])
+    await seed({f"u{i}": {} for i in range(5)})
     client = _RecordingClient()
     sends = []
     original = client.send
@@ -200,7 +215,7 @@ def test_citation_sweep_sends_large_lists_in_chunks(firestore, monkeypatch):
 
     client.send = counting_send
 
-    res = mocked.trigger(fns.nightly_citation_sweep, _cron_event(), client)
+    res = await _trigger(fns.nightly_citation_sweep, _cron_event(), client)
 
     assert res.output["users_queued"] == 5
     assert sends == [2, 2, 1]
@@ -221,12 +236,21 @@ def test_event_ids_repeat_for_the_same_user_and_day():
 # ---------------------------------------------------------------------------
 
 
-def test_user_check_calls_run_job_for_user(firestore, monkeypatch):
-    db = firestore(_user("a", notification_email="a@example.com"))
-    run = AsyncMock(return_value=(4, 2))
+@needs_db
+async def test_user_check_calls_run_job_for_user(seed, monkeypatch):
+    """The check runs in a session of its own on the user's row, with this
+    part's deadline and the run's start time."""
+    await seed({"a": {"display_name": "Ada"}})
+    seen: dict = {}
+
+    async def fake_run(**kwargs):
+        seen["display_name"] = (await UserStore(kwargs["session"]).get("a")).display_name
+        return 4, 2
+
+    run = AsyncMock(side_effect=fake_run)
     monkeypatch.setattr(fns, "run_job_for_user", run)
 
-    res = mocked.trigger(
+    res = await _trigger(
         fns.citation_check_user, _user_event(fns.CITATION_CHECK_EVENT, "a"), _RecordingClient()
     )
 
@@ -235,17 +259,21 @@ def test_user_check_calls_run_job_for_user(firestore, monkeypatch):
     run.assert_awaited_once()
     kwargs = run.await_args.kwargs
     assert kwargs["uid"] == "a"
-    assert kwargs["user_data"] == {"notification_email": "a@example.com"}
-    assert kwargs["db"] is db
+    assert isinstance(kwargs["session"], AsyncSession)
+    assert seen["display_name"] == "Ada"
+    assert kwargs["email_service"] is fns.email_service
     assert kwargs["dry_run"] is False
+    assert isinstance(kwargs["checked_since"], datetime)
+    assert kwargs["deadline"] is not None
 
 
-def test_user_check_passes_dry_run_through(firestore, monkeypatch):
-    firestore(_user("a"))
+@needs_db
+async def test_user_check_passes_dry_run_through(seed, monkeypatch):
+    await seed({"a": {}})
     run = AsyncMock(return_value=(1, 0))
     monkeypatch.setattr(fns, "run_job_for_user", run)
 
-    mocked.trigger(
+    await _trigger(
         fns.citation_check_user,
         _user_event(fns.CITATION_CHECK_EVENT, "a", dry_run=True),
         _RecordingClient(),
@@ -254,26 +282,28 @@ def test_user_check_passes_dry_run_through(firestore, monkeypatch):
     assert run.await_args.kwargs["dry_run"] is True
 
 
-def test_user_check_skips_a_deleted_user(firestore, monkeypatch):
-    firestore()
+@needs_db
+async def test_user_check_skips_a_deleted_user(seed, monkeypatch):
+    await seed()
     run = AsyncMock()
     monkeypatch.setattr(fns, "run_job_for_user", run)
 
-    res = mocked.trigger(
+    res = await _trigger(
         fns.citation_check_user, _user_event(fns.CITATION_CHECK_EVENT, "gone"), _RecordingClient()
     )
 
     assert res.status is mocked.Status.COMPLETED
-    assert res.output["skipped"]
+    assert res.output == {"uid": "gone", "skipped": "no user document"}
     run.assert_not_awaited()
 
 
-def test_user_check_is_retried_on_failure(firestore, monkeypatch):
-    firestore(_user("a"))
-    run = AsyncMock(side_effect=[RuntimeError("Firestore timeout"), (3, 1)])
+@needs_db
+async def test_user_check_is_retried_on_failure(seed, monkeypatch):
+    await seed({"a": {}})
+    run = AsyncMock(side_effect=[RuntimeError("database timeout"), (3, 1)])
     monkeypatch.setattr(fns, "run_job_for_user", run)
 
-    res = mocked.trigger(
+    res = await _trigger(
         fns.citation_check_user, _user_event(fns.CITATION_CHECK_EVENT, "a"), _RecordingClient()
     )
 
@@ -282,12 +312,13 @@ def test_user_check_is_retried_on_failure(firestore, monkeypatch):
     assert run.await_count == 2
 
 
-def test_user_check_fails_after_its_retries(firestore, monkeypatch):
-    firestore(_user("a"))
+@needs_db
+async def test_user_check_fails_after_its_retries(seed, monkeypatch):
+    await seed({"a": {}})
     run = AsyncMock(side_effect=RuntimeError("down"))
     monkeypatch.setattr(fns, "run_job_for_user", run)
 
-    res = mocked.trigger(
+    res = await _trigger(
         fns.citation_check_user, _user_event(fns.CITATION_CHECK_EVENT, "a"), _RecordingClient()
     )
 
@@ -295,37 +326,40 @@ def test_user_check_fails_after_its_retries(firestore, monkeypatch):
     assert run.await_count == fns.USER_RETRIES + 1
 
 
-def test_user_check_runs_off_the_event_loop_thread(firestore, monkeypatch):
-    """Firestore calls block, so the check runs on a worker thread."""
-    firestore(_user("a"))
-    threads: list[int] = []
-
-    async def fake_run(**kwargs):
-        threads.append(threading.get_ident())
-        return 0, 0
-
-    monkeypatch.setattr(fns, "run_job_for_user", fake_run)
-
-    mocked.trigger(
-        fns.citation_check_user, _user_event(fns.CITATION_CHECK_EVENT, "a"), _RecordingClient()
-    )
-
-    assert threads and threads[0] != threading.get_ident()
-
-
-def test_a_long_user_check_continues_in_more_parts(firestore, monkeypatch):
-    """Each part is one request; a user who outlasts it carries on in the
-    next part, skipping papers checked since the run started."""
-    firestore(_user("a"))
+@needs_db
+async def test_a_part_that_runs_out_of_time_reports_not_done(seed, monkeypatch):
+    """One part's step: run_job_for_user's "incomplete" becomes done=False,
+    the part's budget becomes its deadline and the run start is parsed back."""
+    await seed({"a": {}})
     calls: list[dict] = []
 
-    async def fake_run(**kwargs):
+    async def out_of_time(**kwargs):
         calls.append(kwargs)
-        if len(calls) < 3:
-            kwargs["stats"]["incomplete"] = 1
+        kwargs["stats"]["incomplete"] = 1
         return 5, 1
 
-    monkeypatch.setattr(fns, "run_job_for_user", fake_run)
+    monkeypatch.setattr(fns, "run_job_for_user", out_of_time)
+    since = "2026-11-06T08:00:00+00:00"
+
+    before = time.monotonic()
+    result = await fns.check_user_citations("a", checked_since=since, time_budget_seconds=200)
+
+    assert result == {"uid": "a", "works_processed": 5, "new_notifications": 1, "done": False}
+    [kwargs] = calls
+    assert kwargs["checked_since"] == datetime(2026, 11, 6, 8, tzinfo=timezone.utc)
+    assert before + 199 < kwargs["deadline"] < time.monotonic() + 201
+
+
+def test_a_long_user_check_continues_in_more_parts(monkeypatch):
+    """Each part is one request; a user who outlasts it carries on in the
+    next part, skipping papers checked since the run started."""
+    calls: list[dict] = []
+
+    async def fake_check(**kwargs):
+        calls.append(kwargs)
+        return {"uid": "a", "works_processed": 5, "new_notifications": 1, "done": len(calls) >= 3}
+
+    monkeypatch.setattr(fns, "check_user_citations", fake_check)
 
     res = mocked.trigger(
         fns.citation_check_user, _user_event(fns.CITATION_CHECK_EVENT, "a"), _RecordingClient()
@@ -336,17 +370,14 @@ def test_a_long_user_check_continues_in_more_parts(firestore, monkeypatch):
     assert len(calls) == 3
     since = {c["checked_since"] for c in calls}
     assert len(since) == 1 and None not in since  # one run start, shared by every part
-    assert all(c["deadline"] is not None for c in calls)
+    assert all(c["time_budget_seconds"] == fns.PART_BUDGET_SECONDS for c in calls)
 
 
-def test_a_user_check_gives_up_after_its_part_limit(firestore, monkeypatch):
-    firestore(_user("a"))
-
+def test_a_user_check_gives_up_after_its_part_limit(monkeypatch):
     async def never_done(**kwargs):
-        kwargs["stats"]["incomplete"] = 1
-        return 1, 0
+        return {"uid": "a", "works_processed": 1, "new_notifications": 0, "done": False}
 
-    monkeypatch.setattr(fns, "run_job_for_user", never_done)
+    monkeypatch.setattr(fns, "check_user_citations", never_done)
 
     res = mocked.trigger(
         fns.citation_check_user, _user_event(fns.CITATION_CHECK_EVENT, "a"), _RecordingClient()
@@ -357,15 +388,9 @@ def test_a_user_check_gives_up_after_its_part_limit(firestore, monkeypatch):
     assert res.output["works_processed"] == fns.MAX_PARTS
 
 
-def test_a_dry_run_user_check_is_one_part(firestore, monkeypatch):
-    firestore(_user("a"))
-    run = AsyncMock(return_value=(1, 0))
-
-    async def incomplete(**kwargs):
-        kwargs["stats"]["incomplete"] = 1
-        return await run(**kwargs)
-
-    monkeypatch.setattr(fns, "run_job_for_user", incomplete)
+def test_a_dry_run_user_check_is_one_part(monkeypatch):
+    check = AsyncMock(return_value={"uid": "a", "works_processed": 1, "new_notifications": 0, "done": False})
+    monkeypatch.setattr(fns, "check_user_citations", check)
 
     mocked.trigger(
         fns.citation_check_user,
@@ -373,7 +398,8 @@ def test_a_dry_run_user_check_is_one_part(firestore, monkeypatch):
         _RecordingClient(),
     )
 
-    assert run.await_count == 1
+    assert check.await_count == 1
+    assert check.await_args.kwargs["dry_run"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -381,20 +407,23 @@ def test_a_dry_run_user_check_is_one_part(firestore, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_publication_sweep_only_queues_users_with_a_linked_author(firestore, monkeypatch):
-    firestore(
-        _user("a", linked_author_id="A123"),
-        _user("b"),
-        _user("c", linked_author_id=""),
-        _user("d", linked_author_id="S2:999"),
-        _user("e", linked_author_id="A456"),
-        _user("orphan", linked_author_id="A789"),
+@needs_db
+async def test_publication_sweep_only_queues_users_with_a_linked_author(seed, monkeypatch):
+    await seed(
+        {
+            "a": {"linked_author_id": "A123"},
+            "b": {},
+            "c": {"linked_author_id": ""},
+            "d": {"linked_author_id": "S2:999"},
+            "e": {"linked_author_id": "A456"},
+            "orphan": {"linked_author_id": "A789"},
+        },
         auth_uids={"a", "b", "c", "d", "e"},
     )
     monkeypatch.setattr(fns, "_pacific_date", lambda: "2026-11-08")
     client = _RecordingClient()
 
-    res = mocked.trigger(fns.weekly_publication_sweep, _cron_event(), client)
+    res = await _trigger(fns.weekly_publication_sweep, _cron_event(), client)
 
     assert res.output == {"day": "2026-11-08", "users_queued": 2}
     assert [(e.name, e.id, e.data) for e in client.sent] == [
@@ -403,12 +432,20 @@ def test_publication_sweep_only_queues_users_with_a_linked_author(firestore, mon
     ]
 
 
-def test_user_sync_calls_sync_new_publications_for_user(firestore, monkeypatch):
-    db = firestore(_user("a", linked_author_id="A123"))
-    sync = AsyncMock(return_value=3)
+@needs_db
+async def test_user_sync_calls_sync_new_publications_for_user(seed, monkeypatch):
+    """The sync runs in a session of its own that sees the user's row."""
+    await seed({"a": {"linked_author_id": "A123"}})
+    seen: dict = {}
+
+    async def fake_sync(**kwargs):
+        seen["linked_author_id"] = (await UserStore(kwargs["session"]).get("a")).linked_author_id
+        return 3
+
+    sync = AsyncMock(side_effect=fake_sync)
     monkeypatch.setattr(fns, "sync_new_publications_for_user", sync)
 
-    res = mocked.trigger(
+    res = await _trigger(
         fns.publication_sync_user, _user_event(fns.PUBLICATION_SYNC_EVENT, "a"), _RecordingClient()
     )
 
@@ -416,17 +453,19 @@ def test_user_sync_calls_sync_new_publications_for_user(firestore, monkeypatch):
     assert res.output == {"uid": "a", "works_added": 3}
     kwargs = sync.await_args.kwargs
     assert kwargs["uid"] == "a"
-    assert kwargs["user_data"] == {"linked_author_id": "A123"}
-    assert kwargs["db"] is db
+    assert isinstance(kwargs["session"], AsyncSession)
+    assert seen["linked_author_id"] == "A123"
+    assert kwargs["email_service"] is fns.email_service
     assert kwargs["dry_run"] is False
 
 
-def test_user_sync_skips_a_user_who_unlinked_since_the_sweep(firestore, monkeypatch):
-    firestore(_user("a"))
+@needs_db
+async def test_user_sync_skips_a_user_who_unlinked_since_the_sweep(seed, monkeypatch):
+    await seed({"a": {}})
     sync = AsyncMock()
     monkeypatch.setattr(fns, "sync_new_publications_for_user", sync)
 
-    res = mocked.trigger(
+    res = await _trigger(
         fns.publication_sync_user, _user_event(fns.PUBLICATION_SYNC_EVENT, "a"), _RecordingClient()
     )
 
@@ -439,16 +478,28 @@ def test_user_sync_skips_a_user_who_unlinked_since_the_sweep(firestore, monkeypa
 # ---------------------------------------------------------------------------
 
 
-def test_cleanup_deletes_old_notifications(firestore, monkeypatch):
-    db = firestore()
-    cleanup = AsyncMock(return_value={"users_processed": 2, "notifications_deleted": 5})
-    monkeypatch.setattr(fns, "cleanup_old_notifications", cleanup)
+@needs_db
+async def test_cleanup_deletes_old_notifications(seed, app_db):
+    """Alerts found more than 30 days ago go; newer ones and the citations
+    themselves stay."""
+    await seed({"a": {}, "b": {}})
+    now = datetime.now(timezone.utc)
+    work, _ = await tracking_service.track_paper(
+        app_db, "a", "10.1__paper", {"doi": "10.1/paper", "title": "A paper"}, now=now - timedelta(days=60)
+    )
+    for doi, found in (("10.9/old", now - timedelta(days=40)), ("10.9/new", now - timedelta(days=2))):
+        cid, _ = await CitationStore(app_db).record(
+            work.id, doi, {f"doi:{doi}"}, {"doi": doi, "title": f"Paper {doi}"}, found_at=found
+        )
+        await AlertStore(app_db).add("a", cid, created_at=found)
+    await app_db.commit()
 
-    res = mocked.trigger(fns.notification_cleanup, _cron_event(), _RecordingClient())
+    res = await _trigger(fns.notification_cleanup, _cron_event(), _RecordingClient())
 
     assert res.status is mocked.Status.COMPLETED
-    assert res.output == {"users_processed": 2, "notifications_deleted": 5}
-    cleanup.assert_awaited_once_with(db=db, dry_run=False)
+    assert res.output == {"users_processed": 2, "notifications_deleted": 1}
+    left = (await app_db.exec(select(Alert))).all()
+    assert len(left) == 1 and left[0].created_at > now - timedelta(days=30)
 
 
 # ---------------------------------------------------------------------------

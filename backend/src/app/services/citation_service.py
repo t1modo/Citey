@@ -5,8 +5,12 @@ This module is responsible for:
 1. Iterating a user's tracked works.
 2. Querying OpenAlex, Semantic Scholar, OpenCitations and Europe PMC for
    new citing papers since the last check.
-3. Writing Notification documents to Firestore (deduplication via doc ID).
-4. Triggering email delivery for users who have notifications enabled.
+3. Recording each new citation once per paper, and an alert for every user
+   tracking it (Postgres, through the stores).
+4. Emailing each user a digest of their alerts not yet emailed.
+
+A paper is one shared row, so co-authors share its check: whoever's run
+reaches it first checks it, and everyone tracking it gets the alert.
 """
 
 import asyncio
@@ -20,8 +24,12 @@ from types import ModuleType
 from typing import Any
 
 from firebase_admin import auth as firebase_auth
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.schemas import Notification, TrackedWork, is_openalex_work_id
+from app.core.concurrency import run_blocking
+from app.models import Work
+from app.schemas import Notification, is_openalex_work_id
+from app.services import alert_service, convert
 from app.services.citing_identity import is_junk, keys_for_normalized, merge_records
 from app.services import crossref as crossref_svc
 from app.services import europe_pmc as europe_pmc_svc
@@ -30,6 +38,7 @@ from app.services import opencitations as opencitations_svc
 from app.services import semantic_scholar as s2_svc
 
 from app.services.email_service import resolve_recipient
+from app.store import AlertStore, CitationStore, UserStore, WorkStore
 
 logger = logging.getLogger(__name__)
 
@@ -40,69 +49,60 @@ logger = logging.getLogger(__name__)
 
 
 async def process_tracked_work(
-    uid: str,
-    work: TrackedWork,
-    db: Any,
+    session: AsyncSession,
+    work: Work,
     dry_run: bool = False,
-    notified_ids: set[str] | None = None,
     source_failures: list[str] | None = None,
-    notified_keys: set[str] | None = None,
-    baseline_done: bool = False,
+    uid: str = "",
 ) -> tuple[int, list[Notification]]:
     """
-    Check for new citations of *work* and write Notification documents.
+    Check *work* for new citations and record them.
 
-    *notified_ids* is the work's permanent record of notification doc IDs
-    already sent (``notified_ids`` on the trackedWorks doc). Notifications
-    themselves are pruned after 30 days, so without this record a citing
-    paper that still passes the date filter (e.g. one with only a year)
-    would be re-notified every month.
+    "New" means not reported before: none of the citing paper's identity
+    keys is already recorded for this paper (or was reported while the data
+    lived in Firestore). Each new citation is recorded once, and every user
+    tracking the paper gets an alert. *uid* only labels the logs.
 
-    Returns (new_notification_count, list_of_new_notification_objects).
+    Returns (new_citation_count, the new citations as Notifications).
     """
     # 1. Resolve the OpenAlex work ID — only DOI/OpenAlex ID are used; no
     #    pre-supplied metadata is sent to the API.
+    works = WorkStore(session)
     openalex_id: str | None = work.openalex_id
     if not openalex_id and work.doi:
         logger.info(
             "No cached OpenAlex ID for work %s — resolving from doi=%s (uid=%s)",
-            work.id, work.doi, uid,
+            work.key, work.doi, uid,
         )
         raw = await openalex_svc.get_work_by_doi(work.doi)
         if raw:
             openalex_id = raw.get("id")
             # Let the caller's count refresh use the resolved ID this run.
             work.openalex_id = openalex_id
-            logger.info("Resolved OpenAlex ID: %s for work %s", openalex_id, work.id)
+            logger.info("Resolved OpenAlex ID: %s for work %s", openalex_id, work.key)
             if not dry_run and openalex_id:
-                (
-                    db.collection("users")
-                    .document(uid)
-                    .collection("trackedWorks")
-                    .document(work.id)
-                    .update({"openalex_id": openalex_id})
-                )
+                await works.update_fields(work.id, openalex_id=openalex_id)
         else:
             logger.warning(
                 "OpenAlex returned no result for doi=%s (work %s, uid=%s)",
-                work.doi, work.id, uid,
+                work.doi, work.key, uid,
             )
 
     if not openalex_id and not work.doi:
         logger.warning(
-            "No OpenAlex ID or DOI for work %s (uid=%s) — skipping.", work.id, uid
+            "No OpenAlex ID or DOI for work %s (uid=%s) — skipping.", work.key, uid
         )
         return 0, []
 
     if not openalex_id:
         logger.info(
             "OpenAlex ID unavailable for work %s (uid=%s) — will rely on Semantic Scholar.",
-            work.id, uid,
+            work.key, uid,
         )
 
     logger.info(
         "Fetching citations for work %s (openalex_id=%s, doi=%s, uid=%s)",
-        work.id, openalex_id, work.doi, uid,
+        work.key, openalex_id, work.doi, uid,
     )
 
     # 2. Fetch from every source in parallel.
@@ -112,12 +112,12 @@ async def process_tracked_work(
     now = datetime.now(tz=timezone.utc)
     window_start = (now - timedelta(days=_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
     recent_start = (now - timedelta(days=_RECENT_DAYS)).strftime("%Y-%m-%d")
-    is_fresh_add = work.last_checked_at is None
-    known_keys: set[str] = set(notified_keys or ())
-    # The first complete check of a work (or of a work tracked before the
+    citation_store = CitationStore(session)
+    known_keys: set[str] = await citation_store.known_keys(work.id)
+    # The first complete check of a paper (or of one tracked before the
     # wider window existed) records older citations silently instead of
     # emailing a year of them at once.
-    baseline = not baseline_done
+    baseline = work.citation_window != _CITATION_WINDOW_VERSION
 
     async def _empty() -> list:
         return []
@@ -159,25 +159,25 @@ async def process_tracked_work(
     )
     failed: list[str] = []
     if isinstance(oa_results, BaseException):
-        logger.warning("OpenAlex citation fetch failed for work %s: %s", work.id, oa_results)
+        logger.warning("OpenAlex citation fetch failed for work %s: %s", work.key, oa_results)
         failed.append("openalex")
         oa_results = []
     if isinstance(s2_results, BaseException):
-        logger.warning("S2 citation fetch failed for work %s: %s", work.id, s2_results)
+        logger.warning("S2 citation fetch failed for work %s: %s", work.key, s2_results)
         failed.append("semantic_scholar")
         s2_results = []
     if isinstance(oc_refs, BaseException):
-        logger.warning("OpenCitations fetch failed for work %s: %s", work.id, oc_refs)
+        logger.warning("OpenCitations fetch failed for work %s: %s", work.key, oc_refs)
         failed.append("opencitations")
         oc_refs = []
     if isinstance(epmc_results, BaseException):
-        logger.warning("Europe PMC fetch failed for work %s: %s", work.id, epmc_results)
+        logger.warning("Europe PMC fetch failed for work %s: %s", work.key, epmc_results)
         failed.append("europe_pmc")
         epmc_results = []
 
     logger.info(
         "OpenAlex: %d | S2: %d | OpenCitations: %d | Europe PMC: %d citing record(s) for %s (uid=%s)",
-        len(oa_results), len(s2_results), len(oc_refs), len(epmc_results), work.id, uid,
+        len(oa_results), len(s2_results), len(oc_refs), len(epmc_results), work.key, uid,
     )
 
     # 3. Normalise, drop notices (errata, retractions), and merge every record
@@ -187,7 +187,7 @@ async def process_tracked_work(
     normalized += [s2_svc.normalize_citing_work(r) for r in s2_results]
     epmc_normalized = [europe_pmc_svc.normalize_citing_work(r) for r in epmc_results]
     hydrated, hydrate_failed = await _hydrate_extra_citations(
-        oc_refs, epmc_normalized, normalized, known_keys, work.id
+        oc_refs, epmc_normalized, normalized, known_keys, work.key
     )
     if hydrate_failed and "opencitations" not in failed:
         # Citing papers were found but could not be described; the baseline
@@ -206,114 +206,74 @@ async def process_tracked_work(
 
     logger.info(
         "Citing works for %s (uid=%s): %d unique of %d records; %d notice(s) dropped; baseline=%s",
-        work.id, uid, len(merged), len(normalized), junk_count, baseline,
+        work.key, uid, len(merged), len(normalized), junk_count, baseline,
     )
 
-    notifications_ref = db.collection("users").document(uid).collection("notifications")
-
-    # 4. Existing notification documents for this work. On a fresh add they
-    #    are leftovers from a failed cascade delete and are wiped; otherwise
-    #    their IDs (migrated to the DOI form) also count as already reported.
-    existing_ids: set[str] = set()
-    if not is_fresh_add and notified_ids:
-        existing_ids |= notified_ids
-
-    if not dry_run:
-        stale_refs = []
-        for ndoc in notifications_ref.where("cited_work_id", "==", work.id).stream():
-            if is_fresh_add:
-                stale_refs.append(ndoc.reference)
-                continue
-            data = ndoc.to_dict() or {}
-            citing_doi_stored = data.get("citing_work_doi") or ""
-            canonical_id = (
-                f"{work.id}__{_safe_doc_id(citing_doi_stored)}"
-                if citing_doi_stored
-                else ndoc.id
-            )
-            if canonical_id != ndoc.id:
-                notifications_ref.document(canonical_id).set(data)
-                ndoc.reference.delete()
-                logger.info("Migrated notification %s -> %s (uid=%s)", ndoc.id, canonical_id, uid)
-            existing_ids.add(canonical_id)
-
-        if stale_refs:
-            for ref in stale_refs:
-                ref.delete()
-            logger.warning(
-                "Wiped %d stale notification(s) for freshly added work %s (uid=%s).",
-                len(stale_refs), work.id, uid,
-            )
-
+    alert_store = AlertStore(session)
     new_count = 0
     skipped_count = 0
     baselined_count = 0
     new_notifications: list[Notification] = []
-    pending_writes: list[tuple[Any, dict]] = []
 
     for item in merged:
         keys: set[str] = item["_keys"]
-        # DOI is the stable document ID when there is one; DOIs are case
-        # insensitive, so lowercase them to avoid twin documents.
+        # DOI is the stable identity when there is one; DOIs are case
+        # insensitive, so lowercase them to avoid twins.
         citing_doi: str = (item.get("doi") or "").lower()
         citing_id: str = citing_doi or item.get("id") or ""
         if not citing_id:
             continue
-        doc_id = f"{work.id}__{_safe_doc_id(citing_id)}"
 
-        if keys & known_keys or doc_id in existing_ids:
+        if keys & known_keys:
             known_keys |= keys
             skipped_count += 1
             continue
 
-        if baseline and not _published_since(item, recent_start):
-            known_keys |= keys
+        fields = {
+            "doi": citing_doi or None,
+            "url": item.get("url"),
+            "title": _truncate(item["title"], _TITLE_MAX_CHARS),
+            "authors": [_truncate(a, _AUTHOR_NAME_MAX_CHARS) for a in item.get("authors", [])],
+            "affiliations": item.get("affiliations", []),
+            "year": item.get("year"),
+            "publication_date": item.get("publication_date"),
+        }
+        announce = not (baseline and not _published_since(item, recent_start))
+        known_keys |= keys
+        if not announce:
+            # Recorded, so it counts as known, but nobody is alerted.
             baselined_count += 1
+            if not dry_run:
+                await citation_store.record(work.id, citing_id, keys, fields, found_at=now)
             continue
 
         if dry_run:
-            logger.info(
-                "[DRY RUN] Would write notification %s: '%s' cites '%s'",
-                doc_id, item["title"], work.title,
-            )
-
-        notification = Notification(
-            id=doc_id,
-            cited_work_id=work.id,
-            cited_work_title=work.title,
-            citing_work_id=citing_id,
-            citing_work_title=_truncate(item["title"], _TITLE_MAX_CHARS),
-            citing_work_doi=citing_doi or None,
-            citing_work_url=item.get("url"),
-            citing_authors=[
-                _truncate(a, _AUTHOR_NAME_MAX_CHARS)
-                for a in item.get("authors", [])
-            ],
-            citing_affiliations=item.get("affiliations", []),
-            citing_year=item.get("year"),
-            citing_publication_date=item.get("publication_date"),
-            seen=False,
-            emailed=False,
-            created_at=now,
-        )
-
-        if not dry_run:
-            doc_data = notification.model_dump()
-            doc_data["created_at"] = now
-            pending_writes.append((notifications_ref.document(doc_id), doc_data))
-
-        known_keys |= keys
-        existing_ids.add(doc_id)
+            logger.info("[DRY RUN] Would record citation: '%s' cites '%s'", item["title"], work.title)
+        else:
+            citation_id, created = await citation_store.record(work.id, citing_id, keys, fields, found_at=now)
+            if created:
+                await alert_store.add_for_trackers(citation_id, created_at=now)
         new_count += 1
-        new_notifications.append(notification)
-
-    if pending_writes:
-        _commit_in_batches(db, [("set", ref, data) for ref, data in pending_writes])
-        logger.info("Wrote %d notification(s) for uid=%s", len(pending_writes), uid)
+        new_notifications.append(
+            Notification(
+                id=citing_id,
+                cited_work_id=work.key,
+                cited_work_title=work.title,
+                citing_work_id=citing_id,
+                citing_work_title=fields["title"],
+                citing_work_doi=fields["doi"],
+                citing_work_url=fields["url"],
+                citing_authors=fields["authors"],
+                citing_affiliations=fields["affiliations"],
+                citing_year=fields["year"],
+                citing_publication_date=fields["publication_date"],
+                created_at=now,
+            )
+        )
 
     logger.info(
         "Work %s (uid=%s): %d new, %d already reported, %d older recorded at baseline.",
-        work.id, uid, new_count, skipped_count, baselined_count,
+        work.key, uid, new_count, skipped_count, baselined_count,
     )
 
     # 5. Record what was checked. When every source failed nothing was
@@ -325,48 +285,15 @@ async def process_tracked_work(
         update: dict[str, Any] = {"last_check_failed_sources": failed}
         if not all_sources_failed:
             update["last_checked_at"] = now
-        if existing_ids:
-            update["notified_ids"] = sorted(existing_ids)
-        if known_keys:
-            update["notified_keys"] = sorted(known_keys)
+            work.last_checked_at = now
         if baseline and not failed:
             update["citation_window"] = _CITATION_WINDOW_VERSION
-        (
-            db.collection("users")
-            .document(uid)
-            .collection("trackedWorks")
-            .document(work.id)
-            .update(update)
-        )
+        await works.update_fields(work.id, **update)
 
     return new_count, new_notifications
 
 
 _EMAIL_RETRY_DAYS = 7
-
-
-def _pending_email_notifications(uid: str, db: Any) -> list[tuple[Any, Notification]]:
-    """Notifications from the last week whose alert email has not gone out.
-
-    Only documents written with ``emailed: False`` match; older documents
-    have no such field and are never re-sent.
-    """
-    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=_EMAIL_RETRY_DAYS)
-    out: list[tuple[Any, Notification]] = []
-    ref = db.collection("users").document(uid).collection("notifications")
-    for doc in ref.where("emailed", "==", False).stream():
-        data = doc.to_dict() or {}
-        created = _firestore_dt(data.get("created_at"))
-        if created is not None and created < cutoff:
-            continue
-        try:
-            fields = {k: v for k, v in data.items() if k in Notification.model_fields and k != "id"}
-            fields["created_at"] = created
-            out.append((doc.reference, Notification(id=doc.id, **fields)))
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Skipping unreadable notification %s (uid=%s): %s", doc.id, uid, exc)
-    out.sort(key=lambda pair: pair[1].created_at or datetime.min.replace(tzinfo=timezone.utc))
-    return out
 
 
 _LOOKBACK_DAYS = 365
@@ -483,8 +410,7 @@ def _user_lock(uid: str) -> threading.Lock:
 
 async def run_job_for_user(
     uid: str,
-    user_data: dict,
-    db: Any,
+    session: AsyncSession,
     email_service: ModuleType,
     dry_run: bool = False,
     settings: Any = None,
@@ -493,19 +419,19 @@ async def run_job_for_user(
     checked_since: datetime | None = None,
 ) -> tuple[int, int]:
     """
-    Run citation checks for all tracked works belonging to a single user.
+    Run citation checks for every paper *uid* tracks, then email their digest.
 
-    Returns (works_processed, new_notifications). When *stats* is given it is
+    Returns (works_processed, new_citations). When *stats* is given it is
     filled with per-source failure counts for the run's health summary.
 
     *deadline* (``time.monotonic()``) stops starting new works once passed;
     the user's email then waits for the call that finishes them, and
-    ``stats["incomplete"]`` is set to 1. *checked_since* skips works checked
-    at or after that time, so the next call carries on from there.
+    ``stats["incomplete"]`` is set to 1. *checked_since* skips papers checked
+    at or after that time, so the next call carries on from there; it also
+    skips a paper a co-author's run already checked.
 
     One check per user at a time: a manual "check now" during the nightly
-    sweep would otherwise find the same citations twice and email them twice.
-    The second caller skips the user instead of waiting.
+    sweep would otherwise run twice. The second caller skips the user.
     """
     lock = _user_lock(uid)
     if not lock.acquire(blocking=False):
@@ -513,7 +439,7 @@ async def run_job_for_user(
         return 0, 0
     try:
         return await _run_job_for_user_locked(
-            uid, user_data, db, email_service, dry_run, settings, stats, deadline, checked_since
+            uid, session, email_service, dry_run, settings, stats, deadline, checked_since
         )
     finally:
         lock.release()
@@ -521,8 +447,7 @@ async def run_job_for_user(
 
 async def _run_job_for_user_locked(
     uid: str,
-    user_data: dict,
-    db: Any,
+    session: AsyncSession,
     email_service: ModuleType,
     dry_run: bool,
     settings: Any,
@@ -535,31 +460,25 @@ async def _run_job_for_user_locked(
         settings = get_settings()
 
     logger.info("Processing user uid=%s", uid)
+    user = await UserStore(session).get(uid)
+    if user is None:
+        logger.info("Skipping uid=%s: no profile.", uid)
+        return 0, 0
+    user_data = convert.user_data(user)
 
-    works_docs = (
-        db.collection("users").document(uid).collection("trackedWorks").stream()
-    )
-    works: list[TrackedWork] = []
-    notified_by_work: dict[str, set[str]] = {}
-    keys_by_work: dict[str, set[str]] = {}
-    baseline_by_work: dict[str, bool] = {}
-    works_ref = db.collection("users").document(uid).collection("trackedWorks")
-    for wdoc in works_docs:
-        wdata = wdoc.to_dict() or {}
-        stored_oa_id = wdata.get("openalex_id")
-        if stored_oa_id and not is_openalex_work_id(stored_oa_id):
+    work_store = WorkStore(session)
+    works: list[Work] = [work for work, _ in await work_store.tracked(uid)]
+    for work in works:
+        if work.openalex_id and not is_openalex_work_id(work.openalex_id):
             # Older cross-source imports stored "S2:…"/"pubmed:…" here and
             # seeded openalex_citation_count with that source's number.
             # Clear both; the check below resolves the real ID by DOI.
-            logger.info("Clearing non-OpenAlex id %s on work %s (uid=%s)", stored_oa_id, wdoc.id, uid)
+            logger.info("Clearing non-OpenAlex id %s on work %s (uid=%s)", work.openalex_id, work.key, uid)
+            work.openalex_id = None
             if not dry_run:
-                works_ref.document(wdoc.id).update({"openalex_id": None, "openalex_citation_count": None})
-        works.append(_doc_to_tracked_work(wdoc.id, wdata))
-        notified_by_work[wdoc.id] = set(wdata.get("notified_ids") or [])
-        keys_by_work[wdoc.id] = set(wdata.get("notified_keys") or [])
-        baseline_by_work[wdoc.id] = wdata.get("citation_window") == _CITATION_WINDOW_VERSION
+                await work_store.update_fields(work.id, openalex_id=None, openalex_citation_count=None)
 
-    user_new_notifications: list[Notification] = []
+    new_citations = 0
     works_processed = 0
     source_failures: list[str] = []
     incomplete = False
@@ -578,45 +497,33 @@ async def _run_job_for_user_locked(
             break
         works_processed += 1
         try:
-            count, notifications = await process_tracked_work(
-                uid=uid, work=work, db=db, dry_run=dry_run,
-                notified_ids=notified_by_work.get(work.id),
-                source_failures=source_failures,
-                notified_keys=keys_by_work.get(work.id),
-                baseline_done=baseline_by_work.get(work.id, False),
+            count, _ = await process_tracked_work(
+                session, work, dry_run=dry_run, source_failures=source_failures, uid=uid
             )
-            user_new_notifications.extend(notifications)
+            new_citations += count
+            if not dry_run:
+                # Each paper's result is kept even if a later one fails.
+                await session.commit()
         except Exception as exc:  # noqa: BLE001
-            logger.error(
-                "Error processing work %s for uid=%s: %s", work.id, uid, exc,
-                exc_info=True,
-            )
+            await session.rollback()
+            logger.error("Error processing work %s for uid=%s: %s", work.key, uid, exc, exc_info=True)
 
-    # Fetch Semantic Scholar citation counts for all works in one batch.
+    # Lifetime citation counts from Semantic Scholar and OpenAlex, in one
+    # batch each.
     if not dry_run:
         try:
-            from app.services.semantic_scholar import get_citation_counts
-
-            from app.services.semantic_scholar import _clean_doi
+            from app.services.semantic_scholar import _clean_doi, get_citation_counts
 
             dois = [w.doi for w in works if w.doi]
             if dois:
                 s2_counts = await get_citation_counts(dois)
                 for work in works:
-                    if not work.doi:
-                        continue
-                    s2_count = s2_counts.get(_clean_doi(work.doi).lower())
+                    s2_count = s2_counts.get(_clean_doi(work.doi).lower()) if work.doi else None
                     if s2_count is not None:
-                        works_ref.document(work.id).update({"s2_citation_count": s2_count})
-                logger.info(
-                    "Updated S2 citation counts for uid=%s (%d works matched)",
-                    uid, len(s2_counts),
-                )
+                        await work_store.update_fields(work.id, s2_citation_count=s2_count)
+                logger.info("Updated S2 citation counts for uid=%s (%d works matched)", uid, len(s2_counts))
         except Exception as exc:  # noqa: BLE001
             logger.error("Failed to fetch S2 citation counts for uid=%s: %s", uid, exc)
-
-    # Fetch OpenAlex citation counts (cited_by_count) for all works in one batch.
-    if not dry_run:
         try:
             oa_ids = [w.openalex_id for w in works if is_openalex_work_id(w.openalex_id)]
             if oa_ids:
@@ -624,20 +531,14 @@ async def _run_job_for_user_locked(
                 for work in works:
                     if not work.openalex_id:
                         continue
-                    short_id = (
-                        work.openalex_id[len("https://openalex.org/"):]
-                        if work.openalex_id.startswith("https://openalex.org/")
-                        else work.openalex_id
-                    )
+                    short_id = work.openalex_id.removeprefix("https://openalex.org/")
                     oa_count = oa_counts.get(short_id)
                     if oa_count is not None:
-                        works_ref.document(work.id).update({"openalex_citation_count": oa_count})
-                logger.info(
-                    "Updated OpenAlex citation counts for uid=%s (%d works matched)",
-                    uid, len(oa_counts),
-                )
+                        await work_store.update_fields(work.id, openalex_citation_count=oa_count)
+                logger.info("Updated OpenAlex citation counts for uid=%s (%d works matched)", uid, len(oa_counts))
         except Exception as exc:  # noqa: BLE001
             logger.error("Failed to fetch OpenAlex citation counts for uid=%s: %s", uid, exc)
+        await session.commit()
 
     oa_failed = source_failures.count("openalex")
     s2_failed = source_failures.count("semantic_scholar")
@@ -657,78 +558,69 @@ async def _run_job_for_user_locked(
     if incomplete:
         # The email goes out with the batch that finishes this user, so the
         # digest is one message, not one per batch.
-        return works_processed, len(user_new_notifications)
+        return works_processed, new_citations
 
-    # Send an immediate email when new citations are found.
+    await _email_digest(session, uid, user_data, email_service, settings, dry_run)
+    return works_processed, new_citations
+
+
+async def _email_digest(
+    session: AsyncSession,
+    uid: str,
+    user_data: dict,
+    email_service: ModuleType,
+    settings: Any,
+    dry_run: bool,
+) -> None:
+    """
+    Email every alert from the last week not yet emailed: this run's, any a
+    co-author's run created, and any whose earlier send failed. They are
+    marked emailed only after Resend accepts the message.
+    """
     to_email: str | None = resolve_recipient(user_data)
-    notify_enabled: bool = user_data.get("notify_enabled", True)
+    if not to_email or not user_data.get("notify_enabled", True):
+        return
+    since = datetime.now(tz=timezone.utc) - timedelta(days=_EMAIL_RETRY_DAYS)
+    to_send = await alert_service.pending_email(session, uid, since)
+    if not to_send:
+        return
 
     email_verified = True
     try:
-        user_record = firebase_auth.get_user(uid)
+        user_record = await run_blocking(firebase_auth.get_user, uid)
         email_verified = user_record.email_verified
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("Could not check email_verified for uid=%s: %s", uid, exc)
-
-    # What to email: every notification not yet emailed from the last week,
-    # which includes this run's and any whose earlier send failed (during the
-    # October domain outage those were marked sent and lost). They are marked
-    # emailed only after Resend accepts the message.
-    to_send: list[tuple[Any, Notification]] = (
-        [] if dry_run else _pending_email_notifications(uid, db)
-    )
-    if dry_run:
-        to_send = [(None, n) for n in user_new_notifications]
-
-    if to_send and to_email and not email_verified:
+    if not email_verified:
         logger.info("Skipping citation email: uid=%s email not verified.", uid)
+        return
 
-    if to_send and to_email and notify_enabled and email_verified:
-        notifications = [n for _, n in to_send]
-        if dry_run:
-            logger.info("[DRY RUN] Would email %s with %d new citation(s).", to_email, len(notifications))
-        else:
-            try:
-                citation_groups = _group_notifications(notifications)
-                recipient_name: str = user_data.get("display_name") or to_email
-                await email_service.send_digest_email(
-                    to_email=to_email,
-                    recipient_name=recipient_name,
-                    citation_groups=citation_groups,
-                    total_citations=len(notifications),
-                    digest_date=datetime.now(tz=timezone.utc),
-                    settings=settings,
-                    uid=uid,
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.error(
-                    "Failed to send citation email to %s (uid=%s); %d citation(s) stay pending: %s",
-                    to_email, uid, len(notifications), exc, exc_info=True,
-                )
-            else:
-                _commit_in_batches(db, [("update", ref, {"emailed": True}) for ref, _ in to_send])
-                logger.info(
-                    "Citation email sent to %s (uid=%s): %d citation(s) across %d paper(s).",
-                    to_email, uid, len(notifications), len(citation_groups),
-                )
-
-    return works_processed, len(user_new_notifications)
-
-
-def users_after(db: Any, cursor: str | None) -> list[Any]:
-    """Every user document ordered by uid, keeping only those after *cursor*.
-
-    The all-users jobs run in batches so each request fits a host's time
-    limit (Vercel Hobby stops a request after 300 s). A batch returns the
-    last uid it finished as its cursor and the next batch starts after it.
-
-    The whole list is read first: a Firestore stream left open while each
-    user is processed (minutes) times out with "Deadline Exceeded".
-    """
-    docs = sorted(db.collection("users").stream(), key=lambda d: d.id)
-    if cursor is None:
-        return docs
-    return [d for d in docs if d.id > cursor]
+    if dry_run:
+        logger.info("[DRY RUN] Would email %s with %d citation(s).", to_email, len(to_send))
+        return
+    citation_groups = _group_notifications(to_send)
+    try:
+        await email_service.send_digest_email(
+            to_email=to_email,
+            recipient_name=user_data.get("display_name") or to_email,
+            citation_groups=citation_groups,
+            total_citations=len(to_send),
+            digest_date=datetime.now(tz=timezone.utc),
+            settings=settings,
+            uid=uid,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Failed to send citation email to %s (uid=%s); %d citation(s) stay pending: %s",
+            to_email, uid, len(to_send), exc, exc_info=True,
+        )
+        return
+    await AlertStore(session).mark_emailed([int(n.id) for n in to_send])
+    await session.commit()
+    logger.info(
+        "Citation email sent to %s (uid=%s): %d citation(s) across %d paper(s).",
+        to_email, uid, len(to_send), len(citation_groups),
+    )
 
 
 def out_of_time(started: float, time_budget_seconds: float | None) -> bool:
@@ -740,7 +632,7 @@ def out_of_time(started: float, time_budget_seconds: float | None) -> bool:
 
 
 async def run_job_for_all_users(
-    db: Any,
+    session: AsyncSession,
     email_service: ModuleType,
     dry_run: bool = False,
     settings: Any = None,
@@ -749,7 +641,7 @@ async def run_job_for_all_users(
     checked_since: datetime | None = None,
 ) -> dict[str, Any]:
     """
-    Run citation checks for every user in Firestore, in uid order.
+    Run citation checks for every user, in uid order.
 
     *cursor* resumes after that uid. With *time_budget_seconds*, no new user
     is started once the budget is used, and the user already running stops
@@ -779,28 +671,25 @@ async def run_job_for_all_users(
     next_cursor: str | None = None
     last_done: str | None = cursor
 
-    auth_uids = _get_auth_uids()
+    auth_uids = await _get_auth_uids()
     deadline = started + time_budget_seconds if time_budget_seconds is not None else None
     if checked_since is not None and checked_since.tzinfo is None:
         checked_since = checked_since.replace(tzinfo=timezone.utc)
-    for user_doc in users_after(db, cursor):
+    for uid in await UserStore(session).ids_after(cursor):
         if out_of_time(started, time_budget_seconds):
             next_cursor = last_done
             break
-        uid: str = user_doc.id
         previous_done, last_done = last_done, uid
         if uid not in auth_uids:
-            logger.warning("Skipping orphaned Firestore user uid=%s in citation job", uid)
+            logger.warning("Skipping user uid=%s with no sign-in account in citation job", uid)
             continue
-        user_data: dict = user_doc.to_dict() or {}
         users_processed += 1
 
         user_stats: dict[str, int] = {}
         try:
             wp, nn = await run_job_for_user(
                 uid=uid,
-                user_data=user_data,
-                db=db,
+                session=session,
                 email_service=email_service,
                 dry_run=dry_run,
                 settings=settings,
@@ -809,8 +698,8 @@ async def run_job_for_all_users(
                 checked_since=checked_since,
             )
         except Exception as exc:  # noqa: BLE001
-            # One user's failure (a Firestore timeout, a bad document) must
-            # not cost everyone else their check.
+            # One user's failure must not cost everyone else their check.
+            await session.rollback()
             users_failed += 1
             logger.error("Citation check failed for uid=%s: %s", uid, exc, exc_info=True)
             continue
@@ -846,101 +735,49 @@ async def run_job_for_all_users(
 _NOTIFICATION_TTL_DAYS = 30
 
 
-async def prune_user_notifications(
-    uid: str, db: Any, dry_run: bool = False
-) -> int:
+async def prune_user_notifications(uid: str, session: AsyncSession, dry_run: bool = False) -> int:
     """
-    Delete stale notification documents for a single user.
-
-    A notification is stale once Citey found it more than
-    ``_NOTIFICATION_TTL_DAYS`` days ago. The citing paper's publication date
-    does not matter: a late indexed citation stays visible for its 30 days.
-    Returns the number of notifications deleted (or that would be deleted in
-    dry-run mode).
+    Delete one user's alerts found more than ``_NOTIFICATION_TTL_DAYS`` days
+    ago (by when Citey found them, not when the citing paper came out).
+    Returns how many were (or, in a dry run, would be) deleted.
     """
-    cutoff_dt = datetime.now(tz=timezone.utc) - timedelta(days=_NOTIFICATION_TTL_DAYS)
-
-    notifs_ref = db.collection("users").document(uid).collection("notifications")
-
-    to_delete: dict[str, Any] = {}
-    for doc in notifs_ref.where("created_at", "<", cutoff_dt).stream():
-        to_delete[doc.id] = doc.reference
-
-    count = len(to_delete)
-
+    before = datetime.now(tz=timezone.utc) - timedelta(days=_NOTIFICATION_TTL_DAYS)
+    count = await AlertStore(session).prune(before, uid=uid, dry_run=dry_run)
     if count:
         action = "[DRY RUN] would delete" if dry_run else "deleted"
-        logger.info(
-            "Prune uid=%s: %s %d notification(s) older than %d days.",
-            uid, action, count, _NOTIFICATION_TTL_DAYS,
-        )
-
-    if count and not dry_run:
-        # Firestore batch is capped at 500 writes — chunk if needed.
-        refs = list(to_delete.values())
-        for i in range(0, len(refs), 500):
-            batch = db.batch()
-            for ref in refs[i : i + 500]:
-                batch.delete(ref)
-            batch.commit()
-
+        logger.info("Prune uid=%s: %s %d notification(s) older than %d days.",
+                    uid, action, count, _NOTIFICATION_TTL_DAYS)
+    if not dry_run:
+        await session.commit()
     return count
 
 
-async def cleanup_old_notifications(db: Any, dry_run: bool = False) -> dict:
+async def cleanup_old_notifications(session: AsyncSession, dry_run: bool = False) -> dict:
     """
-    Delete stale notification documents across all users.
+    Delete every user's alerts older than ``_NOTIFICATION_TTL_DAYS`` days.
+    The citations themselves stay: they are the papers' record.
 
     Returns a summary dict: {users_processed, notifications_deleted}.
     """
-    users_processed = 0
-    total_deleted = 0
-
-    auth_uids = _get_auth_uids()
-    # Read the whole list first: a Firestore stream left open while each
-    # user is processed (minutes) times out with "Deadline Exceeded".
-    for user_doc in list(db.collection("users").stream()):
-        uid: str = user_doc.id
-        if uid not in auth_uids:
-            logger.warning("Skipping orphaned Firestore user uid=%s in notification cleanup", uid)
-            continue
-        users_processed += 1
-        count = await prune_user_notifications(uid, db, dry_run)
-        total_deleted += count
-
-    summary = {"users_processed": users_processed, "notifications_deleted": total_deleted}
+    before = datetime.now(tz=timezone.utc) - timedelta(days=_NOTIFICATION_TTL_DAYS)
+    deleted = await AlertStore(session).prune(before, dry_run=dry_run)
+    if not dry_run:
+        await session.commit()
+    summary = {
+        "users_processed": len(await UserStore(session).ids_after()),
+        "notifications_deleted": deleted,
+    }
     logger.info("Notification cleanup complete: %s", summary)
     return summary
 
 
 # ---------------------------------------------------------------------------
-# Firestore helpers
-# ---------------------------------------------------------------------------
-
-_BATCH_LIMIT = 500  # Firestore's max writes per batch
-
-
-def _commit_in_batches(db: Any, ops: list[tuple[str, Any, Any]]) -> None:
-    """Apply ("set"|"update"|"delete", ref, data) ops in chunks of 500."""
-    for i in range(0, len(ops), _BATCH_LIMIT):
-        batch = db.batch()
-        for op, ref, data in ops[i : i + _BATCH_LIMIT]:
-            if op == "set":
-                batch.set(ref, data)
-            elif op == "update":
-                batch.update(ref, data)
-            else:
-                batch.delete(ref)
-        batch.commit()
-
-
-# ---------------------------------------------------------------------------
-# Auth helpers
+# Accounts without a sign-in record
 # ---------------------------------------------------------------------------
 
 
-def _get_auth_uids() -> set[str]:
-    """Return the set of all Firebase Auth user UIDs (paginated, single sweep)."""
+def _list_auth_uids() -> set[str]:
+    """Every Firebase Auth user UID (paginated). Blocking."""
     uids: set[str] = set()
     page = firebase_auth.list_users()
     while page:
@@ -950,38 +787,34 @@ def _get_auth_uids() -> set[str]:
     return uids
 
 
-async def cleanup_orphan_users(db: Any, dry_run: bool = False) -> dict:
-    """
-    Delete Firestore user documents (and their subcollections) that have no
-    corresponding Firebase Auth account.
-    """
-    auth_uids = _get_auth_uids()
-    orphans_found = 0
-    orphans_deleted = 0
+async def _get_auth_uids() -> set[str]:
+    """Every Firebase Auth user UID, fetched off the event loop."""
+    return await run_blocking(_list_auth_uids)
 
-    # Read the whole list first: a Firestore stream left open while each
-    # user is processed (minutes) times out with "Deadline Exceeded".
-    for user_doc in list(db.collection("users").stream()):
-        uid: str = user_doc.id
-        if uid in auth_uids:
-            continue
-        orphans_found += 1
-        logger.warning("Orphaned Firestore user found: uid=%s", uid)
+
+async def cleanup_orphan_users(session: AsyncSession, dry_run: bool = False) -> dict:
+    """
+    Delete accounts with no Firebase Auth record: their profile, tracking and
+    alerts (papers and citations stay for anyone else tracking them).
+    """
+    auth_uids = await _get_auth_uids()
+    store = UserStore(session)
+    orphans = [uid for uid in await store.ids_after() if uid not in auth_uids]
+    for uid in orphans:
+        logger.warning("User with no sign-in account found: uid=%s", uid)
         if not dry_run:
-            for subcoll in ("trackedWorks", "notifications"):
-                for doc in db.collection("users").document(uid).collection(subcoll).stream():
-                    doc.reference.delete()
-            user_doc.reference.delete()
-            orphans_deleted += 1
-            logger.info("Deleted orphaned Firestore user: uid=%s", uid)
-
+            await store.delete_by_id(uid)
+            logger.info("Deleted user with no sign-in account: uid=%s", uid)
+    if not dry_run:
+        await session.commit()
+    deleted = 0 if dry_run else len(orphans)
     return {
-        "orphans_found": orphans_found,
-        "orphans_deleted": orphans_deleted,
+        "orphans_found": len(orphans),
+        "orphans_deleted": deleted,
         "message": (
-            f"Found {orphans_found} orphaned user(s) — dry run, nothing deleted."
+            f"Found {len(orphans)} orphaned user(s) — dry run, nothing deleted."
             if dry_run
-            else f"Deleted {orphans_deleted} orphaned user(s)."
+            else f"Deleted {deleted} orphaned user(s)."
         ),
     }
 
@@ -1023,11 +856,6 @@ def _truncate(text: str, limit: int) -> str:
     return text[:limit].rstrip() + "…"
 
 
-def _safe_doc_id(value: str) -> str:
-    """Replace characters that are invalid in Firestore document IDs."""
-    return value.replace("/", "__").replace(".", "_")
-
-
 def _normalize_title(title: str) -> str:
     """
     Lowercase and normalize a title for fuzzy dedup.
@@ -1056,54 +884,3 @@ def _dedup_key(normalized: dict) -> str:
     title = normalized.get("title") or ""
     nt = _normalize_title(title)
     return f"title:{nt}" if nt else ""
-
-
-def _doc_to_tracked_work(doc_id: str, data: dict) -> TrackedWork:
-    """Convert a Firestore document dict to a TrackedWork model."""
-
-    def _to_dt(val: Any) -> datetime | None:
-        if val is None:
-            return None
-        if isinstance(val, datetime):
-            return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
-        if hasattr(val, "timestamp"):
-            return val.replace(tzinfo=timezone.utc) if val.tzinfo is None else val
-        return None
-
-    return TrackedWork(
-        id=doc_id,
-        doi=data.get("doi"),
-        openalex_id=data.get("openalex_id"),
-        title=data.get("title", ""),
-        authors=data.get("authors", []),
-        year=data.get("year"),
-        venue=data.get("venue"),
-        work_type=data.get("work_type"),
-        topics=data.get("topics", []),
-        added_at=_to_dt(data.get("added_at")),
-        last_checked_at=_to_dt(data.get("last_checked_at")),
-        s2_citation_count=data.get("s2_citation_count"),
-        openalex_citation_count=data.get("openalex_citation_count"),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Daily digest email
-# ---------------------------------------------------------------------------
-
-
-def _firestore_dt(val: Any) -> datetime | None:
-    """Coerce a Firestore timestamp or ISO string to an aware datetime."""
-    if val is None:
-        return None
-    if isinstance(val, datetime):
-        return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
-    if hasattr(val, "timestamp"):
-        return val.replace(tzinfo=timezone.utc) if val.tzinfo is None else val
-    if isinstance(val, str):
-        try:
-            dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
-            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-        except ValueError:
-            return None
-    return None

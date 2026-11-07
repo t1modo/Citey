@@ -14,7 +14,6 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
 import respx
 from httpx import Response
 

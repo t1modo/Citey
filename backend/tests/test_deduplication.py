@@ -1,7 +1,7 @@
 """
 Tests for the deduplication logic in citation_service.process_tracked_work.
 
-Uses an in-memory fake Firestore so no real Firebase connection is required.
+Runs against the test database (TEST_DATABASE_URL; skipped otherwise).
 Both OpenAlex and Semantic Scholar are mocked since process_tracked_work
 fetches from both sources in parallel.
 """
@@ -9,123 +9,23 @@ fetches from both sources in parallel.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from sqlmodel import select
 
 # Use a recent date so papers pass the 30-day publication_date filter in process_tracked_work.
 _RECENT_DATE = (datetime.now(tz=timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
-from app.schemas import TrackedWork
+from app.models import Citation, CitingWork, Work
+from app.services import alert_service, tracking_service
 from app.services.citation_service import process_tracked_work
+from app.store import AlertStore, UserStore, WorkStore
+from tests.conftest import needs_db
 
-# ---------------------------------------------------------------------------
-# Fake (in-memory) Firestore
-# ---------------------------------------------------------------------------
+pytestmark = needs_db
 
-
-class _FakeDocSnapshot:
-    def __init__(self, data: dict | None) -> None:
-        self._data = data
-        self.exists = data is not None
-
-    def to_dict(self) -> dict | None:
-        return self._data
-
-
-class _FakeDocRef:
-    def __init__(self, store: dict, path: str) -> None:
-        self._store = store
-        self._path = path
-        self.id = path.rsplit("/", 1)[-1]
-
-    def get(self) -> _FakeDocSnapshot:
-        return _FakeDocSnapshot(self._store.get(self._path))
-
-    def set(self, data: dict) -> None:
-        self._store[self._path] = data
-
-    def update(self, data: dict) -> None:
-        existing = self._store.get(self._path, {})
-        existing.update(data)
-        self._store[self._path] = existing
-
-    def delete(self) -> None:
-        self._store.pop(self._path, None)
-
-    def collection(self, name: str) -> "_FakeCollectionRef":
-        return _FakeCollectionRef(self._store, f"{self._path}/{name}")
-
-
-class _FakeQuery:
-    """Minimal Firestore query simulation supporting a single where() filter."""
-
-    def __init__(self, collection: "_FakeCollectionRef", field: str, op: str, value: Any) -> None:
-        self._collection = collection
-        self._field = field
-        self._op = op
-        self._value = value
-
-    def stream(self):
-        for doc in self._collection.stream():
-            data = doc.to_dict() or {}
-            doc_value = data.get(self._field)
-            if self._op == "==" and doc_value == self._value:
-                yield doc
-
-
-class _FakeCollectionRef:
-    def __init__(self, store: dict, prefix: str) -> None:
-        self._store = store
-        self._prefix = prefix
-
-    def document(self, doc_id: str) -> _FakeDocRef:
-        return _FakeDocRef(self._store, f"{self._prefix}/{doc_id}")
-
-    def where(self, field: str, op: str, value: Any) -> "_FakeQuery":
-        return _FakeQuery(self, field, op, value)
-
-    def stream(self):
-        prefix = self._prefix + "/"
-        for key, value in list(self._store.items()):
-            if key.startswith(prefix) and key.count("/") == self._prefix.count("/") + 1:
-                doc_id = key[len(prefix):]
-                ref = _FakeDocRef(self._store, key)
-                ref.id = doc_id
-                ref.reference = ref
-                ref.to_dict = lambda v=value: v
-                yield ref
-
-
-class _FakeBatch:
-    """Applies writes immediately; enough for code that uses db.batch()."""
-
-    def set(self, ref, data) -> None:
-        ref.set(data)
-
-    def update(self, ref, data) -> None:
-        ref.update(data)
-
-    def delete(self, ref) -> None:
-        ref.delete()
-
-    def commit(self) -> None:
-        pass
-
-
-class _FakeDB:
-    def __init__(self) -> None:
-        self._store: dict[str, Any] = {}
-
-    def collection(self, name: str) -> _FakeCollectionRef:
-        return _FakeCollectionRef(self._store, name)
-
-    def batch(self) -> _FakeBatch:
-        return _FakeBatch()
-
-    def dump(self) -> dict:
-        return dict(self._store)
+_LAST_CHECKED = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -133,22 +33,34 @@ class _FakeDB:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
-def fake_db() -> _FakeDB:
-    return _FakeDB()
-
-
-@pytest.fixture()
-def tracked_work() -> TrackedWork:
-    return TrackedWork(
-        id="10.1038__nature12345",
-        doi="10.1038/nature12345",
-        openalex_id="W2741809807",
-        title="A Landmark Study in Genomics",
-        authors=["Jane Smith"],
-        year=2021,
-        last_checked_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+async def _track(session, key: str, fields: dict) -> Work:
+    await UserStore(session).create("user_abc", email="abc@uni.edu")
+    work, _ = await tracking_service.track_paper(
+        session, "user_abc", key, fields, now=datetime.now(tz=timezone.utc)
     )
+    return work
+
+
+@pytest.fixture()
+async def tracked_work(pg_session) -> Work:
+    """A paper user_abc tracks; its first check (the baseline) is still to come."""
+    return await _track(pg_session, "10.1038__nature12345", {
+        "doi": "10.1038/nature12345",
+        "openalex_id": "W2741809807",
+        "title": "A Landmark Study in Genomics",
+        "authors": ["Jane Smith"],
+        "year": 2021,
+        "last_checked_at": _LAST_CHECKED,
+    })
+
+
+async def _alerts(session) -> list[str | None]:
+    """DOIs of user_abc's alerts."""
+    return sorted(n.citing_work_doi or "" for n in await alert_service.notifications(session, "user_abc"))
+
+
+async def _rows(session, model) -> list:
+    return list((await session.exec(select(model))).all())
 
 
 # Raw OpenAlex citing works — publication_date is set to yesterday so they
@@ -217,122 +129,91 @@ def _patch_both(oa_return=None, s2_return=None):
 # ---------------------------------------------------------------------------
 
 
-async def test_first_run_writes_all_notifications(
-    fake_db: _FakeDB,
-    tracked_work: TrackedWork,
-) -> None:
-    """On the first run, all citing works produce notification docs."""
+async def test_first_run_writes_all_notifications(pg_session, tracked_work: Work) -> None:
+    """On the first run, every recent citing work becomes an alert."""
     oa_patch, s2_patch, s2_counts_patch = _patch_both(oa_return=_CITING_WORKS_RAW)
     with oa_patch, s2_patch, s2_counts_patch:
-        count, notifications = await process_tracked_work(
-            uid="user_abc", work=tracked_work, db=fake_db, dry_run=False
-        )
+        count, notifications = await process_tracked_work(pg_session, tracked_work, dry_run=False)
 
     assert count == 2
     assert len(notifications) == 2
-    notification_keys = [k for k in fake_db.dump() if "/notifications/" in k]
-    assert len(notification_keys) == 2
+    assert await _alerts(pg_session) == ["10.1016/j.cell.2022.01.001", "10.1038/s41586-022-00001-1"]
 
 
-async def test_second_run_does_not_duplicate(
-    fake_db: _FakeDB,
-    tracked_work: TrackedWork,
-) -> None:
-    """Running the job twice for the same work must not create duplicate notifications."""
+async def test_second_run_does_not_duplicate(pg_session, tracked_work: Work) -> None:
+    """Running the job twice for the same work must not create duplicate alerts."""
     oa_patch, s2_patch, s2_counts_patch = _patch_both(oa_return=_CITING_WORKS_RAW)
     with oa_patch, s2_patch, s2_counts_patch:
-        count1, _ = await process_tracked_work(
-            uid="user_abc", work=tracked_work, db=fake_db, dry_run=False
-        )
-        count2, _ = await process_tracked_work(
-            uid="user_abc", work=tracked_work, db=fake_db, dry_run=False
-        )
+        count1, _ = await process_tracked_work(pg_session, tracked_work, dry_run=False)
+        count2, notes2 = await process_tracked_work(pg_session, tracked_work, dry_run=False)
+
+    assert count1 == 2
+    assert (count2, notes2) == (0, [])
+    assert len(await _alerts(pg_session)) == 2
+    assert len(await _rows(pg_session, Citation)) == 2
+
+
+async def test_pruned_notification_is_not_resent(pg_session, tracked_work: Work) -> None:
+    """Alerts are pruned after 30 days; the citing paper must not be
+    alerted again just because its alert is gone."""
+    oa_patch, s2_patch, s2_counts_patch = _patch_both(oa_return=_CITING_WORKS_RAW)
+    with oa_patch, s2_patch, s2_counts_patch:
+        count1, _ = await process_tracked_work(pg_session, tracked_work)
+
+        # Simulate the daily prune deleting every alert.
+        await AlertStore(pg_session).prune(datetime.now(tz=timezone.utc) + timedelta(days=1))
+        assert await _alerts(pg_session) == []
+
+        count2, _ = await process_tracked_work(pg_session, tracked_work)
 
     assert count1 == 2
     assert count2 == 0
-
-    notification_keys = [k for k in fake_db.dump() if "/notifications/" in k]
-    assert len(notification_keys) == 2
+    assert await _alerts(pg_session) == []
 
 
-async def test_pruned_notification_is_not_resent(
-    fake_db: _FakeDB,
-    tracked_work: TrackedWork,
-) -> None:
-    """Notifications are pruned after 30 days; the citing paper must not be
-    notified again just because its notification doc is gone."""
-    from datetime import datetime, timezone
-
-    work = tracked_work.model_copy(update={"last_checked_at": datetime(2026, 1, 1, tzinfo=timezone.utc)})
+async def test_dry_run_does_not_write_to_the_database(pg_session, tracked_work: Work) -> None:
+    """dry_run=True returns the would-be alerts but writes nothing."""
     oa_patch, s2_patch, s2_counts_patch = _patch_both(oa_return=_CITING_WORKS_RAW)
     with oa_patch, s2_patch, s2_counts_patch:
-        count1, _ = await process_tracked_work(uid="user_abc", work=work, db=fake_db)
-
-        # Simulate the daily prune deleting every notification doc.
-        for key in [k for k in fake_db.dump() if "/notifications/" in k]:
-            fake_db._store.pop(key)
-
-        work_doc = fake_db._store[f"users/user_abc/trackedWorks/{work.id}"]
-        count2, _ = await process_tracked_work(
-            uid="user_abc", work=work, db=fake_db,
-            notified_ids=set(work_doc.get("notified_ids") or []),
-        )
-
-    assert count1 == 2
-    assert count2 == 0
-
-
-async def test_dry_run_does_not_write_to_firestore(
-    fake_db: _FakeDB,
-    tracked_work: TrackedWork,
-) -> None:
-    """dry_run=True must not write any documents to Firestore."""
-    oa_patch, s2_patch, s2_counts_patch = _patch_both(oa_return=_CITING_WORKS_RAW)
-    with oa_patch, s2_patch, s2_counts_patch:
-        count, notifications = await process_tracked_work(
-            uid="user_abc", work=tracked_work, db=fake_db, dry_run=True
-        )
+        count, notifications = await process_tracked_work(pg_session, tracked_work, dry_run=True)
 
     assert count == 2
     assert len(notifications) == 2
-    store = fake_db.dump()
-    assert all("/notifications/" not in k for k in store)
-    assert all("trackedWorks" not in k for k in store)
+    assert await _alerts(pg_session) == []
+    assert await _rows(pg_session, Citation) == []
+    assert await _rows(pg_session, CitingWork) == []
+    stored = await WorkStore(pg_session).refresh(tracked_work)
+    assert stored.last_checked_at == _LAST_CHECKED
+    assert stored.citation_window is None
+    assert stored.last_check_failed_sources == []
 
 
-async def test_new_citing_work_added_after_first_run(
-    fake_db: _FakeDB,
-    tracked_work: TrackedWork,
-) -> None:
-    """A new citing work on the second run produces exactly one new notification."""
+async def test_new_citing_work_added_after_first_run(pg_session, tracked_work: Work) -> None:
+    """A new citing work on the second run produces exactly one new alert."""
     oa_patch1, s2_patch1, s2_counts_patch1 = _patch_both(oa_return=[_CITING_WORKS_RAW[0]])
     with oa_patch1, s2_patch1, s2_counts_patch1:
-        count1, _ = await process_tracked_work(
-            uid="user_abc", work=tracked_work, db=fake_db, dry_run=False
-        )
+        count1, _ = await process_tracked_work(pg_session, tracked_work, dry_run=False)
     assert count1 == 1
 
     oa_patch2, s2_patch2, s2_counts_patch2 = _patch_both(oa_return=_CITING_WORKS_RAW)
     with oa_patch2, s2_patch2, s2_counts_patch2:
-        count2, _ = await process_tracked_work(
-            uid="user_abc", work=tracked_work, db=fake_db, dry_run=False
-        )
+        count2, notes2 = await process_tracked_work(pg_session, tracked_work, dry_run=False)
     assert count2 == 1
+    assert notes2[0].citing_work_doi == "10.1038/s41586-022-00001-1"
 
-    notification_keys = [k for k in fake_db.dump() if "/notifications/" in k]
-    assert len(notification_keys) == 2
+    assert len(await _alerts(pg_session)) == 2
 
 
-async def test_resolves_openalex_id_when_missing(fake_db: _FakeDB) -> None:
-    """When openalex_id is not set, it is resolved from the DOI."""
-    work_without_id = TrackedWork(
-        id="10.1038__nature12345",
-        doi="10.1038/nature12345",
-        openalex_id=None,
-        title="A Landmark Study in Genomics",
-        authors=[],
-        year=2021,
-    )
+async def test_resolves_openalex_id_when_missing(pg_session) -> None:
+    """When openalex_id is not set, it is resolved from the DOI and stored."""
+    work_without_id = await _track(pg_session, "10.1038__nature12345", {
+        "doi": "10.1038/nature12345",
+        "openalex_id": None,
+        "title": "A Landmark Study in Genomics",
+        "authors": [],
+        "year": 2021,
+    })
+    citing = AsyncMock(return_value=[])
 
     with (
         patch(
@@ -340,11 +221,7 @@ async def test_resolves_openalex_id_when_missing(fake_db: _FakeDB) -> None:
             new_callable=AsyncMock,
             return_value={"id": "https://openalex.org/W2741809807"},
         ),
-        patch(
-            "app.services.citation_service.openalex_svc.get_citing_works",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
+        patch("app.services.citation_service.openalex_svc.get_citing_works", citing),
         patch(
             "app.services.citation_service.s2_svc.get_citing_papers",
             new_callable=AsyncMock,
@@ -356,22 +233,23 @@ async def test_resolves_openalex_id_when_missing(fake_db: _FakeDB) -> None:
             return_value={},
         ),
     ):
-        count, _ = await process_tracked_work(
-            uid="user_abc", work=work_without_id, db=fake_db, dry_run=False
-        )
+        count, _ = await process_tracked_work(pg_session, work_without_id, dry_run=False)
 
     assert count == 0
+    assert citing.await_args.args[0] == "https://openalex.org/W2741809807"
+    stored = await WorkStore(pg_session).refresh(work_without_id)
+    assert stored.openalex_id == "https://openalex.org/W2741809807"
 
 
-async def test_skips_work_when_openalex_id_unresolvable(fake_db: _FakeDB) -> None:
-    """If the OpenAlex ID cannot be resolved, the work is silently skipped."""
-    work = TrackedWork(
-        id="10.9999__unknown",
-        doi="10.9999/unknown",
-        openalex_id=None,
-        title="Unknown Work",
-        authors=[],
-    )
+async def test_skips_work_when_openalex_id_unresolvable(pg_session) -> None:
+    """If the OpenAlex ID cannot be resolved, OpenAlex is skipped quietly."""
+    work = await _track(pg_session, "10.9999__unknown", {
+        "doi": "10.9999/unknown",
+        "openalex_id": None,
+        "title": "Unknown Work",
+        "authors": [],
+    })
+    citing = AsyncMock(return_value=[])
 
     with (
         patch(
@@ -379,6 +257,7 @@ async def test_skips_work_when_openalex_id_unresolvable(fake_db: _FakeDB) -> Non
             new_callable=AsyncMock,
             return_value=None,
         ),
+        patch("app.services.citation_service.openalex_svc.get_citing_works", citing),
         patch(
             "app.services.citation_service.s2_svc.get_citing_papers",
             new_callable=AsyncMock,
@@ -390,18 +269,15 @@ async def test_skips_work_when_openalex_id_unresolvable(fake_db: _FakeDB) -> Non
             return_value={},
         ),
     ):
-        count, notifications = await process_tracked_work(
-            uid="user_abc", work=work, db=fake_db, dry_run=False
-        )
+        count, notifications = await process_tracked_work(pg_session, work, dry_run=False)
 
     assert count == 0
     assert notifications == []
+    citing.assert_not_awaited()
+    assert (await WorkStore(pg_session).refresh(work)).openalex_id is None
 
 
-async def test_s2_results_merged_with_openalex(
-    fake_db: _FakeDB,
-    tracked_work: TrackedWork,
-) -> None:
+async def test_s2_results_merged_with_openalex(pg_session, tracked_work: Work) -> None:
     """Citations from S2 that are not in OpenAlex are included after dedup."""
     s2_only = [
         {
@@ -431,19 +307,15 @@ async def test_s2_results_merged_with_openalex(
             return_value={},
         ),
     ):
-        count, notifications = await process_tracked_work(
-            uid="user_abc", work=tracked_work, db=fake_db, dry_run=False
-        )
+        count, notifications = await process_tracked_work(pg_session, tracked_work, dry_run=False)
 
-    # 1 from OA + 1 from S2 = 2 total (assuming S2 paper passes date filter)
-    assert count >= 1
+    # 1 from OA + 1 from S2 = 2 total
+    assert count == 2
+    assert await _alerts(pg_session) == ["10.1016/j.cell.2022.01.001", "10.9999/s2only"]
 
 
-async def test_doi_dedup_prevents_duplicate_from_both_sources(
-    fake_db: _FakeDB,
-    tracked_work: TrackedWork,
-) -> None:
-    """The same DOI from both OA and S2 produces only one notification."""
+async def test_doi_dedup_prevents_duplicate_from_both_sources(pg_session, tracked_work: Work) -> None:
+    """The same DOI from both OA and S2 produces only one alert."""
     shared_doi = "10.1016/j.cell.2022.01.001"
     s2_duplicate = [
         {
@@ -473,10 +345,10 @@ async def test_doi_dedup_prevents_duplicate_from_both_sources(
             return_value={},
         ),
     ):
-        count, _ = await process_tracked_work(
-            uid="user_abc", work=tracked_work, db=fake_db, dry_run=False
-        )
+        count, _ = await process_tracked_work(pg_session, tracked_work, dry_run=False)
 
-    # Same DOI from both sources → only 1 notification
-    notification_keys = [k for k in fake_db.dump() if "/notifications/" in k]
-    assert len(notification_keys) == 1
+    # Same DOI from both sources → one citing paper, one alert
+    assert count == 1
+    assert await _alerts(pg_session) == [shared_doi]
+    assert len(await _rows(pg_session, CitingWork)) == 1
+

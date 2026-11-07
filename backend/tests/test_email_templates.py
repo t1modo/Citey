@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment
 
 from app.schemas import Notification
 
@@ -352,7 +352,6 @@ class TestRedesignedDigest:
         assert "&lt;i&gt;" not in out
 
 
-import pytest  # noqa: E402
 
 
 @pytest.mark.parametrize("name", ["verify", "confirm_address", "test"])

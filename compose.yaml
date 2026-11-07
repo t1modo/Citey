@@ -68,7 +68,7 @@ services:
 
   # Runs the nightly and weekly jobs locally. Crons fire on their schedule;
   # to run one now, open http://localhost:8288, pick the function and
-  # Invoke it. The functions use whatever Firestore backend/.env points at.
+  # Invoke it. The functions use the local Postgres above.
   inngest:
     image: inngest/inngest
     command: inngest dev -u http://backend:8000/api/inngest

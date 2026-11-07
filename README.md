@@ -12,7 +12,7 @@ Get an email when a new paper cites yours. Try it at [citey.email](https://www.c
 ## Stack
 
 * **Frontend:** Next.js, Tailwind, Firebase Auth, PostHog analytics.
-* **Backend:** FastAPI, Firestore, Resend for email. Served at `/api` on the same domain.
+* **Backend:** FastAPI, Postgres (Neon) through SQLModel, Firebase Auth (moving to Clerk), Resend for email. Served at `/api` on the same domain.
 * **Hosting:** one Vercel project builds both (see [Deploy on Vercel](#deploy-on-vercel)).
 * **Scheduled jobs:** [Inngest](https://www.inngest.com/) calls `/api/inngest`. See [Scheduled jobs](#scheduled-jobs).
 * **Data:** OpenAlex and Semantic Scholar for citations. Crossref, PubMed, NASA ADS, INSPIRE and DBLP for imports and DOI lookups.
@@ -107,15 +107,14 @@ it.
   (`Depends(get_session)`), or `async with connect()` for raw SQL. Load
   relationships up front (`selectinload(...)`); lazy loading doesn't work in
   async code.
-- The blocking SDKs still in use (Firestore, Firebase Auth, Resend) are called
-  through `run_blocking(fn, ...)`, or `run_off_loop(job, ...)` for a whole
-  Firestore-backed job, from `app.core.concurrency`, so they run on worker
+- The blocking SDKs still in use (Firebase Auth, Resend) are called through
+  `run_blocking(fn, ...)` from `app.core.concurrency`, so they run on worker
   threads.
 
 `tests/test_async_backend.py` enforces this: every handler and dependency
-must be async, and every route is called against a fake Firestore and fake
-Firebase Auth that fail the test if a blocking call runs on the serving
-loop. A new route goes in that test's `REQUESTS` (or `NO_BLOCKING_IO`).
+must be async, and every route is called against Postgres with fakes of
+the sign-in check, Firebase Auth and Resend that fail the test if a blocking
+call runs on the serving loop. A new route goes in that test's `REQUESTS` (or `NO_BLOCKING_IO`).
 
 ### Database (Postgres)
 
@@ -193,8 +192,7 @@ Project settings:
 
 The API runs as one function with Hobby's 300 s limit. The scheduled jobs
 stay under it because Inngest checks one user per request (see
-[Scheduled jobs](#scheduled-jobs)). The in-app scheduler switches itself off
-on Vercel.
+[Scheduled jobs](#scheduled-jobs)).
 
 Requests to old backend paths without `/api` get a 308 to the `/api` path.
 Links in emails sent before the move point at `api.citey.email`, which is

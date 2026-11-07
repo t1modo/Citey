@@ -7,18 +7,21 @@ Each test pins one way the nightly check used to report the wrong thing.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlmodel import select
 
-from app.schemas import TrackedWork
+from app.models import CitingWork, Work
+from app.services import alert_service, tracking_service
 from app.services.citation_service import (
     _CITATION_WINDOW_VERSION,
     process_tracked_work,
     run_job_for_user,
 )
 from app.services.citing_identity import identity_keys, is_junk, merge_records, title_key
+from app.store import CitationStore, UserStore, WorkStore
+from tests.conftest import needs_db
 
 _NOW = datetime.now(tz=timezone.utc)
 
@@ -28,103 +31,44 @@ def _day(days_ago: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# A small Firestore fake with equality filters and real batches
+# A tracked paper in the test database
 # ---------------------------------------------------------------------------
 
 
-class _Doc:
-    def __init__(self, store: dict, path: str) -> None:
-        self._store, self._path = store, path
-        self.id = path.rsplit("/", 1)[-1]
-        self.reference = self
-
-    @property
-    def exists(self) -> bool:
-        return self._path in self._store
-
-    def get(self) -> "_Doc":
-        return self
-
-    def to_dict(self) -> dict:
-        return dict(self._store.get(self._path, {}))
-
-    def set(self, data: dict, merge: bool = False) -> None:
-        if merge:
-            self._store.setdefault(self._path, {}).update(data)
-        else:
-            self._store[self._path] = dict(data)
-
-    def update(self, data: dict) -> None:
-        self._store.setdefault(self._path, {}).update(data)
-
-    def delete(self) -> None:
-        self._store.pop(self._path, None)
-
-    def collection(self, name: str) -> "_Coll":
-        return _Coll(self._store, f"{self._path}/{name}")
+WORK_KEY = "10.1000__mine"
+# The name tests/test_user_resume.py imports; it is now the paper's key.
+WORK_PATH = WORK_KEY
 
 
-class _Coll:
-    def __init__(self, store: dict, prefix: str, filters: tuple = ()) -> None:
-        self._store, self._prefix, self._filters = store, prefix, filters
-
-    def document(self, doc_id: str) -> _Doc:
-        return _Doc(self._store, f"{self._prefix}/{doc_id}")
-
-    def where(self, field: str, op: str, value: Any) -> "_Coll":
-        assert op == "=="
-        return _Coll(self._store, self._prefix, self._filters + ((field, value),))
-
-    def select(self, _fields: list) -> "_Coll":
-        return self
-
-    def stream(self):
-        depth = self._prefix.count("/") + 1
-        for path in list(self._store):
-            if path.startswith(self._prefix + "/") and path.count("/") == depth:
-                data = self._store[path]
-                if all(data.get(f) == v for f, v in self._filters):
-                    yield _Doc(self._store, path)
-
-
-class _Batch:
-    def __init__(self) -> None:
-        self.ops: list = []
-
-    def set(self, ref, data) -> None:
-        self.ops.append(lambda: ref.set(data))
-
-    def update(self, ref, data) -> None:
-        self.ops.append(lambda: ref.update(data))
-
-    def delete(self, ref) -> None:
-        self.ops.append(ref.delete)
-
-    def commit(self) -> None:
-        for op in self.ops:
-            op()
-
-
-class _DB:
-    def __init__(self) -> None:
-        self.store: dict[str, dict] = {}
-
-    def collection(self, name: str) -> _Coll:
-        return _Coll(self.store, name)
-
-    def batch(self) -> _Batch:
-        return _Batch()
-
-
-WORK_ID = "10.1000__mine"
-WORK_PATH = f"users/u1/trackedWorks/{WORK_ID}"
-
-
-def _work(**kw) -> TrackedWork:
-    return TrackedWork(
-        id=WORK_ID, doi="10.1000/mine", openalex_id="W1", title="My paper",
-        last_checked_at=kw.pop("last_checked_at", _NOW - timedelta(days=1)), **kw,
+async def _work(session, *, uid: str = "u1", baseline_done: bool = False, **fields) -> Work:
+    """*uid* (created if missing) tracks "My paper". Without *baseline_done*
+    its first check is still the quiet baseline."""
+    await UserStore(session).create(uid, email="r@example.com")
+    work, _ = await tracking_service.track_paper(
+        session, uid, WORK_KEY,
+        {
+            "doi": "10.1000/mine", "openalex_id": "W1", "title": "My paper",
+            "last_checked_at": _NOW - timedelta(days=1),
+            "citation_window": _CITATION_WINDOW_VERSION if baseline_done else None,
+            **fields,
+        },
+        now=_NOW,
     )
+    return work
+
+
+async def _stored(session, work: Work) -> Work:
+    """The paper's row as the database has it now."""
+    return await WorkStore(session).refresh(work)
+
+
+async def _known(session, work: Work) -> set[str]:
+    return await CitationStore(session).known_keys(work.id)
+
+
+async def _alerted(session, uid: str = "u1") -> list[str | None]:
+    """DOIs of the citing papers *uid* was alerted about, newest first."""
+    return [n.citing_work_doi for n in await alert_service.notifications(session, uid)]
 
 
 def _oa(title: str, *, doi: str | None, pub: str, wid: str = "W9", arxiv: str | None = None,
@@ -143,10 +87,10 @@ def _s2(title: str, *, doi: str | None, pub: str, pid: str = "p9", arxiv: str | 
             "year": int(pub[:4]), "publicationDate": pub, "authors": []}
 
 
-async def _check(db: _DB, work: TrackedWork, oa: list, s2: list, **kw):
+async def _check(session, work: Work, oa: list, s2: list, **kw):
     with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=oa)), \
          patch("app.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=s2)):
-        return await process_tracked_work("u1", work, db, **kw)
+        return await process_tracked_work(session, work, uid="u1", **kw)
 
 
 LONG = "Calibrated uncertainty for tool using language model agents"
@@ -206,70 +150,85 @@ def test_openalex_erratum_type_is_junk() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_baseline_records_older_citations_without_alerting() -> None:
-    db = _DB()
-    db.store[WORK_PATH] = {}
-    count, notes = await _check(db, _work(), [
+@needs_db
+async def test_baseline_records_older_citations_without_alerting(pg_session) -> None:
+    """The first check announces only last month's citations, to every
+    tracker; older ones are recorded as known and alert nobody."""
+    work = await _work(pg_session)
+    await _work(pg_session, uid="u2")
+    count, notes = await _check(pg_session, work, [
         _oa("A recent citing paper with enough words", doi="10.1/new", pub=_day(3), wid="W2"),
         _oa("An older citing paper with enough words", doi="10.1/old", pub=_day(90), wid="W3"),
     ], [])
     assert count == 1 and notes[0].citing_work_doi == "10.1/new"
-    stored = db.store[WORK_PATH]
-    assert "doi:10.1/old" in stored["notified_keys"]
-    assert stored["citation_window"] == _CITATION_WINDOW_VERSION
+    assert "doi:10.1/old" in await _known(pg_session, work)
+    assert await _alerted(pg_session, "u1") == await _alerted(pg_session, "u2") == ["10.1/new"]
+    assert (await _stored(pg_session, work)).citation_window == _CITATION_WINDOW_VERSION
 
 
-async def test_after_baseline_a_late_indexed_citation_is_reported() -> None:
-    db = _DB()
-    db.store[WORK_PATH] = {}
-    count, notes = await _check(db, _work(), [
+@needs_db
+async def test_after_baseline_a_late_indexed_citation_is_reported(pg_session) -> None:
+    """Once the baseline is done, a citation published two months ago but
+    indexed only now is still news."""
+    work = await _work(pg_session, baseline_done=True)
+    count, notes = await _check(pg_session, work, [
         _oa("Published two months ago but indexed this week", doi="10.1/late", pub=_day(60), wid="W4"),
-    ], [], baseline_done=True)
+    ], [])
     assert count == 1 and notes[0].citing_work_doi == "10.1/late"
+    assert await _alerted(pg_session) == ["10.1/late"]
 
 
-async def test_baseline_not_marked_done_when_a_source_failed() -> None:
+@needs_db
+async def test_baseline_not_marked_done_when_a_source_failed(pg_session) -> None:
+    """A source that was down could return a year of citations tomorrow, so
+    the baseline stays open."""
     from app.services.source_errors import SourceUnavailable
 
-    db = _DB()
-    db.store[WORK_PATH] = {}
+    work = await _work(pg_session)
     with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=[])), \
          patch("app.services.citation_service.s2_svc.get_citing_papers",
                new=AsyncMock(side_effect=SourceUnavailable("semantic_scholar", "429"))):
-        await process_tracked_work("u1", _work(), db)
-    assert "citation_window" not in db.store[WORK_PATH]
+        await process_tracked_work(pg_session, work)
+    assert (await _stored(pg_session, work)).citation_window is None
 
 
-async def test_paper_gaining_a_doi_later_is_not_reported_twice() -> None:
-    db = _DB()
-    db.store[WORK_PATH] = {}
-    first, _ = await _check(db, _work(), [], [_s2(LONG, doi=None, pub=_day(2), pid="abc")], baseline_done=True)
-    keys = set(db.store[WORK_PATH]["notified_keys"])
+@needs_db
+async def test_paper_gaining_a_doi_later_is_not_reported_twice(pg_session) -> None:
+    """A paper first seen without a DOI is recognised by its S2 ID and title
+    when it comes back with one."""
+    work = await _work(pg_session, baseline_done=True)
+    first, _ = await _check(pg_session, work, [], [_s2(LONG, doi=None, pub=_day(2), pid="abc")])
     second, _ = await _check(
-        db, _work(), [_oa(LONG, doi="10.1/now-has-doi", pub=_day(2), wid="W8")],
+        pg_session, work, [_oa(LONG, doi="10.1/now-has-doi", pub=_day(2), wid="W8")],
         [_s2(LONG, doi="10.1/now-has-doi", pub=_day(2), pid="abc")],
-        baseline_done=True, notified_keys=keys,
     )
     assert (first, second) == (1, 0)
+    assert len(await _alerted(pg_session)) == 1
 
 
-async def test_same_paper_from_both_sources_is_one_alert() -> None:
-    db = _DB()
-    db.store[WORK_PATH] = {}
+@needs_db
+async def test_same_paper_from_both_sources_is_one_alert(pg_session) -> None:
+    """OpenAlex with a DOI and S2 without one, same title: one citation."""
+    work = await _work(pg_session, baseline_done=True)
     count, _ = await _check(
-        db, _work(), [_oa(LONG, doi="10.1/both", pub=_day(2), wid="W7")],
-        [_s2(LONG, doi=None, pub=_day(2), pid="zz")], baseline_done=True,
+        pg_session, work, [_oa(LONG, doi="10.1/both", pub=_day(2), wid="W7")],
+        [_s2(LONG, doi=None, pub=_day(2), pid="zz")],
     )
     assert count == 1
+    assert await _alerted(pg_session) == ["10.1/both"]
+    assert len((await pg_session.exec(select(CitingWork))).all()) == 1
 
 
-async def test_errata_are_not_reported() -> None:
-    db = _DB()
-    db.store[WORK_PATH] = {}
-    count, _ = await _check(db, _work(), [
+@needs_db
+async def test_errata_are_not_reported(pg_session) -> None:
+    """A correction notice is not a citation: no alert, nothing recorded."""
+    work = await _work(pg_session, baseline_done=True)
+    count, _ = await _check(pg_session, work, [
         _oa("Correction to: My paper and its many words", doi="10.1/fix", pub=_day(2), wid="W6"),
-    ], [], baseline_done=True)
+    ], [])
     assert count == 0
+    assert await _alerted(pg_session) == []
+    assert await _known(pg_session, work) == set()
 
 
 # ---------------------------------------------------------------------------
@@ -277,15 +236,12 @@ async def test_errata_are_not_reported() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _user_db() -> _DB:
-    db = _DB()
-    db.store["users/u1"] = {"email": "r@example.com"}
-    db.store[WORK_PATH] = {"doi": "10.1000/mine", "openalex_id": "W1", "title": "My paper",
-                           "last_checked_at": _NOW - timedelta(days=1), "citation_window": _CITATION_WINDOW_VERSION}
-    return db
+async def _user_db(session) -> Work:
+    """u1 (with an email address) tracks "My paper", baseline done."""
+    return await _work(session, baseline_done=True)
 
 
-async def _run(db: _DB, email_service) -> None:
+async def _run(session, email_service) -> None:
     oa = [_oa("A brand new citing paper with enough words", doi="10.1/n", pub=_day(1), wid="W2")]
     with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=oa)), \
          patch("app.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
@@ -293,41 +249,45 @@ async def _run(db: _DB, email_service) -> None:
          patch("app.services.semantic_scholar.get_citation_counts", new=AsyncMock(return_value={})), \
          patch("app.services.citation_service.firebase_auth.get_user") as get_user:
         get_user.return_value.email_verified = True
-        await run_job_for_user("u1", db.store["users/u1"], db, email_service)
+        await run_job_for_user("u1", session, email_service, settings=MagicMock())
 
 
-def _notifications(db: _DB) -> list[dict]:
-    return [v for k, v in db.store.items() if k.startswith("users/u1/notifications/")]
+async def _emailed(session) -> list[bool]:
+    return [n.emailed for n in await alert_service.notifications(session, "u1")]
 
 
-async def test_failed_send_leaves_citation_pending_and_next_run_sends_it() -> None:
-    db = _user_db()
+@needs_db
+async def test_failed_send_leaves_citation_pending_and_next_run_sends_it(pg_session) -> None:
+    """An alert whose email failed goes out with the next run."""
+    await _user_db(pg_session)
 
     class Broken:
         send_digest_email = AsyncMock(side_effect=RuntimeError("domain not verified"))
 
-    await _run(db, Broken)
-    assert [n["emailed"] for n in _notifications(db)] == [False]
+    await _run(pg_session, Broken)
+    assert await _emailed(pg_session) == [False]
 
     class Working:
         send_digest_email = AsyncMock()
 
-    await _run(db, Working)  # nothing new this time, but the pending one goes out
+    await _run(pg_session, Working)  # nothing new this time, but the pending one goes out
     Working.send_digest_email.assert_awaited_once()
     assert Working.send_digest_email.call_args.kwargs["total_citations"] == 1
-    assert [n["emailed"] for n in _notifications(db)] == [True]
+    assert await _emailed(pg_session) == [True]
 
 
-async def test_successful_send_marks_emailed_and_is_not_repeated() -> None:
-    db = _user_db()
+@needs_db
+async def test_successful_send_marks_emailed_and_is_not_repeated(pg_session) -> None:
+    """An alert that was emailed is not emailed again."""
+    await _user_db(pg_session)
 
     class Working:
         send_digest_email = AsyncMock()
 
-    await _run(db, Working)
-    await _run(db, Working)
+    await _run(pg_session, Working)
+    await _run(pg_session, Working)
     assert Working.send_digest_email.await_count == 1
-    assert [n["emailed"] for n in _notifications(db)] == [True]
+    assert await _emailed(pg_session) == [True]
 
 
 def test_identity_keys_cover_every_identifier() -> None:

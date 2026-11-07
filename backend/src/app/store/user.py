@@ -17,7 +17,7 @@ class UserStore(BaseStore[User]):
         """The user's row, created if missing. An existing row is left as it is."""
         await self.session.exec(
             insert(User)
-            .values(id=uid, email=email, notification_email=email or None, **fields)
+            .values(**{"id": uid, "email": email, "notification_email": email or None, **fields})
             .on_conflict_do_nothing(index_elements=["id"])
         )
         user = await self.session.get(User, uid, populate_existing=True)

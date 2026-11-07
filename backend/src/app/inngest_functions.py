@@ -20,24 +20,22 @@ saving time. Midnight and 01:00 are clear of the 02:00 US DST switch.
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any
 
 import inngest
 import inngest.fast_api
 import pytz
 from fastapi import FastAPI
 
-from app.core.concurrency import run_off_loop
 from app.config import API_PREFIX, Settings, get_settings
-from app.firebase_client import get_db
+from app.core.db import session_scope
 from app.services import email_service
 from app.services.citation_service import (
     _get_auth_uids,
     cleanup_old_notifications,
     run_job_for_user,
-    users_after,
 )
 from app.services.publication_sync import sync_new_publications_for_user
+from app.store import UserStore
 
 logger = logging.getLogger(__name__)
 
@@ -109,24 +107,22 @@ def _pacific_date() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Work done inside steps. Each runs on a worker thread (run_off_loop), since
-# Firestore and Firebase Auth calls block.
+# Work done inside steps. Each opens its own database session.
 # ---------------------------------------------------------------------------
 
 
 async def list_citation_check_uids() -> list[str]:
-    """Every user with a Firebase Auth account, in uid order.
-
-    Firestore user documents without an Auth account (orphans) are skipped,
-    as the old all-users sweep did.
-    """
-    auth_uids = _get_auth_uids()
+    """Every user with a Firebase Auth account, in uid order (accounts with
+    no sign-in record are skipped, as the all-users sweep does)."""
+    auth_uids = await _get_auth_uids()
+    async with session_scope() as session:
+        all_uids = await UserStore(session).ids_after()
     uids = []
-    for doc in users_after(get_db(), None):
-        if doc.id not in auth_uids:
-            logger.warning("Skipping orphaned Firestore user uid=%s in citation sweep", doc.id)
+    for uid in all_uids:
+        if uid not in auth_uids:
+            logger.warning("Skipping user uid=%s with no sign-in account in citation sweep", uid)
             continue
-        uids.append(doc.id)
+        uids.append(uid)
     return uids
 
 
@@ -135,23 +131,19 @@ async def list_publication_sync_uids() -> list[str]:
 
     Semantic Scholar links ("S2:...") are left out: the sync skips them.
     """
-    auth_uids = _get_auth_uids()
+    auth_uids = await _get_auth_uids()
     uids = []
-    for doc in users_after(get_db(), None):
-        if doc.id not in auth_uids:
-            logger.warning("Skipping orphaned Firestore user uid=%s in publication sweep", doc.id)
-            continue
-        author = (doc.to_dict() or {}).get("linked_author_id")
-        if author and not str(author).startswith("S2:"):
-            uids.append(doc.id)
+    async with session_scope() as session:
+        store = UserStore(session)
+        for uid in await store.ids_after():
+            if uid not in auth_uids:
+                logger.warning("Skipping user uid=%s with no sign-in account in publication sweep", uid)
+                continue
+            user = await store.get(uid)
+            author = user.linked_author_id if user else None
+            if author and not str(author).startswith("S2:"):
+                uids.append(uid)
     return uids
-
-
-def _load_user(db: Any, uid: str) -> dict | None:
-    snapshot = db.collection("users").document(uid).get()
-    if not snapshot.exists:
-        return None
-    return snapshot.to_dict() or {}
 
 
 async def check_user_citations(
@@ -163,23 +155,21 @@ async def check_user_citations(
     """One part of a user's check. ``done`` is False when the time budget ran
     out with papers left; the next part, given the same *checked_since*,
     carries on from there."""
-    db = get_db()
-    user_data = _load_user(db, uid)
-    if user_data is None:
-        logger.info("Skipping citation check for uid=%s: user document is gone.", uid)
-        return {"uid": uid, "skipped": "no user document", "done": True}
-    stats: dict[str, int] = {}
-    works_processed, new_notifications = await run_job_for_user(
-        uid=uid,
-        user_data=user_data,
-        db=db,
-        email_service=email_service,
-        dry_run=dry_run,
-        settings=get_settings(),
-        stats=stats,
-        deadline=(time.monotonic() + time_budget_seconds) if time_budget_seconds else None,
-        checked_since=datetime.fromisoformat(checked_since) if checked_since else None,
-    )
+    async with session_scope() as session:
+        if await UserStore(session).get(uid) is None:
+            logger.info("Skipping citation check for uid=%s: user is gone.", uid)
+            return {"uid": uid, "skipped": "no user document", "done": True}
+        stats: dict[str, int] = {}
+        works_processed, new_notifications = await run_job_for_user(
+            uid=uid,
+            session=session,
+            email_service=email_service,
+            dry_run=dry_run,
+            settings=get_settings(),
+            stats=stats,
+            deadline=(time.monotonic() + time_budget_seconds) if time_budget_seconds else None,
+            checked_since=datetime.fromisoformat(checked_since) if checked_since else None,
+        )
     return {
         "uid": uid,
         "works_processed": works_processed,
@@ -189,23 +179,23 @@ async def check_user_citations(
 
 
 async def sync_user_publications(uid: str, dry_run: bool = False) -> dict:
-    db = get_db()
-    user_data = _load_user(db, uid)
-    if user_data is None or not user_data.get("linked_author_id"):
-        return {"uid": uid, "skipped": "no linked author"}
-    added = await sync_new_publications_for_user(
-        uid=uid,
-        user_data=user_data,
-        db=db,
-        email_service=email_service,
-        dry_run=dry_run,
-        settings=get_settings(),
-    )
+    async with session_scope() as session:
+        user = await UserStore(session).get(uid)
+        if user is None or not user.linked_author_id:
+            return {"uid": uid, "skipped": "no linked author"}
+        added = await sync_new_publications_for_user(
+            uid=uid,
+            session=session,
+            email_service=email_service,
+            dry_run=dry_run,
+            settings=get_settings(),
+        )
     return {"uid": uid, "works_added": added}
 
 
 async def cleanup_notifications() -> dict:
-    return await cleanup_old_notifications(db=get_db(), dry_run=False)
+    async with session_scope() as session:
+        return await cleanup_old_notifications(session=session, dry_run=False)
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +215,7 @@ def fan_out_events(name: str, kind: str, day: str, uids: list[str]) -> list[inng
 
 async def _sweep(ctx: inngest.Context, list_step: str, list_uids, event: str, kind: str) -> dict:
     async def plan() -> dict:
-        return {"day": _pacific_date(), "uids": await run_off_loop(list_uids)}
+        return {"day": _pacific_date(), "uids": await list_uids()}
 
     planned = await ctx.step.run(list_step, plan)
     day, uids = planned["day"], planned["uids"]
@@ -281,8 +271,7 @@ async def citation_check_user(ctx: inngest.Context) -> dict:
     parts = 1 if dry_run else MAX_PARTS
     for part in range(parts):
         async def check(part: int = part) -> dict:
-            return await run_off_loop(
-                check_user_citations,
+            return await check_user_citations(
                 uid=uid,
                 dry_run=dry_run,
                 checked_since=since,
@@ -309,7 +298,7 @@ async def citation_check_user(ctx: inngest.Context) -> dict:
 )
 async def notification_cleanup(ctx: inngest.Context) -> dict:
     async def cleanup() -> dict:
-        return await run_off_loop(cleanup_notifications)
+        return await cleanup_notifications()
 
     return await ctx.step.run("delete-old-notifications", cleanup)
 
@@ -339,7 +328,7 @@ async def publication_sync_user(ctx: inngest.Context) -> dict:
     dry_run = bool(ctx.event.data.get("dry_run", False))
 
     async def sync() -> dict:
-        return await run_off_loop(sync_user_publications, uid=uid, dry_run=dry_run)
+        return await sync_user_publications(uid=uid, dry_run=dry_run)
 
     return await ctx.step.run("sync-publications", sync)
 

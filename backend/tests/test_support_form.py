@@ -7,59 +7,46 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.firebase_client import get_db
+from app.core.db import get_session
 from app.routers import support
+from tests.conftest import needs_db
 
 
-class _Snap:
-    def __init__(self, data):
-        self._data = data
+class _NoDatabase:
+    """Stands in for the session where a test must never reach the database."""
 
-    @property
-    def exists(self) -> bool:
-        return self._data is not None
-
-    def to_dict(self):
-        return dict(self._data or {})
+    def __getattr__(self, name):
+        raise AssertionError(f"this request should not have used the database ({name})")
 
 
-class _Ref:
-    def __init__(self, store, key):
-        self._store, self._key = store, key
+def _client_with(session):
+    from app.main import app
 
-    def get(self):
-        return _Snap(self._store.get(self._key))
+    async def _session():
+        yield session
 
-    def set(self, data):
-        self._store[self._key] = dict(data)
-
-    def update(self, data):
-        self._store[self._key].update(data)
-
-
-class _DB:
-    def __init__(self):
-        self.store: dict = {}
-
-    def collection(self, _name):
-        db = self
-
-        class _C:
-            def document(self, key):
-                return _Ref(db.store, key)
-
-        return _C()
+    app.dependency_overrides[get_session] = _session
+    deliver = AsyncMock()
+    patcher = patch("app.services.email_service.send_support_message", deliver)
+    patcher.start()
+    return app, patcher, TestClient(app), deliver
 
 
 @pytest.fixture()
 def client():
-    from app.main import app
+    """No database: bots and invalid input are turned away before any limit is counted."""
+    app, patcher, c, deliver = _client_with(_NoDatabase())
+    yield c, deliver
+    patcher.stop()
+    app.dependency_overrides.clear()
 
-    db = _DB()
-    app.dependency_overrides[get_db] = lambda: db
-    deliver = AsyncMock()
-    with patch("app.services.email_service.send_support_message", deliver):
-        yield TestClient(app), deliver
+
+@pytest.fixture()
+def db_client(pg_session):
+    """The limits counted in Postgres (support_limits)."""
+    app, patcher, c, deliver = _client_with(pg_session)
+    yield c, deliver
+    patcher.stop()
     app.dependency_overrides.clear()
 
 
@@ -73,8 +60,9 @@ def _post(c, body, ip="1.1.1.1"):
     return c.post("/api/support", json=body, headers={"cf-connecting-ip": ip})
 
 
-def test_valid_message_is_delivered_with_reply_to_sender(client):
-    c, deliver = client
+@needs_db
+def test_valid_message_is_delivered_with_reply_to_sender(db_client):
+    c, deliver = db_client
     r = _post(c, _msg(name="Ada", subject="Missing"))
     assert r.status_code == 202
     kwargs = deliver.await_args.kwargs
@@ -88,20 +76,23 @@ def test_bots_get_a_success_but_nothing_is_sent(client, trap):
     deliver.assert_not_awaited()
 
 
-def test_fourth_message_from_one_connection_in_an_hour_is_refused(client):
-    c, _ = client
+@needs_db
+def test_fourth_message_from_one_connection_in_an_hour_is_refused(db_client):
+    c, _ = db_client
     codes = [_post(c, _msg(email=f"u{i}@example.com")).status_code for i in range(4)]
     assert codes == [202, 202, 202, 429]
 
 
-def test_fourth_message_from_one_address_in_a_day_is_refused(client):
-    c, _ = client
+@needs_db
+def test_fourth_message_from_one_address_in_a_day_is_refused(db_client):
+    c, _ = db_client
     codes = [_post(c, _msg(), ip=f"9.9.9.{i}").status_code for i in range(4)]
     assert codes == [202, 202, 202, 429]
 
 
-def test_site_wide_daily_cap(client):
-    c, deliver = client
+@needs_db
+def test_site_wide_daily_cap(db_client):
+    c, deliver = db_client
     codes = [
         _post(c, _msg(email=f"u{i}@example.com"), ip=f"10.0.0.{i}").status_code
         for i in range(support.SITE_PER_DAY + 1)
@@ -110,8 +101,9 @@ def test_site_wide_daily_cap(client):
     assert deliver.await_count == support.SITE_PER_DAY
 
 
-def test_line_breaks_cannot_reach_the_subject(client):
-    c, deliver = client
+@needs_db
+def test_line_breaks_cannot_reach_the_subject(db_client):
+    c, deliver = db_client
     _post(c, _msg(subject="Hi\r\nBcc: everyone@example.com"))
     assert "\n" not in deliver.await_args.kwargs["subject"]
 

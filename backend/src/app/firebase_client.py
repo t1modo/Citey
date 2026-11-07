@@ -46,7 +46,11 @@ def _initialize_firebase() -> firebase_admin.App:
 
 
 def get_db() -> Any:
-    """Return the Firestore client, initializing Firebase if necessary."""
+    """Return the Firestore client, initializing Firebase if necessary.
+
+    The app's data lives in Postgres; only scripts/copy_firestore_to_postgres.py
+    still reads Firestore.
+    """
     _initialize_firebase()
     return firestore.client()
 

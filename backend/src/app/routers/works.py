@@ -3,19 +3,20 @@ import logging
 import re
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.core.concurrency import run_blocking
+from app.core.db import get_session
 from app.deps import enforce_cooldown, get_current_user
-from app.firebase_client import get_db
 from app.schemas import AddWorkRequest, ImportByAuthorRequest, TrackedWork, is_openalex_work_id
+from app.services import convert, tracking_service, user_service
 from app.services.crossref import resolve_doi
 from app.services.normalize import dedupe_works_by_title, doi_to_work_id, normalize_doi
 from app.services.text_clean import clean_names, clean_text
 from app.services.openalex import extract_topics, extract_venue
+from app.store import UserStore, WorkStore
 
 logger = logging.getLogger(__name__)
 
@@ -114,44 +115,15 @@ def _author_in_paper(paper_authors: list[str], names_to_check: list[str]) -> boo
     return False
 
 
-def _doc_to_tracked_work(doc_id: str, data: dict) -> TrackedWork:
-    """Convert a Firestore document dict to a TrackedWork model."""
-
-    def _to_dt(val: Any) -> datetime | None:
-        if val is None:
-            return None
-        if isinstance(val, datetime):
-            return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
-        if hasattr(val, "timestamp"):
-            return val.replace(tzinfo=timezone.utc) if val.tzinfo is None else val
-        return None
-
-    return TrackedWork(
-        id=doc_id,
-        doi=data.get("doi"),
-        openalex_id=data.get("openalex_id"),
-        title=data.get("title", ""),
-        authors=data.get("authors", []),
-        year=data.get("year"),
-        venue=data.get("venue"),
-        work_type=data.get("work_type"),
-        topics=data.get("topics", []),
-        added_at=_to_dt(data.get("added_at")),
-        last_checked_at=_to_dt(data.get("last_checked_at")),
-        s2_citation_count=data.get("s2_citation_count"),
-        openalex_citation_count=data.get("openalex_citation_count"),
-    )
-
-
 @router.post("", response_model=TrackedWork, status_code=status.HTTP_201_CREATED)
 async def add_work(
     body: AddWorkRequest,
     uid: str = Depends(get_current_user),
-    db: Any = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> TrackedWork:
     """
-    Resolve a DOI via Crossref, then store it in the user's trackedWorks subcollection.
-    Uses the DOI (with slashes replaced) as the document ID to prevent duplicates.
+    Resolve a DOI via Crossref, then track it. The paper's key is its DOI
+    with slashes replaced, so the same paper is never added twice.
     """
     work_info = await resolve_doi(body.doi)
 
@@ -160,9 +132,7 @@ async def add_work(
     # includes that author (or one of their known aliases) before adding.
     # The user can pass force=True to bypass this check.
     if not body.force:
-        # Firestore calls block, so each runs off the event loop.
-        user_snap = await run_blocking(db.collection("users").document(uid).get)
-        user_data = user_snap.to_dict() or {} if user_snap.exists else {}
+        user_data = await user_service.user_data(session, uid)
         # Both fields must be present — if either was cleared by an unlink the
         # check is inactive.  This prevents a stale linked_author_name from
         # blocking additions after the author profile has been reset.
@@ -222,16 +192,15 @@ async def add_work(
     work_info["doi"] = normalize_doi(work_info["doi"])
     work_id = doi_to_work_id(work_info["doi"])
 
-    ref = db.collection("users").document(uid).collection("trackedWorks").document(work_id)
-    snapshot = await run_blocking(ref.get)
-    if snapshot.exists:
+    await user_service.ensure_user(session, uid)
+    if await WorkStore(session).tracks(uid, work_id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="This work is already being tracked.",
         )
 
     now = datetime.now(tz=timezone.utc)
-    doc_data: dict = {
+    fields: dict = {
         "doi": work_info["doi"],
         "openalex_id": work_info.get("openalex_id") if is_openalex_work_id(work_info.get("openalex_id")) else None,
         "title": clean_text(work_info["title"]) or "Untitled",
@@ -240,21 +209,14 @@ async def add_work(
         "venue": work_info.get("venue"),
         "work_type": work_info.get("work_type"),
         "topics": work_info.get("topics", []),
-        "added_at": now,
-        "last_checked_at": None,
         "openalex_citation_count": work_info.get("openalex_citation_count"),
     }
-    await run_blocking(ref.set, doc_data)
-    # Adding a paper by hand undoes an earlier dismissal.
-    from firebase_admin import firestore
-    await run_blocking(
-        db.collection("users").document(uid).set,
-        {"dismissed_work_ids": firestore.ArrayRemove([work_id])},
-        merge=True,
-    )
+    # Adding a paper by hand also undoes an earlier dismissal.
+    work, _ = await tracking_service.track_paper(session, uid, work_id, fields, now=now)
+    await session.commit()
     logger.info("Added tracked work %s for uid=%s", work_id, uid)
 
-    return _doc_to_tracked_work(work_id, doc_data)
+    return convert.tracked_work(work, now)
 
 
 def _format_author_candidate(r: dict) -> dict:
@@ -423,7 +385,7 @@ async def get_paper_authors_endpoint(
 async def import_works_by_author(
     body: ImportByAuthorRequest,
     uid: str = Depends(get_current_user),
-    db: Any = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Bulk-import all works by an author (OpenAlex, S2, INSPIRE-HEP, or DBLP)."""
     from app.services import dblp as dblp_svc
@@ -431,13 +393,11 @@ async def import_works_by_author(
     from app.services import openalex as openalex_svc
     from app.services import semantic_scholar as s2_svc
 
-    # Enforce single linked-author policy. Firestore calls block, so each
-    # runs off the event loop.
-    user_ref = db.collection("users").document(uid)
-    user_snap = await run_blocking(user_ref.get)
-    user_data = user_snap.to_dict() or {} if user_snap.exists else {}
+    # Enforce single linked-author policy.
+    user = await user_service.ensure_user(session, uid)
+    user_data = convert.user_data(user)
 
-    # Rate-limit bulk imports to prevent Firestore write floods.
+    # Rate-limit bulk imports to prevent write floods.
     enforce_cooldown(
         user_data, "last_import_at", _IMPORT_COOLDOWN,
         "You've run an import recently. Please wait before importing again.",
@@ -530,12 +490,10 @@ async def import_works_by_author(
             primary_works=raw_works,
         )
 
-    works_ref = user_ref.collection("trackedWorks")
     now = datetime.now(tz=timezone.utc)
-    imported, skipped = await run_blocking(
-        _write_imported_works,
-        db,
-        works_ref,
+    imported, skipped = await _import_papers(
+        session,
+        uid,
         raw_works,
         dismissed={d.lower() for d in (user_data.get("dismissed_work_ids") or [])},
         now=now,
@@ -556,7 +514,8 @@ async def import_works_by_author(
             "Merged author %s (%s) into uid=%s additional linked authors",
             incoming_short, author_display_name, uid,
         )
-    await run_blocking(user_ref.set, user_updates, merge=True)
+    await UserStore(session).update_fields(uid, **user_updates)
+    await session.commit()
 
     logger.info("Bulk import: %d imported, %d skipped for uid=%s", imported, skipped, uid)
     return {"imported": imported, "skipped": skipped}
@@ -565,69 +524,57 @@ async def import_works_by_author(
 _MAX_TRACKED_WORKS = 500
 
 
-def _write_imported_works(
-    db: Any, works_ref: Any, raw_works: list[dict], *, dismissed: set[str], now: datetime
+def _import_fields(raw: dict) -> tuple[str, dict] | None:
+    """(paper key, fields) for one record of an author import, or None
+    without a DOI."""
+    doi = normalize_doi(raw.get("doi"))
+    if not doi:
+        return None
+    # Records merged in from other sources carry their own IDs ("S2:…",
+    # "pubmed:…"); only a real OpenAlex ID may be stored as openalex_id,
+    # otherwise the nightly check queries OpenAlex with a foreign ID and
+    # finds nothing. The citation check resolves the rest by DOI.
+    source_id = raw.get("id") or ""
+    oa_id = source_id if is_openalex_work_id(source_id) else None
+    source_count = raw.get("cited_by_count")
+    return doi_to_work_id(doi), {
+        "doi": doi,
+        "openalex_id": oa_id,
+        "title": clean_text(raw.get("title")) or "Untitled",
+        "authors": clean_names([
+            a.get("author", {}).get("display_name", "")
+            for a in raw.get("authorships", [])
+            if a.get("author", {}).get("display_name")
+        ]),
+        "year": raw.get("publication_year"),
+        "venue": extract_venue(raw),
+        "work_type": raw.get("type"),
+        "topics": extract_topics(raw),
+        "openalex_citation_count": source_count if oa_id else None,
+        "s2_citation_count": source_count if source_id.startswith("S2:") else None,
+    }
+
+
+async def _import_papers(
+    session: AsyncSession, uid: str, raw_works: list[dict], *, dismissed: set[str], now: datetime
 ) -> tuple[int, int]:
-    """
-    Write an import's new papers to Firestore and return (imported, skipped).
-    Blocking (Firestore), so the import runs it on a worker thread.
-    """
-    # Case-insensitive: older imports stored mixed-case DOI document IDs.
-    existing_ids = {doc.id.lower() for doc in works_ref.stream()}
-
-    # Cap total tracked works at 500 per user to prevent runaway Firestore
-    # writes and excessive citation-check workload.
-    remaining_capacity = max(0, _MAX_TRACKED_WORKS - len(existing_ids))
-
-    imported = 0
-    skipped = 0
-    batch = db.batch()
-    pending = 0
-
+    """Track an import's new papers; returns (imported, skipped)."""
+    # Case-insensitive: older imports stored mixed-case DOI keys.
+    existing = await WorkStore(session).tracked_keys(uid)
+    # Cap tracked papers per user to keep the nightly check's workload bounded.
+    remaining_capacity = max(0, _MAX_TRACKED_WORKS - len(existing))
+    imported = skipped = 0
     # Keep one version per (near-)identical title, preferring journal or
     # proceedings DOIs over arXiv preprints.
     for raw in dedupe_works_by_title(raw_works):
-        doi = normalize_doi(raw.get("doi"))
-        work_id = doi_to_work_id(doi)  # type: ignore[arg-type]
-        if work_id in existing_ids or work_id in dismissed or imported >= remaining_capacity:
+        prepared = _import_fields(raw)
+        key = prepared[0] if prepared else None
+        if prepared is None or key in existing or key in dismissed or imported >= remaining_capacity:
             skipped += 1
             continue
-
-        # Records merged in from other sources carry their own IDs ("S2:…",
-        # "pubmed:…"); only a real OpenAlex ID may be stored as openalex_id,
-        # otherwise the nightly check queries OpenAlex with a foreign ID and
-        # finds nothing. The citation check resolves the rest by DOI.
-        source_id = raw.get("id") or ""
-        oa_id = source_id if is_openalex_work_id(source_id) else None
-        source_count = raw.get("cited_by_count")
-        batch.set(works_ref.document(work_id), {
-            "doi": doi,
-            "openalex_id": oa_id,
-            "title": clean_text(raw.get("title")) or "Untitled",
-            "authors": clean_names([
-                a.get("author", {}).get("display_name", "")
-                for a in raw.get("authorships", [])
-                if a.get("author", {}).get("display_name")
-            ]),
-            "year": raw.get("publication_year"),
-            "venue": extract_venue(raw),
-            "work_type": raw.get("type"),
-            "topics": extract_topics(raw),
-            "added_at": now,
-            "last_checked_at": None,
-            "openalex_citation_count": source_count if oa_id else None,
-            "s2_citation_count": source_count if source_id.startswith("S2:") else None,
-        })
-        pending += 1
-        if pending == 500:  # Firestore batch limit
-            batch.commit()
-            batch, pending = db.batch(), 0
-        existing_ids.add(work_id)
+        await tracking_service.track_paper(session, uid, key, prepared[1], now=now)
+        existing.add(key)
         imported += 1
-
-    if pending:
-        batch.commit()
-
     return imported, skipped
 
 
@@ -697,88 +644,27 @@ async def _gather_cross_source_works(
 async def delete_work(
     work_id: str,
     uid: str = Depends(get_current_user),
-    db: Any = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> None:
-    """Remove a tracked work and all its notifications.
+    """Stop tracking a paper and remove its alerts for this user.
 
-    The work is also recorded as dismissed so the weekly publication sync
-    doesn't quietly add it back. Plain ``def``: FastAPI runs it in a worker
-    thread, so the blocking Firestore calls don't stall the event loop.
+    The paper is also recorded as dismissed so the weekly publication sync
+    doesn't quietly add it back. Other users tracking it are unaffected.
     """
-    return await run_blocking(_delete_work_sync, work_id=work_id, uid=uid, db=db)
-
-
-def _delete_work_sync(work_id: str, uid: str, db: Any) -> None:
-    """The blocking (Firestore) part of delete_work, run on a worker thread."""
-    from firebase_admin import firestore
-
-    from app.services.citation_service import _commit_in_batches
-
-    user_ref = db.collection("users").document(uid)
-    ref = user_ref.collection("trackedWorks").document(work_id)
-    if not ref.get().exists:
+    removed = await tracking_service.untrack_paper(session, uid, work_id)
+    if removed is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tracked work not found.",
         )
-
-    notif_refs = [
-        ndoc.reference
-        for ndoc in user_ref.collection("notifications").where("cited_work_id", "==", work_id).stream()
-    ]
-    _commit_in_batches(db, [("delete", r, None) for r in [ref, *notif_refs]])
-    user_ref.set({"dismissed_work_ids": firestore.ArrayUnion([work_id.lower()])}, merge=True)
-
-    logger.info(
-        "Deleted tracked work %s and %d notification(s) for uid=%s",
-        work_id, len(notif_refs), uid,
-    )
+    await session.commit()
+    logger.info("Stopped tracking %s and removed %d alert(s) for uid=%s", work_id, removed, uid)
 
 
 @router.get("", response_model=list[TrackedWork])
 async def list_works(
     uid: str = Depends(get_current_user),
-    db: Any = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> list[TrackedWork]:
     """Return all tracked works with citation counts, sorted by publication year descending."""
-    return await run_blocking(_list_works_sync, uid=uid, db=db)
-
-
-def _list_works_sync(uid: str, db: Any) -> list[TrackedWork]:
-    """The blocking (Firestore) part of list_works, run on a worker thread."""
-    found_since = datetime.now(tz=timezone.utc) - timedelta(days=30)
-    total_counts: defaultdict[str, int] = defaultdict(int)
-    recent_counts: defaultdict[str, int] = defaultdict(int)
-
-    # Only the three fields we count with; avoids pulling whole documents.
-    notifs = (
-        db.collection("users").document(uid).collection("notifications")
-        .select(["cited_work_id", "created_at"])
-    )
-    for ndoc in notifs.stream():
-        ndata = ndoc.to_dict() or {}
-        work_id = ndata.get("cited_work_id", "")
-        if not work_id:
-            continue
-        total_counts[work_id] += 1
-        # "New this month" = found in the last 30 days (matches the list
-        # endpoint), so a late indexed citation still counts as new.
-        found = ndata.get("created_at")
-        if found is None or not hasattr(found, "tzinfo"):
-            recent_counts[work_id] += 1
-        else:
-            if found.tzinfo is None:
-                found = found.replace(tzinfo=timezone.utc)
-            if found >= found_since:
-                recent_counts[work_id] += 1
-
-    works: list[TrackedWork] = []
-    for doc in db.collection("users").document(uid).collection("trackedWorks").stream():
-        work = _doc_to_tracked_work(doc.id, doc.to_dict() or {})
-        work.citation_count = total_counts.get(doc.id, 0)
-        work.new_citations_30d = recent_counts.get(doc.id, 0)
-        works.append(work)
-
-    # Sort by publication year descending; works without a year go last.
-    works.sort(key=lambda w: (w.year is not None, w.year or 0), reverse=True)
-    return works
+    return await tracking_service.tracked_papers(session, uid, now=datetime.now(tz=timezone.utc))

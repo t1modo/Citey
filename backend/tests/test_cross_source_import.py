@@ -12,11 +12,10 @@ Covers three layers:
 
 from __future__ import annotations
 
-import pytest
 import respx
 from httpx import Response
 
-from app.routers.works import _names_match, _author_in_paper
+from app.routers.works import _names_match
 from app.services.semantic_scholar import get_paper_with_authors
 
 _S2_API = "https://api.semanticscholar.org/graph/v1"
@@ -33,7 +32,7 @@ def _s2_work(doi: str, title: str, year: int = 2024) -> dict:
         "doi": f"https://doi.org/{doi}",
         "title": title,
         "publication_year": year,
-        "id": f"S2:fake",
+        "id": "S2:fake",
         "cited_by_count": 0,
         "type": None,
         "authorships": [],

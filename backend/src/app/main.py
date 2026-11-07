@@ -3,8 +3,6 @@ Citey API — main FastAPI application entrypoint.
 """
 
 import logging
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,48 +36,6 @@ if not settings.token_secret and not settings.is_local:
 
 
 # ---------------------------------------------------------------------------
-# Lifespan: start / stop the background scheduler
-# ---------------------------------------------------------------------------
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Start APScheduler on startup (local dev only) and shut it down on teardown.
-
-    In production DISABLE_SCHEDULER=true so APScheduler never starts; Inngest
-    runs the scheduled jobs through /api/inngest instead.
-    """
-    from app.firebase_client import get_db
-    from app.services import email_service
-
-    db = get_db()
-    app.state.db = db
-
-    if not settings.disable_scheduler:
-        from app.scheduler.jobs import create_scheduler
-
-        scheduler = create_scheduler(
-            db=db,
-            email_service=email_service,
-            settings=settings,
-        )
-        scheduler.start()
-        logger.info("APScheduler started.")
-        app.state.scheduler = scheduler
-    else:
-        logger.info(
-            "APScheduler disabled (DISABLE_SCHEDULER=true); "
-            "Inngest runs the scheduled jobs through /api/inngest."
-        )
-
-    yield
-
-    if not settings.disable_scheduler and hasattr(app.state, "scheduler"):
-        app.state.scheduler.shutdown(wait=False)
-        logger.info("APScheduler shut down.")
-
-
-# ---------------------------------------------------------------------------
 # Application factory
 # ---------------------------------------------------------------------------
 
@@ -95,7 +51,6 @@ def create_app() -> FastAPI:
             "Backend API for Citey — a citation notification service that alerts "
             "researchers when their published works are cited."
         ),
-        lifespan=lifespan,
         docs_url=f"{API_PREFIX}/docs",
         redoc_url=f"{API_PREFIX}/redoc",
         openapi_url=f"{API_PREFIX}/openapi.json",
