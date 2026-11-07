@@ -68,6 +68,31 @@ npx --ignore-scripts=false inngest-cli@latest dev -u http://localhost:8000/api/i
 Add or upgrade a backend dependency with `uv add <package>`, which updates
 `pyproject.toml` and `uv.lock`.
 
+### Database (Postgres)
+
+The Postgres tables are SQLModel models (SQLAlchemy 2.1 ORM tables that are
+also Pydantic models) in `backend/app/db_models.py`, and Alembic migrations
+in `backend/migrations/`. `docker compose up` starts a local Postgres 18 and
+applies the migrations before the API starts; Compose always uses that local
+database, never Neon.
+
+```bash
+cd backend
+uv run alembic upgrade head                              # apply migrations
+uv run alembic revision --autogenerate -m "add x to y"   # after editing db_models.py
+uv run alembic check                                     # models and migrations agree?
+```
+
+Read the generated migration before committing it. The schema tests need a
+throwaway database: with Compose running,
+`TEST_DATABASE_URL=postgresql://citey:citey@localhost:5432/citey_test uv run pytest`.
+CI runs them against its own Postgres and fails if a model changed without a
+migration.
+
+Production is the Neon project `citey`. Migrations are not run on deploy yet:
+apply them with `DATABASE_URL_UNPOOLED` set to Neon's direct connection
+string before deploying code that needs them.
+
 ## Deploy on Vercel
 
 The site and the API deploy as one Vercel project using
