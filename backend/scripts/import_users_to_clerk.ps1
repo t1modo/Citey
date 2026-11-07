@@ -50,6 +50,9 @@ Required to import with an sk_live_ key, so production is never hit by accident.
 .PARAMETER DryRun
 Check the inputs and count the users without contacting Clerk.
 
+.PARAMETER Yes
+Skip the typed confirmation, for running from a non-interactive shell.
+
 .PARAMETER ResumeAfter
 A Firebase UID to resume after, if a previous run stopped partway.
 #>
@@ -58,6 +61,7 @@ param(
     [string]$UsersFile = "users.json",
     [switch]$Production,
     [switch]$DryRun,
+    [switch]$Yes,
     [string]$ResumeAfter
 )
 
@@ -155,10 +159,12 @@ try {
     bun install --frozen-lockfile
     if ($LASTEXITCODE -ne 0) { Fail "bun install failed." }
 
-    $confirm = Read-Host "Import $($withEmail.Count) users into the $instance Clerk instance? Type yes to continue"
-    if ($confirm -ne "yes") {
-        Write-Host "Cancelled."
-        exit 0
+    if (-not $Yes) {
+        $confirm = Read-Host "Import $($withEmail.Count) users into the $instance Clerk instance? Type yes to continue"
+        if ($confirm -ne "yes") {
+            Write-Host "Cancelled."
+            exit 0
+        }
     }
 
     # The secret key is passed through the environment, not the command line,
