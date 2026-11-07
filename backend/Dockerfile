@@ -26,6 +26,9 @@ COPY --from=build /app/.venv /app/.venv
 COPY --chown=citey:citey main.py ./
 COPY --chown=citey:citey app ./app
 COPY --chown=citey:citey templates ./templates
+# `alembic upgrade head` runs from this image too (the migrate service).
+COPY --chown=citey:citey alembic.ini ./
+COPY --chown=citey:citey migrations ./migrations
 USER citey
 
 EXPOSE 8000

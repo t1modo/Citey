@@ -21,6 +21,23 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # A throwaway Postgres 18 (Neon's version) for the schema tests.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: citey
+          POSTGRES_PASSWORD: citey
+          POSTGRES_DB: citey_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U citey -d citey_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgresql://citey:citey@localhost:5432/citey_test
     steps:
       - uses: actions/checkout@v7
 
@@ -37,6 +54,12 @@ jobs:
 
       - name: Install locked dependencies
         run: uv sync --locked
+
+      # Fails if app/db_models.py changed without a migration.
+      - name: Check migrations match the models
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: uv run alembic upgrade head && uv run alembic check
 
       - name: Run tests
         run: uv run pytest -q
