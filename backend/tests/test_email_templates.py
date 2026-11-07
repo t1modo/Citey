@@ -2,7 +2,7 @@
 Tests for Jinja2 email template rendering.
 
 Covers both the digest templates (active) and the legacy citation templates.
-No HTTP calls or Firebase connections required — pure template unit tests.
+No HTTP calls or database connections required — pure template unit tests.
 """
 
 from __future__ import annotations
@@ -354,7 +354,7 @@ class TestRedesignedDigest:
 
 
 
-@pytest.mark.parametrize("name", ["verify", "confirm_address", "test"])
+@pytest.mark.parametrize("name", ["confirm_address", "test"])
 def test_transactional_templates_render(name: str) -> None:
     from app.config import Settings
     from app.services.email_service import _base_context

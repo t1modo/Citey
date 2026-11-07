@@ -1,7 +1,7 @@
 """
 Tests for app.services.cache.AsyncTTLCache.
 
-No HTTP calls or Firebase connections required.
+No HTTP calls or database connections required.
 """
 
 from __future__ import annotations

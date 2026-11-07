@@ -16,8 +16,7 @@ if TYPE_CHECKING:
 
 class CitingWork(Base, table=True):
     """
-    A paper that cites a tracked one, stored once. Firestore copies its
-    details into every alert as citing_work_*.
+    A paper that cites a tracked one, stored once.
     """
 
     __tablename__ = "citing_works"
@@ -46,7 +45,7 @@ class CitingWorkKey(Base, table=True):
     """
     Every identity a citing paper is known by ("doi:…", "id:w123…"), so the
     same paper reported by OpenAlex, Semantic Scholar, OpenCitations and
-    Europe PMC is recognised as one. Firestore: notified_keys.
+    Europe PMC is recognised as one.
     """
 
     __tablename__ = "citing_work_keys"

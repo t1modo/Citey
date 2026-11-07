@@ -15,13 +15,11 @@ if TYPE_CHECKING:
 
 
 class User(Base, table=True):
-    """One account. Firestore: ``users/{uid}``."""
+    """One account."""
 
     __tablename__ = "users"
 
-    # The Firebase UID, or the Clerk user ID for someone who signed up with
-    # Clerk. A user imported into Clerk keeps their Firebase UID as Clerk's
-    # external_id, so their rows stay theirs.
+    # The Clerk user ID ("user_..."), the session token's sub.
     id: str = Field(primary_key=True, max_length=128)
     email: str = Field(
         default="", nullable=False, sa_type=Text, sa_column_kwargs={"server_default": text("''")}
@@ -49,7 +47,7 @@ class User(Base, table=True):
     )
     name_aliases: list[str] = text_array_column()
     # works.key values the user removed, so publication sync doesn't add
-    # them back. Firestore: dismissed_work_ids.
+    # them back.
     dismissed_work_keys: list[str] = text_array_column()
 
     # Cooldowns and bookkeeping.

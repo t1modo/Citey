@@ -235,18 +235,6 @@ async def send_digest_email(
     await _deliver(settings, to_email, digest_subject(total_citing), html_body, text_body, "Digest")
 
 
-async def send_verification_email(
-    to_email: str,
-    verification_link: str,
-    settings: Settings,
-) -> None:
-    """Send the sign-up email verification message."""
-    html_body, text_body = _render("verify", {**_base_context(settings), "link": verification_link})
-    await _deliver(
-        settings, to_email, f"Confirm your email for {settings.app_name}", html_body, text_body, "Verification",
-    )
-
-
 async def send_new_publications_email(
     to_email: str,
     recipient_name: str,

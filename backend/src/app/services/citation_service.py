@@ -23,11 +23,9 @@ from datetime import datetime, timedelta, timezone
 from types import ModuleType
 from typing import Any
 
-from firebase_admin import auth as firebase_auth
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.concurrency import run_blocking
-from app.firebase_client import ensure_firebase
 from app.models import Work
 from app.schemas import Notification, is_openalex_work_id
 from app.services import alert_service, convert
@@ -60,8 +58,8 @@ async def process_tracked_work(
     Check *work* for new citations and record them.
 
     "New" means not reported before: none of the citing paper's identity
-    keys is already recorded for this paper (or was reported while the data
-    lived in Firestore). Each new citation is recorded once, and every user
+    keys is already recorded for this paper (or listed in its
+    known_citing_keys). Each new citation is recorded once, and every user
     tracking the paper gets an alert. *uid* only labels the logs.
 
     Returns (new_citation_count, the new citations as Notifications).
@@ -586,17 +584,9 @@ async def _email_digest(
     if not to_send:
         return
 
-    email_verified = True
-    try:
-        ensure_firebase()
-        user_record = await run_blocking(firebase_auth.get_user, uid)
-        email_verified = user_record.email_verified
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not check email_verified for uid=%s: %s", uid, exc)
-    if not email_verified:
-        logger.info("Skipping citation email: uid=%s email not verified.", uid)
-        return
-
+    # Clerk verifies the sign-in address before an account exists, and an
+    # alternate notification address is confirmed by link before it is used
+    # (see resolve_recipient), so there is no unverified address to skip.
     if dry_run:
         logger.info("[DRY RUN] Would email %s with %d citation(s).", to_email, len(to_send))
         return
@@ -778,36 +768,19 @@ async def cleanup_old_notifications(session: AsyncSession, dry_run: bool = False
 # ---------------------------------------------------------------------------
 
 
-def _list_auth_uids() -> set[str]:
-    """Every Firebase Auth user UID (paginated). Blocking."""
-    # A nightly job has no sign-in token, so nothing else has set up the SDK.
-    ensure_firebase()
-    uids: set[str] = set()
-    page = firebase_auth.list_users()
-    while page:
-        for user in page.users:
-            uids.add(user.uid)
-        page = page.get_next_page()
-    return uids
-
-
 async def _get_auth_uids() -> set[str]:
-    """Every account's uid: Firebase Auth users, plus Clerk users when Clerk is
-    configured, fetched off the event loop. While users move to Clerk an
-    account can be in either. If Clerk is configured but unreachable this
-    raises (ClerkUnavailable) instead of returning Firebase alone, so no
-    Clerk user is ever mistaken for an orphan."""
+    """Every Clerk account's uid, fetched off the event loop. Raises
+    ClerkUnavailable when Clerk is not configured or cannot be reached, so
+    an empty or partial list is never mistaken for "every user is an
+    orphan"."""
     from app import clerk_api
 
-    uids = await run_blocking(_list_auth_uids)
-    if clerk_api.configured():
-        uids |= await run_blocking(clerk_api.list_account_uids)
-    return uids
+    return await run_blocking(clerk_api.list_account_uids)
 
 
 async def cleanup_orphan_users(session: AsyncSession, dry_run: bool = False) -> dict:
     """
-    Delete accounts with no sign-in record in Firebase Auth or Clerk: their
+    Delete accounts with no Clerk user: their
     profile, tracking and alerts (papers and citations stay for anyone else
     tracking them).
     """

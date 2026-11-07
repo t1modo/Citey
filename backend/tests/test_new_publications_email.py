@@ -2,7 +2,7 @@
 Tests for the new_publications email templates (HTML and plain-text).
 
 Covers singular/plural grammar, content presence, escaping, and links.
-No HTTP calls or Firebase connections required — pure template unit tests.
+No HTTP calls or database connections required — pure template unit tests.
 """
 
 from pathlib import Path

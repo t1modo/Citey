@@ -1,11 +1,7 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
 
-// Clerk's middleware only when this build signs people in with Clerk (see
-// lib/auth-mode). Firebase builds pass every request straight through.
-const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-
-export default clerkEnabled ? clerkMiddleware() : () => NextResponse.next();
+// Clerk's middleware keeps the session cookie in step on page requests.
+export default clerkMiddleware();
 
 export const config = {
   // Vercel Services can't deploy Edge Functions, which is where Next.js puts

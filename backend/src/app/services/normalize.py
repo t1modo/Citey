@@ -35,7 +35,8 @@ def normalize_doi(doi: str | None) -> str | None:
 
 
 def doi_to_work_id(doi: str) -> str:
-    """Firestore document ID for a tracked work (slashes are not allowed)."""
+    """The key a tracked work is stored and addressed by (no slashes, so it
+    fits in a URL path)."""
     return normalize_doi(doi).replace("/", "__")  # type: ignore[union-attr]
 
 

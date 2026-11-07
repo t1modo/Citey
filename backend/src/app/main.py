@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 
 from app import inngest_functions
 from app.config import API_PREFIX, get_settings
-from app.routers import auth, chat, health, jobs, notifications, profile, support, works
+from app.routers import chat, health, jobs, notifications, profile, support, works
 
 logging.basicConfig(
     level=logging.INFO,
@@ -88,7 +88,7 @@ def create_app() -> FastAPI:
     )
 
     # ---- Routers -------------------------------------------------------------
-    for module in (health, auth, profile, works, notifications, jobs, chat, support):
+    for module in (health, profile, works, notifications, jobs, chat, support):
         application.include_router(module.router, prefix=API_PREFIX)
 
     # ---- Scheduled jobs: Inngest calls /api/inngest ------------------------

@@ -11,7 +11,6 @@ from app.models.base import Base
 class SupportLimit(Base, table=True):
     """
     Contact form use per hashed IP or email in the current window.
-    Firestore: ``supportLimits/{key}``.
     """
 
     __tablename__ = "support_limits"

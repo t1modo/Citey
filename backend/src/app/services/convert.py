@@ -15,8 +15,8 @@ def tracked_work(
     citation_count: int = 0,
     new_citations_30d: int = 0,
 ) -> TrackedWork:
-    """A paper as one user tracks it. ``id`` is the paper's key (its old
-    Firestore document ID), which the site passes back to delete it."""
+    """A paper as one user tracks it. ``id`` is the paper's key (see
+    normalize), which the site passes back to delete it."""
     return TrackedWork(
         id=work.key,
         doi=work.doi,
@@ -58,8 +58,8 @@ def notification(alert: Alert, citation: Citation, citing: CitingWork, work: Wor
 
 def user_data(user: User) -> dict[str, Any]:
     """
-    The user as the dict the rest of the app reads (field names as Firestore
-    stored them), for helpers such as resolve_recipient and enforce_cooldown.
+    The user as the dict the rest of the app reads (the field names the routers
+    and helpers use), for helpers such as resolve_recipient and enforce_cooldown.
     """
     return {
         "uid": user.id,

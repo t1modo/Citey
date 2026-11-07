@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { sendVerificationEmail } from "@/lib/api";
 import { useNotifications } from "@/contexts/NotificationsContext";
 import {
   getWorks,
@@ -153,44 +152,6 @@ function RecentCitationCard({
         Cites <i className="font-serif">{notification.cited_work_title || notification.cited_work_id}</i>
       </p>
     </article>
-  );
-}
-
-function VerificationBanner({ onToast }: { onToast: (msg: string, type: ToastType) => void }) {
-  const [sent, setSent] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const handleResend = async () => {
-    setLoading(true);
-    try {
-      await sendVerificationEmail();
-      setSent(true);
-      onToast("Verification email resent. Check your inbox.", "info");
-    } catch {
-      onToast("Couldn't resend. Try again later.", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-mark/40 bg-mark/60 px-4 py-3 text-sm text-amber-900">
-        <p>
-          <span className="font-semibold">Verify your email</span> to receive citation notification emails.
-          Check your inbox for the verification link.
-        </p>
-        {!sent && (
-          <button
-            onClick={handleResend}
-            disabled={loading}
-            className="shrink-0 font-medium underline decoration-dotted underline-offset-2 hover:text-amber-900 disabled:opacity-50 transition-colors"
-          >
-            {loading ? "Sending…" : "Resend"}
-          </button>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -527,7 +488,6 @@ export default function DashboardPage() {
       {showFirstPaperModal && (
         <FirstPaperInfoModal onClose={() => setShowFirstPaperModal(false)} />
       )}
-      {!user.emailVerified && <VerificationBanner onToast={addToast} />}
       <ImportModal
         isOpen={addModalOpen}
         onClose={() => setAddModalOpen(false)}
