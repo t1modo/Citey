@@ -16,8 +16,8 @@
     "framer-motion": "^11.12.0",
     "next": "^15.0.0",
     "posthog-js": "^1.446.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "vgpu": "0.6.0"
   },
   "devDependencies": {
@@ -31,7 +31,7 @@
     "@vgpu/wgsl": "0.6.0",
     "@vitejs/plugin-react": "^4.7.0",
     "@webgpu/types": "0.1.74",
-    "autoprefixer": "^10.0.1",
+    "autoprefixer": "^10.6.2",
     "eslint": "^9",
     "eslint-config-next": "^15.0.0",
     "jsdom": "^26.1.0",
