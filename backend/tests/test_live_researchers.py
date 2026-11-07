@@ -1,15 +1,17 @@
 """
-TEMPORARY integration tests — DO NOT COMMIT.
+Live checks against the real OpenAlex, Semantic Scholar, PubMed, INSPIRE-HEP
+and DBLP APIs, using real researcher names, to confirm the clients still
+parse what those services return today.
 
-These tests hit the live OpenAlex, Semantic Scholar, PubMed, INSPIRE-HEP, and
-DBLP APIs with real researcher names to verify the full data pipeline works
-correctly against production data.
+They depend on the network and on the services' current data, so they are
+skipped unless CITEY_LIVE_TESTS=1:
 
-Run once with:  pytest tests/test_TEMP_real_researchers.py -v -s
-Then delete this file.
+    CITEY_LIVE_TESTS=1 uv run pytest tests/test_live_researchers.py -v
 """
 
 from __future__ import annotations
+
+import os
 
 import pytest
 
@@ -19,6 +21,11 @@ from app.services import pubmed as pubmed_svc
 from app.services import inspire_hep as inspire_svc
 from app.services import dblp as dblp_svc
 from app.routers.works import _author_in_paper, _names_match
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CITEY_LIVE_TESTS") != "1",
+    reason="calls live APIs; set CITEY_LIVE_TESTS=1 to run",
+)
 
 
 # ---------------------------------------------------------------------------
