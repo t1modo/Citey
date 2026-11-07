@@ -134,7 +134,7 @@ def test_run_endpoint_passes_the_batch_through() -> None:
     from fastapi.testclient import TestClient
 
     from app.config import get_settings
-    from main import create_app
+    from app.main import create_app
 
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: Settings(
