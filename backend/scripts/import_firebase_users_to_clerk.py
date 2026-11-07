@@ -95,7 +95,13 @@ def _create(body: dict, secret_key: str) -> tuple[int, str]:
     request = urllib.request.Request(
         CLERK_API,
         data=json.dumps(body).encode(),
-        headers={"Authorization": f"Bearer {secret_key}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {secret_key}",
+            "Content-Type": "application/json",
+            # Cloudflare in front of api.clerk.com refuses Python's default
+            # "Python-urllib" agent with "error code: 1010".
+            "User-Agent": "citey-firebase-import/1.0",
+        },
         method="POST",
     )
     try:
