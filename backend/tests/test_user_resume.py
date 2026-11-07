@@ -6,18 +6,18 @@ import time
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.services import citation_service
-from app.services.citation_service import run_job_for_user
+from citey.services import citation_service
+from citey.services.citation_service import run_job_for_user
 from tests.test_citation_accuracy import WORK_PATH, _NOW, _day, _oa, _user_db
 
 
 async def _run(db, email_service, **kw) -> tuple[int, int]:
     oa = [_oa("A brand new citing paper with enough words", doi="10.1/n", pub=_day(1), wid="W2")]
-    with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=oa)), \
-         patch("app.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
-         patch("app.services.citation_service.openalex_svc.get_citation_counts", new=AsyncMock(return_value={})), \
-         patch("app.services.semantic_scholar.get_citation_counts", new=AsyncMock(return_value={})), \
-         patch("app.services.citation_service.firebase_auth.get_user") as get_user:
+    with patch("citey.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=oa)), \
+         patch("citey.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
+         patch("citey.services.citation_service.openalex_svc.get_citation_counts", new=AsyncMock(return_value={})), \
+         patch("citey.services.semantic_scholar.get_citation_counts", new=AsyncMock(return_value={})), \
+         patch("citey.services.citation_service.firebase_auth.get_user") as get_user:
         get_user.return_value.email_verified = True
         return await run_job_for_user("u1", db.store["users/u1"], db, email_service, **kw)
 

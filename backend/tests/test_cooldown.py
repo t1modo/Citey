@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi import HTTPException
 
-from app.deps import enforce_cooldown
+from citey.deps import enforce_cooldown
 
 
 def _ago(seconds: int) -> datetime:

@@ -7,7 +7,7 @@ authored by their linked profile.  They are also exercised every time a user
 tries to add a paper via arXiv or DOI while an author is linked.
 """
 
-from app.routers.works import _author_in_paper, _name_tokens, _names_match
+from citey.routers.works import _author_in_paper, _name_tokens, _names_match
 
 
 # ---------------------------------------------------------------------------

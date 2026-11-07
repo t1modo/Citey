@@ -20,7 +20,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from dotenv import load_dotenv
 load_dotenv(_PROJECT_ROOT / ".env")
 
-from app.firebase_client import get_db
+from citey.firebase_client import get_db
 
 
 def wipe_citations() -> None:

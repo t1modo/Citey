@@ -10,7 +10,7 @@ def _no_backoff_sleep(monkeypatch):
     async def _instant(_seconds: float) -> None:
         return None
 
-    from app.services import openalex, semantic_scholar
+    from citey.services import openalex, semantic_scholar
 
     monkeypatch.setattr(openalex, "_sleep", _instant)
     monkeypatch.setattr(semantic_scholar, "_sleep", _instant, raising=False)
@@ -21,7 +21,7 @@ def _quiet_extra_citation_sources(monkeypatch, request):
     """OpenCitations and Europe PMC answer "no citations" unless a test
     patches them, so tests written for OpenAlex and S2 never reach the
     network. Tests of the clients themselves opt out with the marker."""
-    from app.services import http_retry
+    from citey.services import http_retry
 
     async def _instant(_seconds: float) -> None:
         return None
@@ -32,7 +32,7 @@ def _quiet_extra_citation_sources(monkeypatch, request):
 
     from unittest.mock import AsyncMock
 
-    from app.services import citation_service
+    from citey.services import citation_service
 
     monkeypatch.setattr(citation_service.opencitations_svc, "get_citing_refs", AsyncMock(return_value=[]))
     monkeypatch.setattr(citation_service.europe_pmc_svc, "get_citing_works", AsyncMock(return_value=[]))

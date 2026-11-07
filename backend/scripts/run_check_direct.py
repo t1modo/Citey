@@ -18,9 +18,9 @@ load_dotenv(_PROJECT_ROOT / ".env")
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-from app.firebase_client import get_db
-from app.services import email_service
-from app.services.citation_service import run_job_for_all_users
+from citey.firebase_client import get_db
+from citey.services import email_service
+from citey.services.citation_service import run_job_for_all_users
 
 
 async def main() -> None:

@@ -9,7 +9,7 @@ import respx
 from fastapi import HTTPException
 from httpx import Response
 
-from app.services.crossref import resolve_doi
+from citey.services.crossref import resolve_doi
 
 _SAMPLE_DOI = "10.1038/nature12345"
 

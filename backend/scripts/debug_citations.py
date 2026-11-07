@@ -25,9 +25,9 @@ import logging
 logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(name)s: %(message)s")
 
 import httpx
-from app.firebase_client import get_db
-from app.services import openalex as oa_svc
-from app.services import semantic_scholar as s2_svc
+from citey.firebase_client import get_db
+from citey.services import openalex as oa_svc
+from citey.services import semantic_scholar as s2_svc
 
 
 async def main(doi: str) -> None:
@@ -120,7 +120,7 @@ async def main(doi: str) -> None:
 
     # 7. Normalise and dedup to see final merged list
     print(f"\n[Dedup/merge]")
-    from app.services.citation_service import _dedup_key
+    from citey.services.citation_service import _dedup_key
     oa_norm = [oa_svc.normalize_citing_work(r) for r in oa_results]
     s2_norm = [s2_svc.normalize_citing_work(r) for r in s2_results]
     merged: dict = {}
@@ -140,7 +140,7 @@ async def main(doi: str) -> None:
 
     # 8. Simulate doc_id computation and existing_ids check
     print(f"\n[Doc ID simulation]")
-    from app.services.citation_service import _safe_doc_id
+    from citey.services.citation_service import _safe_doc_id
     existing_ids: set[str] = set()
     for ndoc in notif_docs:
         d = ndoc.to_dict() or {}

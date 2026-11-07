@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from app.services.email_service import make_unsubscribe_url
+from citey.services.email_service import make_unsubscribe_url
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +133,7 @@ def test_custom_domain_url() -> None:
 
 
 def test_token_secret_is_preferred_when_set() -> None:
-    from app.services.email_service import verify_signed_token
+    from citey.services.email_service import verify_signed_token
 
     settings = _make_settings(cron_secret="cron")
     settings.token_secret = "tok"
@@ -144,7 +144,7 @@ def test_token_secret_is_preferred_when_set() -> None:
 
 
 def test_legacy_cron_signed_links_still_verify() -> None:
-    from app.services.email_service import verify_signed_token
+    from citey.services.email_service import verify_signed_token
 
     settings = _make_settings(cron_secret="cron")
     settings.token_secret = "tok"
@@ -152,7 +152,7 @@ def test_legacy_cron_signed_links_still_verify() -> None:
 
 
 def test_default_secret_never_verifies_in_production() -> None:
-    from app.services.email_service import verify_signed_token
+    from citey.services.email_service import verify_signed_token
 
     settings = _make_settings(cron_secret="changeme")
     forged = _expected_token("victim", "changeme")
@@ -163,7 +163,7 @@ def test_default_secret_never_verifies_in_production() -> None:
 # resolve_recipient
 # ---------------------------------------------------------------------------
 
-from app.services.email_service import resolve_recipient  # noqa: E402
+from citey.services.email_service import resolve_recipient  # noqa: E402
 
 
 def test_recipient_defaults_to_account_email() -> None:

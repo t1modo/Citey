@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.firebase_client import get_db
-from app.routers import support
+from citey.firebase_client import get_db
+from citey.routers import support
 
 
 class _Snap:
@@ -53,12 +53,12 @@ class _DB:
 
 @pytest.fixture()
 def client():
-    from main import app
+    from citey.main import app
 
     db = _DB()
     app.dependency_overrides[get_db] = lambda: db
     deliver = AsyncMock()
-    with patch("app.services.email_service.send_support_message", deliver):
+    with patch("citey.services.email_service.send_support_message", deliver):
         yield TestClient(app), deliver
     app.dependency_overrides.clear()
 
@@ -126,7 +126,7 @@ def test_invalid_input_is_rejected(client, body):
 def test_client_ip_on_vercel_ignores_a_spoofed_cloudflare_header(monkeypatch) -> None:
     from starlette.requests import Request
 
-    from app.routers.support import _client_ip
+    from citey.routers.support import _client_ip
 
     def req(headers: dict) -> Request:
         raw = [(k.encode(), v.encode()) for k, v in headers.items()]
@@ -143,8 +143,8 @@ def test_client_ip_on_vercel_ignores_a_spoofed_cloudflare_header(monkeypatch) ->
 async def test_contact_form_goes_to_support_inbox_when_set():
     from unittest.mock import AsyncMock, patch
 
-    from app.config import Settings
-    from app.services import email_service
+    from citey.config import Settings
+    from citey.services import email_service
 
     send = AsyncMock(return_value={"id": "x"})
     with patch.object(email_service, "_send", send):

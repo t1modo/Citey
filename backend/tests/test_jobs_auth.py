@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.config import Settings, get_settings
-from main import app
+from citey.config import Settings, get_settings
+from citey.main import app
 
 
 def _settings(**overrides) -> Settings:
@@ -25,8 +25,8 @@ def teardown_function() -> None:
 
 def test_orphan_cleanup_rejects_signed_in_users() -> None:
     client = _client()
-    with patch("app.routers.jobs.verify_token", return_value={"uid": "user1"}), \
-         patch("app.services.citation_service.cleanup_orphan_users", new=AsyncMock()) as job:
+    with patch("citey.routers.jobs.verify_token", return_value={"uid": "user1"}), \
+         patch("citey.services.citation_service.cleanup_orphan_users", new=AsyncMock()) as job:
         resp = client.post(
             "/api/jobs/cleanup-orphan-users",
             json={"dry_run": True},
@@ -38,8 +38,8 @@ def test_orphan_cleanup_rejects_signed_in_users() -> None:
 
 def test_orphan_cleanup_accepts_cron_secret() -> None:
     client = _client()
-    with patch("app.firebase_client.get_db"), patch(
-        "app.services.citation_service.cleanup_orphan_users",
+    with patch("citey.firebase_client.get_db"), patch(
+        "citey.services.citation_service.cleanup_orphan_users",
         new=AsyncMock(return_value={"deleted": 0}),
     ) as job:
         resp = client.post(
@@ -83,8 +83,8 @@ def test_cron_run_executes_job_off_the_event_loop() -> None:
         return {"users_processed": 0, "works_processed": 0, "new_notifications": 0}
 
     client = _client()
-    with patch("app.firebase_client.get_db"), patch(
-        "app.services.citation_service.run_job_for_all_users", new=fake_job
+    with patch("citey.firebase_client.get_db"), patch(
+        "citey.services.citation_service.run_job_for_all_users", new=fake_job
     ):
         resp = client.post("/api/jobs/run", json={"dry_run": True}, headers={"X-Cron-Secret": "s3cret"})
     assert resp.status_code == 200
@@ -103,8 +103,8 @@ def test_overlapping_cron_runs_are_refused() -> None:
 
     client = _client()
     results: dict = {}
-    with patch("app.firebase_client.get_db"), patch(
-        "app.services.citation_service.run_job_for_all_users", new=slow_job
+    with patch("citey.firebase_client.get_db"), patch(
+        "citey.services.citation_service.run_job_for_all_users", new=slow_job
     ):
         def first():
             results["first"] = client.post(

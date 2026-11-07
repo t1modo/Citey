@@ -17,8 +17,8 @@ import pytest
 # Use a recent date so papers pass the 30-day publication_date filter in process_tracked_work.
 _RECENT_DATE = (datetime.now(tz=timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
-from app.models import TrackedWork
-from app.services.citation_service import process_tracked_work
+from citey.models import TrackedWork
+from citey.services.citation_service import process_tracked_work
 
 # ---------------------------------------------------------------------------
 # Fake (in-memory) Firestore
@@ -195,17 +195,17 @@ def _patch_both(oa_return=None, s2_return=None):
     s2_return = s2_return or []
     return (
         patch(
-            "app.services.citation_service.openalex_svc.get_citing_works",
+            "citey.services.citation_service.openalex_svc.get_citing_works",
             new_callable=AsyncMock,
             return_value=oa_return,
         ),
         patch(
-            "app.services.citation_service.s2_svc.get_citing_papers",
+            "citey.services.citation_service.s2_svc.get_citing_papers",
             new_callable=AsyncMock,
             return_value=s2_return,
         ),
         patch(
-            "app.services.citation_service.s2_svc.get_citation_counts",
+            "citey.services.citation_service.s2_svc.get_citation_counts",
             new_callable=AsyncMock,
             return_value={},
         ),
@@ -336,22 +336,22 @@ async def test_resolves_openalex_id_when_missing(fake_db: _FakeDB) -> None:
 
     with (
         patch(
-            "app.services.citation_service.openalex_svc.get_work_by_doi",
+            "citey.services.citation_service.openalex_svc.get_work_by_doi",
             new_callable=AsyncMock,
             return_value={"id": "https://openalex.org/W2741809807"},
         ),
         patch(
-            "app.services.citation_service.openalex_svc.get_citing_works",
+            "citey.services.citation_service.openalex_svc.get_citing_works",
             new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "app.services.citation_service.s2_svc.get_citing_papers",
+            "citey.services.citation_service.s2_svc.get_citing_papers",
             new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "app.services.citation_service.s2_svc.get_citation_counts",
+            "citey.services.citation_service.s2_svc.get_citation_counts",
             new_callable=AsyncMock,
             return_value={},
         ),
@@ -375,17 +375,17 @@ async def test_skips_work_when_openalex_id_unresolvable(fake_db: _FakeDB) -> Non
 
     with (
         patch(
-            "app.services.citation_service.openalex_svc.get_work_by_doi",
+            "citey.services.citation_service.openalex_svc.get_work_by_doi",
             new_callable=AsyncMock,
             return_value=None,
         ),
         patch(
-            "app.services.citation_service.s2_svc.get_citing_papers",
+            "citey.services.citation_service.s2_svc.get_citing_papers",
             new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "app.services.citation_service.s2_svc.get_citation_counts",
+            "citey.services.citation_service.s2_svc.get_citation_counts",
             new_callable=AsyncMock,
             return_value={},
         ),
@@ -416,17 +416,17 @@ async def test_s2_results_merged_with_openalex(
 
     with (
         patch(
-            "app.services.citation_service.openalex_svc.get_citing_works",
+            "citey.services.citation_service.openalex_svc.get_citing_works",
             new_callable=AsyncMock,
             return_value=[_CITING_WORKS_RAW[0]],
         ),
         patch(
-            "app.services.citation_service.s2_svc.get_citing_papers",
+            "citey.services.citation_service.s2_svc.get_citing_papers",
             new_callable=AsyncMock,
             return_value=s2_only,
         ),
         patch(
-            "app.services.citation_service.s2_svc.get_citation_counts",
+            "citey.services.citation_service.s2_svc.get_citation_counts",
             new_callable=AsyncMock,
             return_value={},
         ),
@@ -458,17 +458,17 @@ async def test_doi_dedup_prevents_duplicate_from_both_sources(
 
     with (
         patch(
-            "app.services.citation_service.openalex_svc.get_citing_works",
+            "citey.services.citation_service.openalex_svc.get_citing_works",
             new_callable=AsyncMock,
             return_value=[_CITING_WORKS_RAW[0]],  # doi = 10.1016/j.cell.2022.01.001
         ),
         patch(
-            "app.services.citation_service.s2_svc.get_citing_papers",
+            "citey.services.citation_service.s2_svc.get_citing_papers",
             new_callable=AsyncMock,
             return_value=s2_duplicate,
         ),
         patch(
-            "app.services.citation_service.s2_svc.get_citation_counts",
+            "citey.services.citation_service.s2_svc.get_citation_counts",
             new_callable=AsyncMock,
             return_value={},
         ),

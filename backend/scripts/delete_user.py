@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 load_dotenv(_PROJECT_ROOT / ".env")
 
 import firebase_admin.auth as fb_auth
-from app.firebase_client import get_db
+from citey.firebase_client import get_db
 
 
 def delete_user(email: str) -> None:

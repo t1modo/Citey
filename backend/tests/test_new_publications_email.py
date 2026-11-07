@@ -23,7 +23,7 @@ _BASE_CONTEXT = {
 
 def _make_env() -> Environment:
     # Use the production environment so custom filters (safe_url) are present.
-    from app.services.email_service import _get_jinja_env
+    from citey.services.email_service import _get_jinja_env
     return _get_jinja_env()
 
 

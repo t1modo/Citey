@@ -9,7 +9,7 @@ import pytest
 import respx
 from httpx import Response
 
-from app.services.openalex import (
+from citey.services.openalex import (
     _get_with_retry,
     extract_topics,
     extract_venue,
@@ -18,7 +18,7 @@ from app.services.openalex import (
     get_work_by_doi,
     normalize_citing_work,
 )
-from app.services.source_errors import SourceUnavailable
+from citey.services.source_errors import SourceUnavailable
 
 _DOI = "10.1038/nature12345"
 _RE_OA_WORKS = re.compile(r"https://api\.openalex\.org/works")
@@ -451,7 +451,7 @@ async def test_get_citing_works_empty_results(respx_mock) -> None:
 
 async def test_api_key_sent_when_configured(monkeypatch, respx_mock) -> None:
     """OPENALEX_API_KEY goes out as the api_key query parameter on every call."""
-    from app.config import get_settings
+    from citey.config import get_settings
 
     monkeypatch.setenv("OPENALEX_API_KEY", "oa-test-key")
     get_settings.cache_clear()

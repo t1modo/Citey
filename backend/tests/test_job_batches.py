@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.config import Settings
-from app.services import citation_service, publication_sync
+from citey.config import Settings
+from citey.services import citation_service, publication_sync
 
 
 class _Clock:
@@ -133,8 +133,8 @@ async def test_publication_sync_batches_the_same_way(clock: _Clock) -> None:
 def test_run_endpoint_passes_the_batch_through() -> None:
     from fastapi.testclient import TestClient
 
-    from app.config import get_settings
-    from main import create_app
+    from citey.config import get_settings
+    from citey.main import create_app
 
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: Settings(
@@ -143,8 +143,8 @@ def test_run_endpoint_passes_the_batch_through() -> None:
     job = AsyncMock(return_value={
         "users_processed": 1, "works_processed": 2, "new_notifications": 0, "next_cursor": "u9",
     })
-    with patch("app.firebase_client.get_db"), patch(
-        "app.services.citation_service.run_job_for_all_users", new=job
+    with patch("citey.firebase_client.get_db"), patch(
+        "citey.services.citation_service.run_job_for_all_users", new=job
     ):
         resp = TestClient(app).post(
             "/api/jobs/run",

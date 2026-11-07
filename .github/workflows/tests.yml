@@ -55,7 +55,7 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --locked
 
-      # Fails if app/db_models.py changed without a migration.
+      # Fails if src/citey/db_models.py changed without a migration.
       - name: Check migrations match the models
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}

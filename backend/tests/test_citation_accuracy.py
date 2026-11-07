@@ -12,13 +12,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models import TrackedWork
-from app.services.citation_service import (
+from citey.models import TrackedWork
+from citey.services.citation_service import (
     _CITATION_WINDOW_VERSION,
     process_tracked_work,
     run_job_for_user,
 )
-from app.services.citing_identity import identity_keys, is_junk, merge_records, title_key
+from citey.services.citing_identity import identity_keys, is_junk, merge_records, title_key
 
 _NOW = datetime.now(tz=timezone.utc)
 
@@ -144,8 +144,8 @@ def _s2(title: str, *, doi: str | None, pub: str, pid: str = "p9", arxiv: str | 
 
 
 async def _check(db: _DB, work: TrackedWork, oa: list, s2: list, **kw):
-    with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=oa)), \
-         patch("app.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=s2)):
+    with patch("citey.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=oa)), \
+         patch("citey.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=s2)):
         return await process_tracked_work("u1", work, db, **kw)
 
 
@@ -229,12 +229,12 @@ async def test_after_baseline_a_late_indexed_citation_is_reported() -> None:
 
 
 async def test_baseline_not_marked_done_when_a_source_failed() -> None:
-    from app.services.source_errors import SourceUnavailable
+    from citey.services.source_errors import SourceUnavailable
 
     db = _DB()
     db.store[WORK_PATH] = {}
-    with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=[])), \
-         patch("app.services.citation_service.s2_svc.get_citing_papers",
+    with patch("citey.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=[])), \
+         patch("citey.services.citation_service.s2_svc.get_citing_papers",
                new=AsyncMock(side_effect=SourceUnavailable("semantic_scholar", "429"))):
         await process_tracked_work("u1", _work(), db)
     assert "citation_window" not in db.store[WORK_PATH]
@@ -287,11 +287,11 @@ def _user_db() -> _DB:
 
 async def _run(db: _DB, email_service) -> None:
     oa = [_oa("A brand new citing paper with enough words", doi="10.1/n", pub=_day(1), wid="W2")]
-    with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=oa)), \
-         patch("app.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
-         patch("app.services.citation_service.openalex_svc.get_citation_counts", new=AsyncMock(return_value={})), \
-         patch("app.services.semantic_scholar.get_citation_counts", new=AsyncMock(return_value={})), \
-         patch("app.services.citation_service.firebase_auth.get_user") as get_user:
+    with patch("citey.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=oa)), \
+         patch("citey.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
+         patch("citey.services.citation_service.openalex_svc.get_citation_counts", new=AsyncMock(return_value={})), \
+         patch("citey.services.semantic_scholar.get_citation_counts", new=AsyncMock(return_value={})), \
+         patch("citey.services.citation_service.firebase_auth.get_user") as get_user:
         get_user.return_value.email_verified = True
         await run_job_for_user("u1", db.store["users/u1"], db, email_service)
 
@@ -339,7 +339,7 @@ def test_identity_keys_cover_every_identifier() -> None:
 # ACL Anthology papers: S2 often knows newer workshop papers only by DOI.
 
 def test_acl_papers_are_looked_up_by_acl_id_and_doi():
-    from app.services.semantic_scholar import _candidate_ids
+    from citey.services.semantic_scholar import _candidate_ids
 
     assert _candidate_ids("10.18653/v1/2025.uncertainlp-main.23") == [
         "ACL:2025.uncertainlp-main.23",
@@ -351,7 +351,7 @@ async def test_acl_count_comes_from_doi_when_acl_id_is_unknown():
     import respx
     from httpx import Response
 
-    from app.services.semantic_scholar import get_citation_counts
+    from citey.services.semantic_scholar import get_citation_counts
 
     with respx.mock:
         respx.post(url__regex=r".*/paper/batch.*").mock(
@@ -371,7 +371,7 @@ async def test_long_retry_after_gives_up_instead_of_sleeping(module):
     import respx
     from httpx import Response
 
-    svc = importlib.import_module(f"app.services.{module}")
+    svc = importlib.import_module(f"citey.services.{module}")
     sleep = AsyncMock()
     with respx.mock, patch.object(svc, "_sleep", sleep):
         respx.route().mock(return_value=Response(429, headers={"Retry-After": "78890"}))

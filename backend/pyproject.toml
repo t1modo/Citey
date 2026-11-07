@@ -33,10 +33,18 @@ dev = [
     "respx==0.23.1",
 ]
 
-# An app, not a library: uv installs the dependencies but never builds or
-# installs the project itself.
+# The code is the citey package in src/citey. uv installs it (editable
+# locally, as a wheel in Docker and on Vercel), so `import citey` works from
+# tests, scripts, Alembic and uvicorn alike.
+[build-system]
+requires = ["uv_build>=0.9.11,<0.10"]
+build-backend = "uv_build"
+
 [tool.uv]
-package = false
+package = true
+
+[tool.uv.build-backend]
+module-name = "citey"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

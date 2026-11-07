@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models import TrackedWork
-from app.services.citation_service import (
+from citey.models import TrackedWork
+from citey.services.citation_service import (
     _dedup_key,
     _normalize_title,
     _truncate,
@@ -252,12 +252,12 @@ def _raw_citing_work(pub_date: str | None, *, doi: str = "10.1111/citing.0001") 
 def _patch_oa_s2(oa_return: list, s2_return: list | None = None):
     return (
         patch(
-            "app.services.citation_service.openalex_svc.get_citing_works",
+            "citey.services.citation_service.openalex_svc.get_citing_works",
             new_callable=AsyncMock,
             return_value=oa_return,
         ),
         patch(
-            "app.services.citation_service.s2_svc.get_citing_papers",
+            "citey.services.citation_service.s2_svc.get_citing_papers",
             new_callable=AsyncMock,
             return_value=s2_return or [],
         ),
@@ -389,12 +389,12 @@ async def test_partial_async_failure_still_returns_surviving_source(
     }
     with (
         patch(
-            "app.services.citation_service.openalex_svc.get_citing_works",
+            "citey.services.citation_service.openalex_svc.get_citing_works",
             new_callable=AsyncMock,
             side_effect=RuntimeError("OA exploded"),
         ),
         patch(
-            "app.services.citation_service.s2_svc.get_citing_papers",
+            "citey.services.citation_service.s2_svc.get_citing_papers",
             new_callable=AsyncMock,
             return_value=[s2_paper],
         ),
@@ -416,14 +416,14 @@ _WORK_PATH = "users/uid1/trackedWorks/10.1038__nature12345"
 async def test_one_source_failing_is_recorded_and_other_source_still_counts(
     fake_db: _FakeDB, tracked_work: TrackedWork
 ) -> None:
-    from app.services.source_errors import SourceUnavailable
+    from citey.services.source_errors import SourceUnavailable
 
     failures: list[str] = []
     with patch(
-        "app.services.citation_service.openalex_svc.get_citing_works",
+        "citey.services.citation_service.openalex_svc.get_citing_works",
         new_callable=AsyncMock, return_value=[_raw_citing_work(_RECENT)],
     ), patch(
-        "app.services.citation_service.s2_svc.get_citing_papers",
+        "citey.services.citation_service.s2_svc.get_citing_papers",
         new_callable=AsyncMock, side_effect=SourceUnavailable("semantic_scholar", "429"),
     ):
         count, _ = await process_tracked_work(
@@ -439,13 +439,13 @@ async def test_one_source_failing_is_recorded_and_other_source_still_counts(
 async def test_all_sources_failing_leaves_last_checked_untouched(
     fake_db: _FakeDB, tracked_work: TrackedWork
 ) -> None:
-    from app.services.source_errors import SourceUnavailable
+    from citey.services.source_errors import SourceUnavailable
 
     with patch(
-        "app.services.citation_service.openalex_svc.get_citing_works",
+        "citey.services.citation_service.openalex_svc.get_citing_works",
         new_callable=AsyncMock, side_effect=SourceUnavailable("openalex", "503"),
     ), patch(
-        "app.services.citation_service.s2_svc.get_citing_papers",
+        "citey.services.citation_service.s2_svc.get_citing_papers",
         new_callable=AsyncMock, side_effect=SourceUnavailable("semantic_scholar", "429"),
     ):
         count, _ = await process_tracked_work("uid1", tracked_work, fake_db)
@@ -469,12 +469,12 @@ async def test_foreign_openalex_id_is_resolved_by_doi(fake_db: _FakeDB) -> None:
 
     citing = AsyncMock(return_value=[])
     with patch(
-        "app.services.citation_service.openalex_svc.get_work_by_doi",
+        "citey.services.citation_service.openalex_svc.get_work_by_doi",
         new_callable=AsyncMock, return_value={"id": "https://openalex.org/W42"},
     ), patch(
-        "app.services.citation_service.openalex_svc.get_citing_works", citing,
+        "citey.services.citation_service.openalex_svc.get_citing_works", citing,
     ), patch(
-        "app.services.citation_service.s2_svc.get_citing_papers",
+        "citey.services.citation_service.s2_svc.get_citing_papers",
         new_callable=AsyncMock, return_value=[],
     ):
         await process_tracked_work("uid1", work, fake_db)

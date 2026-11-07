@@ -34,10 +34,10 @@ load_dotenv(_PROJECT_ROOT / ".env")
 
 import json  # noqa: E402
 
-from app.config import get_settings  # noqa: E402
-from app.firebase_client import get_db  # noqa: E402
-from app.models import TrackedWork  # noqa: E402
-from app.services.citation_service import process_tracked_work  # noqa: E402
+from citey.config import get_settings  # noqa: E402
+from citey.firebase_client import get_db  # noqa: E402
+from citey.models import TrackedWork  # noqa: E402
+from citey.services.citation_service import process_tracked_work  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Logging

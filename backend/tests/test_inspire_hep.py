@@ -18,7 +18,7 @@ import pytest
 import respx
 from httpx import Response
 
-from app.services.inspire_hep import (
+from citey.services.inspire_hep import (
     _first_last_to_inspire,
     _inspire_to_first_last,
     _normalize_work,
@@ -238,7 +238,7 @@ async def test_get_works_paginates_multiple_pages() -> None:
             Response(200, json=_lit_response(page2, total=3)),
         ]
     )
-    import app.services.inspire_hep as inspire_mod
+    import citey.services.inspire_hep as inspire_mod
     original = inspire_mod._PAGE_SIZE
     inspire_mod._PAGE_SIZE = 2
     try:

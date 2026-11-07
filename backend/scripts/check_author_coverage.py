@@ -21,9 +21,9 @@ import sys
 # Allow running from the backend/ directory without installing the package.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app.routers.works import _names_match
-from app.services import openalex as oa_svc
-from app.services import semantic_scholar as s2_svc
+from citey.routers.works import _names_match
+from citey.services import openalex as oa_svc
+from citey.services import semantic_scholar as s2_svc
 
 
 def _strip_doi(doi: str | None) -> str | None:

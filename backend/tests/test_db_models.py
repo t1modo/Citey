@@ -19,8 +19,8 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.db import DatabaseNotConfigured, make_engine, sqlalchemy_url
-from app.db_models import (
+from citey.db import DatabaseNotConfigured, make_engine, sqlalchemy_url
+from citey.db_models import (
     Alert,
     Citation,
     CitingWork,
@@ -91,8 +91,8 @@ def test_neon_urls_use_the_psycopg_driver() -> None:
 
 
 def test_session_needs_a_database_url(monkeypatch) -> None:
-    from app import db
-    from app.config import Settings
+    from citey import db
+    from citey.config import Settings
 
     monkeypatch.setattr(db, "get_settings", lambda: Settings(database_url=""))
     db.get_engine.cache_clear()
