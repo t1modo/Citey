@@ -77,7 +77,8 @@ backend/
     models/           database tables (SQLModel): base.py, user.py, work.py,
                       citation.py, alert.py, support.py
     schemas/          API request/response shapes (SQLModel, no table)
-    config.py, db.py, ...
+    core/             infrastructure: db.py (Postgres connections and sessions)
+    config.py, ...
     routers/          one module per /api/... area
     services/         citation sources, email, publication sync
     templates/email/  email templates, shipped inside the package

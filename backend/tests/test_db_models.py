@@ -19,7 +19,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.db import DatabaseNotConfigured, make_engine, sqlalchemy_url
+from app.core.db import DatabaseNotConfigured, make_engine, sqlalchemy_url
 from app.models import (
     Alert,
     Citation,
@@ -91,7 +91,7 @@ def test_neon_urls_use_the_psycopg_driver() -> None:
 
 
 def test_session_needs_a_database_url(monkeypatch) -> None:
-    from app import db
+    from app.core import db
     from app.config import Settings
 
     monkeypatch.setattr(db, "get_settings", lambda: Settings(database_url=""))
