@@ -29,7 +29,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vgpu/wgsl": "0.6.0",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^6.2.1",
     "@webgpu/types": "0.1.74",
     "autoprefixer": "^10.0.1",
     "eslint": "^9",
