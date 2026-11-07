@@ -140,6 +140,18 @@ the SQL the PR's new migrations will run, and the SQL that undoes them. Read
 it before merging. Locally:
 `DATABASE_URL=postgresql://x@localhost/x ../.github/scripts/migration-draft.sh origin/main`.
 
+Code reads and writes Postgres through `app.store` (users, works,
+citations, alerts, limits): small async functions over the session that
+flush but never commit, so each request commits once.
+
+To copy the data from Firestore into Postgres (read-only on the Firestore
+side, every write an upsert, one transaction per user):
+
+```bash
+uv run python scripts/copy_firestore_to_postgres.py --dry-run   # copy, then roll back
+uv run python scripts/copy_firestore_to_postgres.py
+```
+
 Production is the Neon project `citey`. Migrations are not run on deploy yet:
 apply them with `DATABASE_URL_UNPOOLED` set to Neon's direct connection
 string before deploying code that needs them.

@@ -45,6 +45,11 @@ class Work(Base, table=True):
     # Version of the "what counts as new" window the first check recorded
     # citations under. Firestore: citation_window.
     citation_window: Optional[int] = Field(default=None, sa_type=Integer)
+    # Identity keys ("doi:…", "id:w…") of citing papers reported while the
+    # data lived in Firestore, whose details were not kept. They count as
+    # already reported, so those papers are never announced twice.
+    # Firestore: notified_keys.
+    known_citing_keys: list[str] = text_array_column()
 
     created_at: datetime = created_at_column()
 
