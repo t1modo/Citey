@@ -1,7 +1,7 @@
 import os
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +16,9 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        # Lets Settings(clerk_publishable_key=...) work for fields that read
+        # an aliased environment variable.
+        populate_by_name=True,
     )
 
     # Firebase
@@ -70,6 +73,15 @@ class Settings(BaseSettings):
     # traffic; DATABASE_URL_UNPOOLED is the direct one, for migrations.
     database_url: str = ""
     database_url_unpooled: str = ""
+
+    # Clerk. The publishable key names the instance whose session tokens the
+    # API accepts; the site uses the same NEXT_PUBLIC_ variable, so one value
+    # in Vercel serves both. Tokens are checked against Clerk's public keys,
+    # so no secret is needed to verify them.
+    clerk_publishable_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("CLERK_PUBLISHABLE_KEY", "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"),
+    )
 
     # OpenCitations. Optional; a free token raises the rate limit:
     # https://opencitations.net/accesstoken

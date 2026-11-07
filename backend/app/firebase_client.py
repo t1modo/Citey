@@ -52,7 +52,16 @@ def get_db() -> Any:
 
 
 def verify_token(token: str) -> dict:
-    """Verify a Firebase ID token and return its decoded claims."""
+    """Verify a sign-in token and return its claims, with the user's ``uid``.
+
+    Clerk session tokens are recognised by their issuer and checked against
+    Clerk's public keys; anything else is a Firebase ID token. Both kinds
+    work while users move from Firebase Auth to Clerk.
+    """
+    from app.clerk_auth import is_clerk_token, verify_clerk_token
+
+    if is_clerk_token(token):
+        return verify_clerk_token(token)
     _initialize_firebase()
     decoded = auth.verify_id_token(token)
     return decoded
