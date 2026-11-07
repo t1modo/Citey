@@ -73,7 +73,7 @@ Add or upgrade a backend dependency with `uv add <package>`, which updates
 ```
 backend/
   src/app/            the API, as the installable package `app`
-    main.py           FastAPI app (Vercel entrypoint: src.app.main:app)
+    main.py           FastAPI app
     models/           database tables (SQLModel): base.py, user.py, work.py,
                       citation.py, alert.py, support.py
     store/            database access only: base.py (BaseStore), user.py,
@@ -85,13 +85,17 @@ backend/
     services/         the rules: tracking, alerts, citation checks, sources,
                       email, publication sync; they use the stores
     templates/email/  email templates, shipped inside the package
+  main.py             Vercel's entrypoint: puts src/ on the path, exposes the app
   migrations/         Alembic migrations
   tests/              pytest
   scripts/            one-off maintenance scripts
 ```
 
 `uv sync` installs `app` in editable mode, so `import app` works from the
-tests, scripts, Alembic and `uvicorn app.main:app`.
+tests, scripts, Alembic and `uvicorn app.main:app`. Vercel installs only the
+dependencies, never the project itself, so its entrypoint is
+`backend/main.py` (`main:app`), which adds `src/` to the path first.
+`tests/test_vercel_entrypoint.py` imports it the same way.
 
 ### Async
 
