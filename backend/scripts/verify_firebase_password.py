@@ -6,8 +6,9 @@ reads the same FIREBASE_HASH_* variables). It asks for the password
 without showing it and prints only whether it matches, so you can tell a
 mistyped password apart from a problem with how hashes reach Clerk.
 
-    pip install cryptography
-    python backend/scripts/verify_firebase_password.py users.json you@example.com
+    uv run --project backend python backend/scripts/verify_firebase_password.py users.json you@example.com
+
+(cryptography comes with the backend's locked dependencies.)
 
 Firebase's scrypt: key = scrypt(password, salt + salt_separator,
 N = 2**mem_cost, r = rounds, p = 1, 32 bytes); the stored hash is the
