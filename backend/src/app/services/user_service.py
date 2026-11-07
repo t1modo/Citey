@@ -19,13 +19,20 @@ logger = logging.getLogger(__name__)
 
 
 async def _account_email(uid: str) -> str:
-    """The sign-in email, from Firebase Auth (blocking, so off the loop)."""
+    """The sign-in email: from Firebase Auth, or from Clerk for an account
+    Firebase doesn't know (blocking calls, so off the loop)."""
+    from app import clerk_api
+
     try:
         ensure_firebase()
         record = await run_blocking(firebase_auth.get_user, uid)
+        if record.email:
+            return record.email
     except Exception:  # noqa: BLE001  (a Clerk-only user, or no record)
-        return ""
-    return record.email or ""
+        pass
+    if clerk_api.configured():
+        return await run_blocking(clerk_api.email_for, uid)
+    return ""
 
 
 async def ensure_user(session: AsyncSession, uid: str) -> User:

@@ -79,6 +79,9 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("CLERK_PUBLISHABLE_KEY", "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"),
     )
+    # Clerk Backend API key, for listing accounts and looking up a user's
+    # email. Without it only Firebase accounts are known to the jobs.
+    clerk_secret_key: str = ""
 
     # OpenCitations. Optional; a free token raises the rate limit:
     # https://opencitations.net/accesstoken

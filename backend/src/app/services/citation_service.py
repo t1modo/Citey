@@ -792,14 +792,24 @@ def _list_auth_uids() -> set[str]:
 
 
 async def _get_auth_uids() -> set[str]:
-    """Every Firebase Auth user UID, fetched off the event loop."""
-    return await run_blocking(_list_auth_uids)
+    """Every account's uid: Firebase Auth users, plus Clerk users when Clerk is
+    configured, fetched off the event loop. While users move to Clerk an
+    account can be in either. If Clerk is configured but unreachable this
+    raises (ClerkUnavailable) instead of returning Firebase alone, so no
+    Clerk user is ever mistaken for an orphan."""
+    from app import clerk_api
+
+    uids = await run_blocking(_list_auth_uids)
+    if clerk_api.configured():
+        uids |= await run_blocking(clerk_api.list_account_uids)
+    return uids
 
 
 async def cleanup_orphan_users(session: AsyncSession, dry_run: bool = False) -> dict:
     """
-    Delete accounts with no Firebase Auth record: their profile, tracking and
-    alerts (papers and citations stay for anyone else tracking them).
+    Delete accounts with no sign-in record in Firebase Auth or Clerk: their
+    profile, tracking and alerts (papers and citations stay for anyone else
+    tracking them).
     """
     auth_uids = await _get_auth_uids()
     store = UserStore(session)
