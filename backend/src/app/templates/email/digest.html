@@ -3,9 +3,10 @@
 {% block title %}{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} of your work | {{ app_name }}{% endblock %}
 
 {% block preheader %}
+{%- set citing = total_citing | default(total_citations) -%}
 {%- set first = citation_groups[0].citations[0] if citation_groups and citation_groups[0].citations else None -%}
 {%- if first -%}
-"{{ first.citing_work_title | truncate(90) }}"{% if total_citations > 1 %} and {{ total_citations - 1 }} more{% endif %} cite{% if total_citations == 1 %}s{% endif %} your work.
+"{{ first.citing_work_title | truncate(90) }}"{% if citing > 1 %} and {{ citing - 1 }} more{% endif %} cite{% if citing == 1 %}s{% endif %} your work.
 {%- else -%}
 New citations of your work.
 {%- endif -%}
@@ -16,18 +17,19 @@ New citations of your work.
 
 {% if recipient_name %}{% call ui.p(tone="muted", size=14, bottom=8) %}Hi {{ recipient_name }},{% endcall %}{% endif %}
 
+{# Citing papers, not citations: one new paper can cite several of the user's. #}
+{% set citing = total_citing | default(total_citations) %}
 {% call ui.h1() %}
-  {%- if total_citations == 1 -%}
+  {%- if citing == 1 -%}
     A {{ ui.mark("new paper") }} cites your work
   {%- else -%}
-    {{ ui.mark(total_citations ~ " new papers") }} cite your work
+    {{ ui.mark(citing ~ " new papers") }} cite your work
   {%- endif -%}
 {% endcall %}
 
+{# One line: trim_blocks drops the newline after a block tag, which was the only space here. #}
 {% call ui.p(tone="muted", size=15, bottom=0) %}
-  {{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %}
-  {% if total_papers == 1 %}of one of your papers{% else %}across {{ total_papers }} of your papers{% endif %},
-  found in OpenAlex and Semantic Scholar on {{ digest_date }}.
+  {{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} {% if total_papers == 1 %}of one of your papers{% else %}across {{ total_papers }} of your papers{% endif %}, found on {{ digest_date }}.
 {% endcall %}
 
 {% for group in citation_groups %}
@@ -53,8 +55,9 @@ New citations of your work.
 {% call ui.entry(n.citing_work_title, href, [n.citing_authors | author_line(3, "others"), affiliations]) %}
   {%- if when or n.citing_work_doi %}
   <div class="muted" style="margin-top:4px; font-family:{{ ui.SANS }}; font-size:13px; line-height:1.5; color:#5B6577;">
-    {%- if when %}{{ when }}.{% endif %}
-    {%- if n.citing_work_doi %} <a href="https://doi.org/{{ n.citing_work_doi }}" class="muted" style="font-family:{{ ui.MONO }}; font-size:12px; color:#5B6577; text-decoration:underline; text-decoration-color:#C9D0DA;">doi:{{ n.citing_work_doi }}</a>{% endif %}
+    {%- if when %}{{ when }}{% endif %}
+    {%- if when and n.citing_work_doi %}, {% endif %}
+    {%- if n.citing_work_doi %}<a href="https://doi.org/{{ n.citing_work_doi }}" class="muted" style="font-family:{{ ui.MONO }}; font-size:12px; color:#5B6577; text-decoration:underline; text-decoration-color:#C9D0DA;">doi:{{ n.citing_work_doi }}</a>{% endif %}
   </div>
   {%- endif %}
 {% endcall %}
@@ -70,7 +73,7 @@ New citations of your work.
 {{ ui.button(app_url ~ "/dashboard", "Open your dashboard") }}
 
 {% call ui.p(tone="muted", size=12, top=22, bottom=0) %}
-  Citation data comes from OpenAlex and Semantic Scholar. Lifetime counts can
+  Citation data comes from OpenAlex, Semantic Scholar, OpenCitations and Europe PMC. Lifetime counts can
   differ from Google Scholar, which also counts theses, slides and duplicate versions.
 {% endcall %}
 {% endblock %}

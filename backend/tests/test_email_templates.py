@@ -366,3 +366,70 @@ def test_transactional_templates_render(name: str) -> None:
     if name != "test":
         assert "https://citey.email/x?a=1&amp;b=2" in html_body
         assert "https://citey.email/x?a=1&b=2" in text_body
+
+
+class TestDigestCopyFixes:
+    """Regressions from the 2026-11-07 digest: a missing space, a stray
+    period after a bare date, and citations counted as citing papers."""
+
+    def _ctx(self, groups: list[dict], total: int, papers: int) -> dict:
+        return {**_BASE_CONTEXT, "recipient_name": "", "digest_date": "November 7, 2026",
+                "citation_groups": groups, "total_citations": total, "total_papers": papers}
+
+    def test_intro_keeps_the_space_before_of_and_across(self) -> None:
+        env = _make_env()
+        one = env.get_template("digest.html").render(
+            **self._ctx([_make_digest_group([_make_notification()])], 1, 1))
+        assert "1 new citation of one of your papers, found on November 7, 2026." in " ".join(one.split())
+        many = env.get_template("digest.html").render(**self._ctx(
+            [_make_digest_group([_make_notification(1)]), _make_digest_group([_make_notification(2)])], 2, 2))
+        assert "2 new citations across 2 of your papers" in " ".join(many.split())
+
+    def test_no_period_after_a_bare_date(self) -> None:
+        n = _make_notification()
+        n.citing_work_doi = None
+        n.citing_work_url = None
+        n.citing_publication_date = "2026-10-31"
+        out = _make_env().get_template("digest.html").render(
+            **self._ctx([_make_digest_group([n])], 1, 1))
+        assert "October 31, 2026." not in out
+        assert "October 31, 2026" in out
+
+    def test_date_and_doi_are_joined_by_a_comma(self) -> None:
+        n = _make_notification()
+        n.citing_publication_date = "2026-10-31"
+        out = " ".join(_make_env().get_template("digest.html").render(
+            **self._ctx([_make_digest_group([n])], 1, 1)).split())
+        assert "October 31, 2026, <a" in out
+
+    def test_one_paper_citing_two_of_yours_is_one_new_paper(self) -> None:
+        a = _make_notification(1)
+        b = _make_notification(1)
+        b.cited_work_id = "10.1038__other"
+        groups = [_make_digest_group([a]), _make_digest_group([b], cited_title="Other")]
+        env = _make_env()
+        ctx = {**self._ctx(groups, 2, 2), "total_citing": 1}
+        html = " ".join(env.get_template("digest.html").render(**ctx).split())
+        txt = env.get_template("digest.txt").render(**ctx)
+        assert "cites your work" in html and "2 new papers" not in html
+        assert txt.startswith("A new paper cites your work")
+        assert "2 new citations across 2 of your papers" in html
+
+
+def test_send_digest_counts_distinct_citing_papers(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+    from app.services import email_service
+
+    sent: dict = {}
+
+    async def fake_deliver(settings, to, subject, html, text, kind):  # noqa: ANN001
+        sent["subject"] = subject
+
+    monkeypatch.setattr(email_service, "_deliver", fake_deliver)
+    a, b = _make_notification(1), _make_notification(1)
+    b.cited_work_id = "10.1038__other"
+    groups = [_make_digest_group([a]), _make_digest_group([b], cited_title="Other")]
+    from app.config import get_settings
+    asyncio.run(email_service.send_digest_email(
+        "x@example.com", "", groups, 2, datetime(2026, 11, 7, tzinfo=timezone.utc), get_settings()))
+    assert sent["subject"] == "A new paper cites your work"

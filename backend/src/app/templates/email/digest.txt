@@ -1,10 +1,11 @@
-{% if total_citations == 1 %}A new paper cites your work{% else %}{{ total_citations }} new papers cite your work{% endif %}
+{% set citing = total_citing | default(total_citations) %}
+{% if citing == 1 %}A new paper cites your work{% else %}{{ citing }} new papers cite your work{% endif %}
 
 
 {% if recipient_name %}Hi {{ recipient_name }},
 
 {% endif %}
-{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} {% if total_papers == 1 %}of one of your papers{% else %}across {{ total_papers }} of your papers{% endif %}, found in OpenAlex and Semantic Scholar on {{ digest_date }}.
+{{ total_citations }} new citation{% if total_citations != 1 %}s{% endif %} {% if total_papers == 1 %}of one of your papers{% else %}across {{ total_papers }} of your papers{% endif %}, found on {{ digest_date }}.
 {% for group in citation_groups %}
 {% set shown = group.citations[:5] %}
 {% set overflow = (group.citations | length) - 5 %}
@@ -36,9 +37,9 @@ New citation{% if group.citations | length != 1 %}s{% endif %} of: {{ group.cite
 
 Open your dashboard: {{ app_url }}/dashboard
 
-Citation data comes from OpenAlex and Semantic Scholar. Lifetime counts can
-differ from Google Scholar, which also counts theses, slides and duplicate
-versions.
+Citation data comes from OpenAlex, Semantic Scholar, OpenCitations and
+Europe PMC. Lifetime counts can differ from Google Scholar, which also counts
+theses, slides and duplicate versions.
 
 You get these emails because you track citations on {{ app_name }}.
 Choose what we send: {{ app_url }}/settings

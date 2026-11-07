@@ -183,10 +183,11 @@ async def _deliver(settings: Settings, to_email: str, subject: str, html_body: s
     logger.info("%s email sent to %s, Resend ID: %s", kind, to_email, result.get("id", "<unknown>"))
 
 
-def digest_subject(total_citations: int) -> str:
-    if total_citations == 1:
+def digest_subject(total_citing: int) -> str:
+    """Subject for a digest announcing this many distinct citing papers."""
+    if total_citing == 1:
         return "A new paper cites your work"
-    return f"{total_citations} new papers cite your work"
+    return f"{total_citing} new papers cite your work"
 
 
 async def send_digest_email(
@@ -209,22 +210,29 @@ async def send_digest_email(
           - cited_work_doi (str | None)
           - citations (list[Notification])
     total_citations:
-        Total number of citing papers across all groups.
+        Total number of new citations (cited paper, citing paper pairs).
     digest_date:
         The UTC datetime the citations were found.
+
+    The subject and heading count distinct citing papers instead, since one
+    new paper can cite several of the user's papers.
     """
+    total_citing = len({
+        n.citing_work_id for group in citation_groups for n in group["citations"]
+    }) or total_citations
     context = {
         **_base_context(settings),
         "recipient_name": _greeting_name(recipient_name),
         "citation_groups": citation_groups,
         "total_citations": total_citations,
+        "total_citing": total_citing,
         "total_papers": len(citation_groups),
         "digest_date": f"{digest_date.strftime('%B')} {digest_date.day}, {digest_date.year}",
         "current_year": digest_date.year,
         "unsubscribe_url": make_unsubscribe_url(uid, settings) if uid else "",
     }
     html_body, text_body = _render("digest", context)
-    await _deliver(settings, to_email, digest_subject(total_citations), html_body, text_body, "Digest")
+    await _deliver(settings, to_email, digest_subject(total_citing), html_body, text_body, "Digest")
 
 
 async def send_verification_email(
