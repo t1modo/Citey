@@ -23,12 +23,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import Settings, get_settings
-from app.core.concurrency import run_blocking
 from app.core.db import get_session
 from app.deps import enforce_cooldown
-from app.firebase_client import verify_token
 from app.schemas import JobRunRequest
 from app.services import convert, user_service
+from app.services.account_service import verify_token
 from app.store import AlertStore, UserStore
 
 logger = logging.getLogger(__name__)
@@ -71,7 +70,7 @@ async def _authorize_job_request(
     # 2. Fall back to Firebase Bearer token.
     if credentials and credentials.credentials:
         try:
-            decoded = await run_blocking(verify_token, credentials.credentials)
+            decoded = await verify_token(credentials.credentials)
             uid: str = decoded.get("uid") or decoded.get("user_id", "")
             if uid:
                 return uid
@@ -208,7 +207,10 @@ async def cleanup_notifications(
     Authorization: X-Cron-Secret header **or** Firebase Bearer token.
     When called by an authenticated user, only cleans up their own notifications.
     """
-    from app.services.citation_service import cleanup_old_notifications, _NOTIFICATION_TTL_DAYS
+    from app.services.citation_service import (
+        _NOTIFICATION_TTL_DAYS,
+        cleanup_old_notifications,
+    )
 
     logger.info(
         "Job /cleanup-notifications triggered by caller_id=%s dry_run=%s",
@@ -350,7 +352,7 @@ async def email_test(
             headers={"WWW-Authenticate": "Bearer"},
         )
     try:
-        decoded = await run_blocking(verify_token, credentials.credentials)
+        decoded = await verify_token(credentials.credentials)
         uid: str = decoded.get("uid") or decoded.get("user_id", "")
     except Exception as exc:
         raise HTTPException(

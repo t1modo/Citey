@@ -25,15 +25,15 @@ from unittest.mock import AsyncMock
 import firebase_admin.auth
 import pytest
 import resend
+from app.config import Settings, get_settings
+from app.core import db as core_db
+from app.core.db import get_session
+from app.main import create_app
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.config import Settings, get_settings
-from app.core import db as core_db
-from app.core.db import get_session
 from tests.conftest import needs_db
-from app.main import create_app
 
 USER = {"email": "ada@uni.edu", "notify_enabled": True, "display_name": "Ada"}
 
@@ -154,6 +154,7 @@ async def guarded(monkeypatch, pg_session):
     from app.core.db import make_engine
     from app.services import tracking_service
     from app.store import AlertStore, CitationStore, UserStore
+
     from tests.conftest import TEST_DATABASE_URL
 
     now = datetime.now(timezone.utc)
@@ -175,9 +176,14 @@ async def guarded(monkeypatch, pg_session):
             return result() if callable(result) else result
         return call
 
-    # Sign-in checks, Firebase Auth and Resend are blocking SDK calls.
-    for module in ("app.deps", "app.routers.jobs", "app.routers.support"):
-        monkeypatch.setattr(f"{module}.verify_token", blocking("verify_token", {"uid": "u1"}))
+    # Sign-in checks, Firebase Auth and Resend are blocking SDK calls. With
+    # Clerk not set up, every token goes to Firebase.
+    monkeypatch.setattr("app.core.clerk.can_verify_tokens", lambda: False)
+    monkeypatch.setattr("app.core.clerk.configured", lambda: False)
+    monkeypatch.setattr("app.firebase_client._initialize_firebase", lambda: None)
+    monkeypatch.setattr(firebase_admin.auth, "verify_id_token", blocking("auth.verify_id_token", {"uid": "u1"}))
+    monkeypatch.setattr(firebase_admin.auth, "list_users", blocking(
+        "auth.list_users", lambda: SimpleNamespace(users=[SimpleNamespace(uid="u1")], get_next_page=lambda: None)))
     monkeypatch.setattr(firebase_admin.auth, "get_user", blocking(
         "auth.get_user", lambda: SimpleNamespace(uid="u1", email="ada@uni.edu", email_verified=False)))
     monkeypatch.setattr(firebase_admin.auth, "delete_user", blocking("auth.delete_user"))

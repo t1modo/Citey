@@ -6,26 +6,19 @@ of the app expects. The database work is in UserStore; nothing here commits.
 import logging
 from typing import Any
 
-from firebase_admin import auth as firebase_auth
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.core.concurrency import run_blocking
-from app.firebase_client import ensure_firebase
 from app.models import User
-from app.services import convert
+from app.services import account_service, convert
 from app.store import UserStore
 
 logger = logging.getLogger(__name__)
 
 
 async def _account_email(uid: str) -> str:
-    """The sign-in email, from Firebase Auth (blocking, so off the loop)."""
-    try:
-        ensure_firebase()
-        record = await run_blocking(firebase_auth.get_user, uid)
-    except Exception:  # noqa: BLE001  (a Clerk-only user, or no record)
-        return ""
-    return record.email or ""
+    """The sign-in email, from Clerk or Firebase Auth ("" when unknown)."""
+    account = await account_service.get_account(uid)
+    return account.email if account else ""
 
 
 async def ensure_user(session: AsyncSession, uid: str) -> User:

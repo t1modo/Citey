@@ -3,17 +3,14 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
-from firebase_admin import auth as firebase_auth
 from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import get_settings
-from app.core.concurrency import run_blocking
-from app.firebase_client import ensure_firebase
 from app.core.db import get_session
 from app.deps import get_current_user
 from app.schemas import LinkedAuthorEntry, UpdateProfileRequest, UserProfile
-from app.services import convert, tracking_service, user_service
+from app.services import account_service, convert, tracking_service, user_service
 from app.store import UserStore
 
 logger = logging.getLogger(__name__)
@@ -184,21 +181,17 @@ async def delete_account(
     """
     Permanently delete the account: the profile, what it tracks and its
     alerts (papers and citations stay for anyone else tracking them), then
-    the Firebase Authentication record, so the user cannot sign in again.
+    the sign-in records in Clerk and Firebase Auth, so the user cannot
+    sign in again.
 
-    If the Firebase Auth deletion fails (e.g. the record was already
-    removed), the error is logged but the endpoint still succeeds: the
-    data has already been deleted.
+    If deleting a sign-in record fails (e.g. it was already removed), the
+    error is logged but the endpoint still succeeds: the data has already
+    been deleted.
     """
     await UserStore(session).delete_by_id(uid)
     await session.commit()
 
-    try:
-        ensure_firebase()
-        await run_blocking(firebase_auth.delete_user, uid)
-        logger.info("Deleted Firebase Auth record for uid=%s", uid)
-    except Exception as exc:
-        logger.error("Could not delete Firebase Auth user %s (data already wiped): %s", uid, exc)
+    await account_service.delete_account(uid)
 
     logger.info("Account fully deleted for uid=%s", uid)
 

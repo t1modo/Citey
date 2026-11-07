@@ -1,8 +1,7 @@
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 # Every backend route is served under this prefix, locally and on Vercel,
 # where one project sends /api/* to the backend and the rest to the site.
@@ -15,9 +14,6 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
-        # Lets Settings(clerk_publishable_key=...) work for fields that read
-        # an aliased environment variable.
-        populate_by_name=True,
     )
 
     # Firebase
@@ -71,14 +67,13 @@ class Settings(BaseSettings):
     database_url: str = ""
     database_url_unpooled: str = ""
 
-    # Clerk. The publishable key names the instance whose session tokens the
-    # API accepts; the site uses the same NEXT_PUBLIC_ variable, so one value
-    # in Vercel serves both. Tokens are checked against Clerk's public keys,
-    # so no secret is needed to verify them.
-    clerk_publishable_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("CLERK_PUBLISHABLE_KEY", "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"),
-    )
+    # Clerk, through its Backend SDK. The secret key (Clerk Dashboard > API
+    # keys) checks session tokens and finds, lists and deletes users; without
+    # it the API accepts Firebase ID tokens only. CLERK_JWT_KEY, the "JWT
+    # public key" on the same page, is optional: with it a token is checked
+    # with no call to Clerk.
+    clerk_secret_key: str = ""
+    clerk_jwt_key: str = ""
 
     # OpenCitations. Optional; a free token raises the rate limit:
     # https://opencitations.net/accesstoken

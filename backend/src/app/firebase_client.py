@@ -61,17 +61,9 @@ def get_db() -> Any:
     return firestore.client()
 
 
-def verify_token(token: str) -> dict:
-    """Verify a sign-in token and return its claims, with the user's ``uid``.
-
-    Clerk session tokens are recognised by their issuer and checked against
-    Clerk's public keys; anything else is a Firebase ID token. Both kinds
-    work while users move from Firebase Auth to Clerk.
-    """
-    from app.clerk_auth import is_clerk_token, verify_clerk_token
-
-    if is_clerk_token(token):
-        return verify_clerk_token(token)
+def verify_id_token(token: str) -> dict:
+    """Verify a Firebase ID token and return its claims, with ``uid``.
+    Blocking. Requests use app.services.account_service.verify_token, which
+    sends Clerk session tokens to Clerk instead."""
     _initialize_firebase()
-    decoded = auth.verify_id_token(token)
-    return decoded
+    return auth.verify_id_token(token)

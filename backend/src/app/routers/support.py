@@ -30,9 +30,8 @@ from pydantic import BaseModel, Field, field_validator
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import Settings, get_settings
-from app.core.concurrency import run_blocking
 from app.core.db import get_session
-from app.firebase_client import verify_token
+from app.services.account_service import verify_token
 from app.store import LimitStore
 
 logger = logging.getLogger(__name__)
@@ -104,7 +103,7 @@ async def _optional_uid(credentials: HTTPAuthorizationCredentials | None) -> str
     if not credentials or not credentials.credentials:
         return None
     try:
-        decoded = await run_blocking(verify_token, credentials.credentials)
+        decoded = await verify_token(credentials.credentials)
         return decoded.get("uid") or decoded.get("user_id")
     except Exception:  # noqa: BLE001  (signed out senders are welcome too)
         return None

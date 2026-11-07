@@ -10,8 +10,10 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services import citation_service, tracking_service
+from app.services.account_service import Account
 from app.services.citation_service import _CITATION_WINDOW_VERSION, run_job_for_user
 from app.store import UserStore, WorkStore
+
 from tests.conftest import needs_db
 
 pytestmark = needs_db
@@ -53,8 +55,8 @@ async def _run(session, email_service, **kw) -> tuple[int, int]:
          patch("app.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
          patch("app.services.citation_service.openalex_svc.get_citation_counts", new=AsyncMock(return_value={})), \
          patch("app.services.semantic_scholar.get_citation_counts", new=AsyncMock(return_value={})), \
-         patch("app.services.citation_service.firebase_auth.get_user") as get_user:
-        get_user.return_value.email_verified = True
+         patch("app.services.account_service.get_account",
+               new=AsyncMock(return_value=Account("u1", "ada@uni.edu", True, "firebase"))):
         return await run_job_for_user("u1", session, email_service, **kw)
 
 

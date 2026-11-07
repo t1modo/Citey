@@ -15,29 +15,25 @@ reaches it first checks it, and everyone tracking it gets the alert.
 
 import asyncio
 import logging
+import re
 import threading
 import time
-import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from types import ModuleType
 from typing import Any
 
-from firebase_admin import auth as firebase_auth
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.core.concurrency import run_blocking
-from app.firebase_client import ensure_firebase
 from app.models import Work
 from app.schemas import Notification, is_openalex_work_id
-from app.services import alert_service, convert
-from app.services.citing_identity import is_junk, keys_for_normalized, merge_records
+from app.services import account_service, alert_service, convert
 from app.services import crossref as crossref_svc
 from app.services import europe_pmc as europe_pmc_svc
 from app.services import openalex as openalex_svc
 from app.services import opencitations as opencitations_svc
 from app.services import semantic_scholar as s2_svc
-
+from app.services.citing_identity import is_junk, keys_for_normalized, merge_records
 from app.services.email_service import resolve_recipient
 from app.store import AlertStore, CitationStore, UserStore, WorkStore
 
@@ -586,14 +582,9 @@ async def _email_digest(
     if not to_send:
         return
 
-    email_verified = True
-    try:
-        ensure_firebase()
-        user_record = await run_blocking(firebase_auth.get_user, uid)
-        email_verified = user_record.email_verified
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not check email_verified for uid=%s: %s", uid, exc)
-    if not email_verified:
+    # An account that can't be looked up is sent to, as before.
+    account = await account_service.get_account(uid)
+    if account is not None and not account.email_verified:
         logger.info("Skipping citation email: uid=%s email not verified.", uid)
         return
 
@@ -778,27 +769,14 @@ async def cleanup_old_notifications(session: AsyncSession, dry_run: bool = False
 # ---------------------------------------------------------------------------
 
 
-def _list_auth_uids() -> set[str]:
-    """Every Firebase Auth user UID (paginated). Blocking."""
-    # A nightly job has no sign-in token, so nothing else has set up the SDK.
-    ensure_firebase()
-    uids: set[str] = set()
-    page = firebase_auth.list_users()
-    while page:
-        for user in page.users:
-            uids.add(user.uid)
-        page = page.get_next_page()
-    return uids
-
-
 async def _get_auth_uids() -> set[str]:
-    """Every Firebase Auth user UID, fetched off the event loop."""
-    return await run_blocking(_list_auth_uids)
+    """Every uid that can sign in, with Firebase Auth or Clerk."""
+    return await account_service.sign_in_uids()
 
 
 async def cleanup_orphan_users(session: AsyncSession, dry_run: bool = False) -> dict:
     """
-    Delete accounts with no Firebase Auth record: their profile, tracking and
+    Delete accounts with no sign-in record (Firebase Auth or Clerk): their profile, tracking and
     alerts (papers and citations stay for anyone else tracking them).
     """
     auth_uids = await _get_auth_uids()

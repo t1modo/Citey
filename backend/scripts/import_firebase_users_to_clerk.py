@@ -23,17 +23,19 @@ secret key, which should never leave it.
    instance first (its sk_test_ key), and sign in with your old password
    on the development Account Portal:
 
-       python backend/scripts/import_firebase_users_to_clerk.py users.json --only you@example.com
+       cd backend
+       uv run python scripts/import_firebase_users_to_clerk.py users.json --only you@example.com
 
    Then the production instance (its sk_live_ key), a dry run first:
 
-       python backend/scripts/import_firebase_users_to_clerk.py users.json --dry-run
-       python backend/scripts/import_firebase_users_to_clerk.py users.json
+       uv run python scripts/import_firebase_users_to_clerk.py users.json --dry-run
+       uv run python scripts/import_firebase_users_to_clerk.py users.json
 
 Each user keeps their email (marked verified) and password, and their
 Firebase UID becomes the Clerk external_id, which the API reads to find
 their data. A user who already exists in Clerk is skipped, so the script
-can be run again. Only the Python standard library is used.
+can be run again. Users are created with the Clerk Backend SDK
+(clerk-backend-api), one of the backend's dependencies.
 """
 
 from __future__ import annotations
@@ -43,10 +45,9 @@ import json
 import os
 import sys
 import time
-import urllib.error
-import urllib.request
 
-CLERK_API = "https://api.clerk.com/v1/users"
+from clerk_backend_api import Clerk, models
+
 # Clerk allows 100 requests per 10 seconds on the Backend API.
 _PAUSE_SECONDS = 0.12
 
@@ -91,24 +92,15 @@ def clerk_user_body(user: dict, params: dict) -> dict | None:
     return body
 
 
-def _create(body: dict, secret_key: str) -> tuple[int, str]:
-    request = urllib.request.Request(
-        CLERK_API,
-        data=json.dumps(body).encode(),
-        headers={"Authorization": f"Bearer {secret_key}", "Content-Type": "application/json"},
-        method="POST",
-    )
+def _create(clerk: Clerk, body: dict) -> tuple[int, str]:
+    """(200, Clerk user ID), or (HTTP status, Clerk's error codes and messages)."""
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return response.status, json.load(response).get("id", "")
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode(errors="replace")
-        try:
-            errors = json.loads(detail).get("errors") or []
-            detail = "; ".join(e.get("code", "") + ": " + e.get("message", "") for e in errors) or detail
-        except ValueError:
-            pass
-        return exc.code, detail
+        return 200, clerk.users.create(request=body).id
+    except models.ClerkErrors as exc:
+        detail = "; ".join(f"{e.code}: {e.message}" for e in exc.data.errors) or str(exc)
+        return exc.status_code, detail
+    except models.SDKError as exc:
+        return exc.status_code, str(exc)
 
 
 def _hash_params() -> dict:
@@ -144,6 +136,7 @@ def main() -> None:
         if not users:
             sys.exit(f"No user with email {args.only} in {args.export}.")
     created = skipped = failed = 0
+    clerk = Clerk(bearer_auth=secret_key)
     for user in users:
         body = clerk_user_body(user, params)
         uid = user.get("localId", "?")
@@ -156,7 +149,7 @@ def main() -> None:
             print(f"would create {uid} ({kind})")
             created += 1
             continue
-        status, result = _create(body, secret_key)
+        status, result = _create(clerk, body)
         if status == 200:
             print(f"created {uid} -> {result}")
             created += 1

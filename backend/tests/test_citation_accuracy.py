@@ -10,17 +10,23 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlmodel import select
-
 from app.models import CitingWork, Work
 from app.services import alert_service, tracking_service
+from app.services.account_service import Account
 from app.services.citation_service import (
     _CITATION_WINDOW_VERSION,
     process_tracked_work,
     run_job_for_user,
 )
-from app.services.citing_identity import identity_keys, is_junk, merge_records, title_key
+from app.services.citing_identity import (
+    identity_keys,
+    is_junk,
+    merge_records,
+    title_key,
+)
 from app.store import CitationStore, UserStore, WorkStore
+from sqlmodel import select
+
 from tests.conftest import needs_db
 
 _NOW = datetime.now(tz=timezone.utc)
@@ -247,8 +253,8 @@ async def _run(session, email_service) -> None:
          patch("app.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
          patch("app.services.citation_service.openalex_svc.get_citation_counts", new=AsyncMock(return_value={})), \
          patch("app.services.semantic_scholar.get_citation_counts", new=AsyncMock(return_value={})), \
-         patch("app.services.citation_service.firebase_auth.get_user") as get_user:
-        get_user.return_value.email_verified = True
+         patch("app.services.account_service.get_account",
+               new=AsyncMock(return_value=Account("u1", "ada@uni.edu", True, "firebase"))):
         await run_job_for_user("u1", session, email_service, settings=MagicMock())
 
 
@@ -309,9 +315,8 @@ def test_acl_papers_are_looked_up_by_acl_id_and_doi():
 
 async def test_acl_count_comes_from_doi_when_acl_id_is_unknown():
     import respx
-    from httpx import Response
-
     from app.services.semantic_scholar import get_citation_counts
+    from httpx import Response
 
     with respx.mock:
         respx.post(url__regex=r".*/paper/batch.*").mock(

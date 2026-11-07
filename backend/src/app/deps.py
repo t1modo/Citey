@@ -3,8 +3,7 @@ import logging
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.core.concurrency import run_blocking
-from app.firebase_client import verify_token
+from app.services.account_service import verify_token
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +14,8 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
 ) -> str:
     """
-    Extract and verify the Firebase Bearer token from the Authorization header.
-    Returns the authenticated user's UID.
+    Extract and verify the Bearer token (Clerk session or Firebase ID
+    token) from the Authorization header. Returns the user's uid.
     Raises HTTP 401 if the token is missing or invalid.
     """
     if credentials is None or not credentials.credentials:
@@ -28,8 +27,7 @@ async def get_current_user(
 
     token = credentials.credentials
     try:
-        # Checking a token can fetch the issuer's public keys: off the loop.
-        decoded = await run_blocking(verify_token, token)
+        decoded = await verify_token(token)
     except Exception as exc:
         logger.warning("Token verification failed: %s", exc)
         raise HTTPException(

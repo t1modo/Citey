@@ -112,7 +112,7 @@ def _pacific_date() -> str:
 
 
 async def list_citation_check_uids() -> list[str]:
-    """Every user with a Firebase Auth account, in uid order (accounts with
+    """Every user with a sign-in account (Firebase Auth or Clerk), in uid order (accounts with
     no sign-in record are skipped, as the all-users sweep does)."""
     auth_uids = await _get_auth_uids()
     async with session_scope() as session:
@@ -127,7 +127,7 @@ async def list_citation_check_uids() -> list[str]:
 
 
 async def list_publication_sync_uids() -> list[str]:
-    """Users with an Auth account and a linked OpenAlex author, in uid order.
+    """Users with a sign-in account and a linked OpenAlex author, in uid order.
 
     Semantic Scholar links ("S2:...") are left out: the sync skips them.
     """
