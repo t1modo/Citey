@@ -24,7 +24,7 @@ def is_openalex_work_id(value: Optional[str]) -> bool:
 
 
 class TrackedWork(SQLModel):
-    id: str  # DOI or OpenAlex ID used as the Firestore doc ID
+    id: str  # DOI or OpenAlex ID used as the work's key
     doi: Optional[str] = None
     openalex_id: Optional[str] = None
     title: str

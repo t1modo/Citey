@@ -102,7 +102,7 @@ desktop.ini
 **/.claude/
 
 # ============================================================
-# Firebase / Google credentials
+# Credentials and other JSON (only the listed config files are tracked)
 # ============================================================
 *.json
 !package.json

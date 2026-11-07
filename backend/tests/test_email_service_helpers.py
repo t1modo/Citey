@@ -4,7 +4,7 @@ Tests for pure helper logic in app.services.email_service.
 Covers:
   - make_unsubscribe_url — HMAC token generation, URL structure, determinism.
 
-No HTTP calls, no Resend SDK, no Firebase required.
+No HTTP calls, no Resend SDK, no database required.
 """
 
 from __future__ import annotations

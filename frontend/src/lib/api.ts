@@ -263,10 +263,6 @@ export async function runJob(dryRun: boolean = false): Promise<{ message: string
   return res.json();
 }
 
-export async function sendVerificationEmail(): Promise<void> {
-  await authFetch("/auth/send-verification", { method: "POST" });
-}
-
 export async function sendTestEmail(): Promise<{ message: string }> {
   const res = await authFetch("/jobs/email-test", { method: "POST" });
   track("test_email_requested");

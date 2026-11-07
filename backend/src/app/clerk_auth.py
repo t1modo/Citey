@@ -1,15 +1,13 @@
 """
-Verify Clerk session tokens.
+Verify Clerk session tokens: the only way to sign in to the API.
 
 Clerk signs session tokens with RS256; the public keys live at the
 instance's Frontend API (``/.well-known/jwks.json``), so verifying needs no
 secret. The instance comes from the publishable key, which encodes the
 Frontend API host.
 
-The session token template adds ``external_id`` (the user's Firebase UID,
-set when existing users were imported) and ``email``. ``uid`` is the
-external ID when there is one, so a migrated user keeps their Firestore
-data; a user who signed up with Clerk has the Clerk user ID instead.
+A user's ``uid`` everywhere in the app (and their row in Postgres) is their
+Clerk user ID, the token's ``sub``.
 """
 
 from __future__ import annotations
@@ -44,23 +42,15 @@ def _jwks_client(iss: str) -> jwt.PyJWKClient:
     return jwt.PyJWKClient(f"{iss}/.well-known/jwks.json", cache_keys=True, lifespan=3600)
 
 
-def is_clerk_token(token: str) -> bool:
-    """True when the token's (unverified) issuer is the configured Clerk instance."""
+def verify_token(token: str) -> dict:
+    """Verify a Clerk session token and return the user's ``uid`` and email.
+
+    Blocking (the first call per key fetches Clerk's public keys), so callers
+    run it off the event loop. Raises on any invalid token.
+    """
     iss = issuer()
     if not iss:
-        return False
-    try:
-        claims = jwt.decode(token, options={"verify_signature": False})
-    except jwt.PyJWTError:
-        return False
-    return claims.get("iss") == iss
-
-
-def verify_clerk_token(token: str) -> dict:
-    """Verify a Clerk session token; return claims shaped like Firebase's."""
-    iss = issuer()
-    if not iss:
-        raise ValueError("Clerk is not configured")
+        raise ValueError("Clerk is not configured: set CLERK_PUBLISHABLE_KEY")
     key = _jwks_client(iss).get_signing_key_from_jwt(token).key
     claims = jwt.decode(
         token,
@@ -74,13 +64,9 @@ def verify_clerk_token(token: str) -> dict:
     azp = claims.get("azp")
     if azp and allowed and azp not in allowed:
         raise jwt.InvalidTokenError("Token was issued for another site")
-    external_id = (claims.get("external_id") or "").strip()
     return {
-        "uid": external_id or claims["sub"],
-        "clerk_user_id": claims["sub"],
+        "uid": claims["sub"],
         "email": claims.get("email") or None,
-        "email_verified": True,  # Clerk verifies the address at sign-up
-        "auth_provider": "clerk",
     }
 
 

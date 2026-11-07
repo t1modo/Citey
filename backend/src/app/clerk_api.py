@@ -1,12 +1,12 @@
 """
-Clerk Backend API lookups, for code that runs without a sign-in token.
+Clerk Backend API calls, for code that runs without a sign-in token or acts
+on the account itself.
 
-The nightly jobs need every account's ID, and a new profile needs its
-email. Accounts are known by the same uid the API uses: the user's
-external_id (their Firebase UID, set when they were imported) or, for
-someone who signed up with Clerk, their Clerk user ID.
+The nightly jobs need every account's ID, a new profile needs its email, and
+deleting an account removes the Clerk user. Accounts are known by their
+Clerk user ID, the same uid the API and Postgres use.
 
-Both calls block, so callers run them off the event loop.
+All calls block, so callers run them off the event loop.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ _PAGE = 500
 
 
 class ClerkUnavailable(RuntimeError):
-    """Clerk is configured but could not be reached."""
+    """Clerk is not configured, or could not be reached."""
 
 
 def configured() -> bool:
@@ -39,14 +39,12 @@ def _client() -> httpx.Client:
     )
 
 
-def account_uid(user: dict) -> str:
-    """The uid the rest of the app knows this Clerk user by."""
-    return (user.get("external_id") or "").strip() or user["id"]
-
-
 def list_account_uids() -> set[str]:
-    """Every Clerk user's uid. Raises ClerkUnavailable rather than returning a
-    partial list: a missing account would look like an orphan."""
+    """Every Clerk user's ID. Raises ClerkUnavailable rather than returning a
+    partial (or empty) list: a missing account would look like an orphan and
+    have its data deleted."""
+    if not configured():
+        raise ClerkUnavailable("CLERK_SECRET_KEY is not set")
     uids: set[str] = set()
     offset = 0
     try:
@@ -55,7 +53,7 @@ def list_account_uids() -> set[str]:
                 resp = client.get("/users", params={"limit": _PAGE, "offset": offset})
                 resp.raise_for_status()
                 page = resp.json()
-                uids.update(account_uid(u) for u in page)
+                uids.update(u["id"] for u in page)
                 if len(page) < _PAGE:
                     return uids
                 offset += _PAGE
@@ -64,22 +62,30 @@ def list_account_uids() -> set[str]:
 
 
 def email_for(uid: str) -> str:
-    """The primary email of the Clerk user with this uid, or ''."""
+    """The primary email of the Clerk user with this ID, or ''."""
+    if not configured():
+        return ""
     try:
         with _client() as client:
-            if uid.startswith("user_"):
-                resp = client.get(f"/users/{uid}")
-                users = [resp.json()] if resp.status_code == 200 else []
-            else:
-                resp = client.get("/users", params={"external_id": uid, "limit": 1})
-                users = resp.json() if resp.status_code == 200 else []
+            resp = client.get(f"/users/{uid}")
     except httpx.HTTPError:
         return ""
-    if not users:
+    if resp.status_code != 200:
         return ""
-    user = users[0]
+    user = resp.json()
     primary = user.get("primary_email_address_id")
     for address in user.get("email_addresses") or []:
         if address.get("id") == primary:
             return address.get("email_address") or ""
     return ""
+
+
+def delete_user(uid: str) -> None:
+    """Delete the Clerk user, so they cannot sign in again. A user already
+    gone (404) counts as deleted; any other failure raises."""
+    if not configured():
+        raise ClerkUnavailable("CLERK_SECRET_KEY is not set")
+    with _client() as client:
+        resp = client.delete(f"/users/{uid}")
+    if resp.status_code not in (200, 404):
+        resp.raise_for_status()

@@ -5,7 +5,7 @@ may block it.
 * Every route handler and every dependency is a coroutine (two cheap, cached
   sync dependencies excepted).
 * The Postgres layer (app.core.db) and the migrations are async.
-* At runtime, no blocking call (the sign-in check, Firebase Auth, Resend)
+* At runtime, no blocking call (the sign-in check, the Clerk API, Resend)
   runs on the loop that serves the request: each goes through run_blocking
   (app.core.concurrency). Fakes of those SDKs record every call made on the
   serving loop, and every endpoint is exercised against a real Postgres
@@ -19,10 +19,8 @@ fails.
 import asyncio
 import inspect
 from contextlib import AbstractAsyncContextManager
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import firebase_admin.auth
 import pytest
 import resend
 from fastapi.routing import APIRoute
@@ -146,7 +144,7 @@ class LoopGuard:
 async def guarded(monkeypatch, pg_session):
     """
     The app on a real Postgres (a fresh async session per request, on the
-    serving loop), with fake Firebase Auth / sign-in / Resend that record
+    serving loop), with fake sign-in / Clerk API / Resend that record
     calls made on that loop. Seeds user u1 with one paper and one alert.
     """
     from datetime import datetime, timezone
@@ -175,14 +173,11 @@ async def guarded(monkeypatch, pg_session):
             return result() if callable(result) else result
         return call
 
-    # Sign-in checks, Firebase Auth and Resend are blocking SDK calls.
+    # Sign-in checks, the Clerk Backend API and Resend are blocking calls.
     for module in ("app.deps", "app.routers.jobs", "app.routers.support"):
         monkeypatch.setattr(f"{module}.verify_token", blocking("verify_token", {"uid": "u1"}))
-    monkeypatch.setattr(firebase_admin.auth, "get_user", blocking(
-        "auth.get_user", lambda: SimpleNamespace(uid="u1", email="ada@uni.edu", email_verified=False)))
-    monkeypatch.setattr(firebase_admin.auth, "delete_user", blocking("auth.delete_user"))
-    monkeypatch.setattr(firebase_admin.auth, "generate_email_verification_link",
-                        blocking("auth.generate_email_verification_link", "https://verify"))
+    monkeypatch.setattr("app.clerk_api.email_for", blocking("clerk.email_for", "ada@uni.edu"))
+    monkeypatch.setattr("app.clerk_api.delete_user", blocking("clerk.delete_user"))
     monkeypatch.setattr(resend.Emails, "send", blocking("resend.send", {"id": "email_1"}))
     monkeypatch.setattr("app.services.email_service.verify_signed_token", lambda *a, **k: True)
 
@@ -221,7 +216,6 @@ CRON = {"X-Cron-Secret": "s3cret"}
 
 # One request per route that can block, with what it needs to get far.
 REQUESTS = {
-    ("POST", "/api/auth/send-verification"): dict(headers=AUTH),
     ("GET", "/api/profile"): dict(headers=AUTH),
     ("PUT", "/api/profile"): dict(headers=AUTH, json={"display_name": "Ada L."}),
     ("GET", "/api/profile/confirm-notification-email"): dict(
@@ -249,7 +243,7 @@ REQUESTS = {
 }
 
 # Routes that only await async clients (httpx, AsyncAnthropic, async
-# psycopg) and never call Firebase Auth or Resend.
+# psycopg) and never call the Clerk API or Resend.
 NO_BLOCKING_IO = {
     ("GET", "/"),
     ("GET", "/api/health"),
@@ -285,16 +279,18 @@ def test_no_blocking_call_runs_on_the_serving_loop(guarded, route) -> None:
 
 @needs_db
 def test_the_guard_catches_a_blocking_call_on_the_loop(guarded) -> None:
-    """The check itself works: a handler that calls Firebase Auth directly fails."""
+    """The check itself works: a handler that calls the Clerk API directly fails."""
     guard, client, app, _ = guarded
 
     @app.get("/api/__blocking_probe")
     async def probe():
-        firebase_admin.auth.get_user("u1")  # blocking, on the loop
+        from app import clerk_api
+
+        clerk_api.email_for("u1")  # blocking, on the loop
         return {}
 
     client.get("/api/__blocking_probe")
-    assert guard.calls_on_loop == ["auth.get_user"]
+    assert guard.calls_on_loop == ["clerk.email_for"]
 
 
 @needs_db

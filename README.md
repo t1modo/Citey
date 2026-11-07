@@ -11,8 +11,8 @@ Get an email when a new paper cites yours. Try it at [citey.email](https://www.c
 
 ## Stack
 
-* **Frontend:** Next.js, Tailwind, Firebase Auth, PostHog analytics.
-* **Backend:** FastAPI, Postgres (Neon) through SQLModel, Firebase Auth (moving to Clerk), Resend for email. Served at `/api` on the same domain.
+* **Frontend:** Next.js, Tailwind, Clerk (sign-in), PostHog analytics.
+* **Backend:** FastAPI, Postgres (Neon) through SQLModel, Clerk session tokens for sign-in, Resend for email. Served at `/api` on the same domain.
 * **Hosting:** one Vercel project builds both (see [Deploy on Vercel](#deploy-on-vercel)).
 * **Scheduled jobs:** [Inngest](https://www.inngest.com/) calls `/api/inngest`. See [Scheduled jobs](#scheduled-jobs).
 * **Data:** OpenAlex and Semantic Scholar for citations. Crossref, PubMed, NASA ADS, INSPIRE and DBLP for imports and DOI lookups.
@@ -22,14 +22,14 @@ Get an email when a new paper cites yours. Try it at [citey.email](https://www.c
 ### With Docker
 
 ```bash
-cp backend/.env.example backend/.env           # Firebase service account JSON, secrets
-cp frontend/.env.example frontend/.env.local   # Firebase web config
+cp backend/.env.example backend/.env           # Clerk keys, Resend, secrets
+cp frontend/.env.example frontend/.env.local   # Clerk publishable key
 docker compose up --build
 ```
 
 Site on http://localhost:3000, API on http://localhost:8000/api, Inngest
-Dev Server on http://localhost:8288. The site's Firebase config is compiled
-in at build time, so rebuild after editing `frontend/.env.local`.
+Dev Server on http://localhost:8288. The site's Clerk publishable key is
+compiled in at build time, so rebuild after editing `frontend/.env.local`.
 
 ### Without Docker
 
@@ -43,7 +43,9 @@ cd backend && uv sync && uv run uvicorn app.main:app --reload
 cd frontend && cp .env.example .env.local && npm install && npm run dev
 ```
 
-Fill `frontend/.env.local` with your Firebase web config.
+Fill `frontend/.env.local` with the Clerk development instance's keys
+(Clerk dashboard > API keys), and set the same publishable key and the
+secret key in `backend/.env`.
 
 Run the tests:
 
@@ -107,13 +109,13 @@ it.
   (`Depends(get_session)`), or `async with connect()` for raw SQL. Load
   relationships up front (`selectinload(...)`); lazy loading doesn't work in
   async code.
-- The blocking SDKs still in use (Firebase Auth, Resend) are called through
+- Blocking calls (the Clerk Backend API and key fetch, Resend) go through
   `run_blocking(fn, ...)` from `app.core.concurrency`, so they run on worker
   threads.
 
 `tests/test_async_backend.py` enforces this: every handler and dependency
 must be async, and every route is called against Postgres with fakes of
-the sign-in check, Firebase Auth and Resend that fail the test if a blocking
+the sign-in check, the Clerk API and Resend that fail the test if a blocking
 call runs on the serving loop. A new route goes in that test's `REQUESTS` (or `NO_BLOCKING_IO`).
 
 ### Database (Postgres)
@@ -158,14 +160,6 @@ Code reaches Postgres in layers: **routers → services → stores → database*
   tracker and announces its recent citations; `convert` turns rows into the
   API's shapes. The router (or job) commits once per request.
 
-To copy the data from Firestore into Postgres (read-only on the Firestore
-side, every write an upsert, one transaction per user):
-
-```bash
-uv run python scripts/copy_firestore_to_postgres.py --dry-run   # copy, then roll back
-uv run python scripts/copy_firestore_to_postgres.py
-```
-
 Production is the Neon project `citey`. Migrations are not run on deploy yet:
 apply them with `DATABASE_URL_UNPOOLED` set to Neon's direct connection
 string before deploying code that needs them.
@@ -186,7 +180,8 @@ Project settings:
 * **Root Directory:** the repository root, not `frontend`.
 * **Domains:** `citey.email` and `www.citey.email`.
 * **Environment variables:** `NEXT_PUBLIC_API_URL=/api` for the site, plus
-  the backend settings below and `FIREBASE_SERVICE_ACCOUNT_JSON`. Set
+  the backend settings below, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (the
+  `pk_live_` key; the API reads it too) and `CLERK_SECRET_KEY`. Set
   `API_URL=https://www.citey.email` (no `/api`); the backend adds the prefix
   to links.
 
@@ -221,7 +216,7 @@ To run a job now, open the function in the Inngest dashboard (or the Dev
 Server at http://localhost:8288) and choose **Invoke**. To check one user,
 send `citey/citation-check.requested` with `{"uid": "...", "dry_run": true}`.
 The `/api/jobs/*` endpoints still work for checks run by hand: a user's own
-check uses their Firebase token, and an all-users run uses `X-Cron-Secret`.
+check uses their Clerk session token, and an all-users run uses `X-Cron-Secret`.
 
 ### Production setup
 

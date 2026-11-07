@@ -20,10 +20,6 @@ class Settings(BaseSettings):
         populate_by_name=True,
     )
 
-    # Firebase
-    firebase_service_account_json: str = ""
-    firebase_service_account_path: str = ""
-
     # Resend
     resend_api_key: str = ""
 
@@ -71,16 +67,18 @@ class Settings(BaseSettings):
     database_url: str = ""
     database_url_unpooled: str = ""
 
-    # Clerk. The publishable key names the instance whose session tokens the
-    # API accepts; the site uses the same NEXT_PUBLIC_ variable, so one value
+    # Clerk, the only sign-in system. The publishable key names the instance
+    # whose session tokens the API accepts; the site uses the same NEXT_PUBLIC_ variable, so one value
     # in Vercel serves both. Tokens are checked against Clerk's public keys,
     # so no secret is needed to verify them.
     clerk_publishable_key: str = Field(
         default="",
         validation_alias=AliasChoices("CLERK_PUBLISHABLE_KEY", "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"),
     )
-    # Clerk Backend API key, for listing accounts and looking up a user's
-    # email. Without it only Firebase accounts are known to the jobs.
+    # Clerk Backend API key: listing accounts for the jobs, looking up a new
+    # user's email and deleting the Clerk user with their account. Required
+    # in production; without it the jobs refuse to run rather than treat
+    # every user as an orphan.
     clerk_secret_key: str = ""
 
     # OpenCitations. Optional; a free token raises the rate limit:

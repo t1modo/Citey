@@ -246,9 +246,7 @@ async def _run(session, email_service) -> None:
     with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=oa)), \
          patch("app.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
          patch("app.services.citation_service.openalex_svc.get_citation_counts", new=AsyncMock(return_value={})), \
-         patch("app.services.semantic_scholar.get_citation_counts", new=AsyncMock(return_value={})), \
-         patch("app.services.citation_service.firebase_auth.get_user") as get_user:
-        get_user.return_value.email_verified = True
+         patch("app.services.semantic_scholar.get_citation_counts", new=AsyncMock(return_value={})):
         await run_job_for_user("u1", session, email_service, settings=MagicMock())
 
 

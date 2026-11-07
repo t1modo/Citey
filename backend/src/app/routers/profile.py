@@ -3,13 +3,12 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
-from firebase_admin import auth as firebase_auth
 from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import get_settings
 from app.core.concurrency import run_blocking
-from app.firebase_client import ensure_firebase
+from app import clerk_api
 from app.core.db import get_session
 from app.deps import get_current_user
 from app.schemas import LinkedAuthorEntry, UpdateProfileRequest, UserProfile
@@ -22,10 +21,9 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 
 
 def _doc_to_profile(uid: str, data: dict) -> UserProfile:
-    """Convert a raw Firestore document dict to a UserProfile."""
+    """Convert the user dict (convert.user_data) to a UserProfile."""
     created_at = data.get("created_at")
     if hasattr(created_at, "timestamp"):
-        # Firestore DatetimeWithNanoseconds → Python datetime
         created_at = created_at.replace(tzinfo=timezone.utc) if created_at.tzinfo is None else created_at
 
     from app.services.email_service import resolve_recipient
@@ -184,21 +182,20 @@ async def delete_account(
     """
     Permanently delete the account: the profile, what it tracks and its
     alerts (papers and citations stay for anyone else tracking them), then
-    the Firebase Authentication record, so the user cannot sign in again.
+    the Clerk user, so they cannot sign in again (which would create a fresh,
+    empty profile).
 
-    If the Firebase Auth deletion fails (e.g. the record was already
-    removed), the error is logged but the endpoint still succeeds: the
-    data has already been deleted.
+    If the Clerk deletion fails, the error is logged but the endpoint still
+    succeeds: the data has already been deleted.
     """
     await UserStore(session).delete_by_id(uid)
     await session.commit()
 
     try:
-        ensure_firebase()
-        await run_blocking(firebase_auth.delete_user, uid)
-        logger.info("Deleted Firebase Auth record for uid=%s", uid)
+        await run_blocking(clerk_api.delete_user, uid)
+        logger.info("Deleted Clerk user for uid=%s", uid)
     except Exception as exc:
-        logger.error("Could not delete Firebase Auth user %s (data already wiped): %s", uid, exc)
+        logger.error("Could not delete Clerk user %s (data already wiped): %s", uid, exc)
 
     logger.info("Account fully deleted for uid=%s", uid)
 

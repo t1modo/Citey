@@ -69,7 +69,7 @@ async def app_db(pg_session, monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture
 def seed(app_db, monkeypatch: pytest.MonkeyPatch):
-    """Create user rows (uid -> column values) and the Firebase Auth
+    """Create user rows (uid -> column values) and the Clerk
     accounts; by default every seeded user has one."""
 
     async def install(users: dict[str, dict] | None = None, *, auth_uids: set[str] | None = None) -> None:

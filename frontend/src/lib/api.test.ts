@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { auth } from "@/lib/firebase";
 import {
   addWorkChecked,
   detailMessage,
@@ -18,8 +17,10 @@ function json(status: number, body: unknown): Response {
   });
 }
 
-function signIn(token = "id-token") {
-  (auth as { currentUser: unknown }).currentUser = { getIdToken: async () => token };
+type ClerkStub = { session: { getToken: () => Promise<string | null> } | null };
+
+function signIn(token = "session-token") {
+  (globalThis as { Clerk?: ClerkStub }).Clerk = { session: { getToken: async () => token } };
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -27,7 +28,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
-  (auth as { currentUser: unknown }).currentUser = null;
+  (globalThis as { Clerk?: ClerkStub }).Clerk = { session: null };
 });
 
 afterEach(() => {
@@ -69,7 +70,7 @@ describe("signed-in requests", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("sends the Firebase ID token to the /api route", async () => {
+  it("sends the Clerk session token to the /api route", async () => {
     signIn("abc123");
     fetchMock.mockResolvedValue(json(200, { uid: "u1" }));
 

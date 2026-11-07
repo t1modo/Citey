@@ -187,7 +187,7 @@ async def add_work(
     if arxiv_names:
         work_info["authors"] = arxiv_names
 
-    # Normalise DOI to lowercase for consistent Firestore document IDs.
+    # Normalise DOI to lowercase for consistent work keys.
     # DOIs are case-insensitive; mixing cases creates phantom duplicates.
     work_info["doi"] = normalize_doi(work_info["doi"])
     work_id = doi_to_work_id(work_info["doi"])

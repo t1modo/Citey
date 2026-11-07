@@ -352,15 +352,15 @@ async def test_no_email_when_no_address_on_profile(pg_session) -> None:
 
 
 class _AllUids(set):
-    """Pretends every uid has a Firebase Auth account."""
+    """Pretends every uid has a Clerk account."""
 
     def __contains__(self, item: object) -> bool:  # noqa: D401
         return True
 
 
 @pytest.fixture(autouse=True)
-def _no_firebase_auth(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The all-users jobs look up Firebase Auth to skip orphans; stub it."""
+def _every_user_has_an_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The all-users jobs look up Clerk accounts to skip orphans; stub it."""
     monkeypatch.setattr(
         "app.services.citation_service._get_auth_uids", AsyncMock(return_value=_AllUids())
     )
@@ -451,7 +451,7 @@ async def test_all_users_empty_db_returns_zero_summary(pg_session) -> None:
 
 @needs_db
 async def test_all_users_skips_users_without_a_sign_in_account(pg_session, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Users with no Firebase Auth account (orphans) are not synced."""
+    """Users with no Clerk account (orphans) are not synced."""
     monkeypatch.setattr(
         "app.services.citation_service._get_auth_uids", AsyncMock(return_value={"u_real"})
     )

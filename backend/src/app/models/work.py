@@ -15,15 +15,14 @@ if TYPE_CHECKING:
 
 class Work(Base, table=True):
     """
-    One paper, shared by everyone who tracks it. Firestore copies it into
-    ``users/{uid}/trackedWorks/{key}`` once per user.
+    One paper, shared by everyone who tracks it.
     """
 
     __tablename__ = "works"
 
     id: Optional[int] = bigint_pk_column()
     # The ID Citey already uses for a paper: its lowercased DOI, or its
-    # OpenAlex ID when it has no DOI. Firestore's trackedWorks document ID.
+    # OpenAlex ID when it has no DOI.
     key: str = Field(unique=True, nullable=False, sa_type=Text)
     doi: Optional[str] = Field(default=None, unique=True, sa_type=Text)
     openalex_id: Optional[str] = Field(default=None, index=True, sa_type=Text)
@@ -43,12 +42,11 @@ class Work(Base, table=True):
     last_checked_at: Optional[datetime] = timestamp_column()
     last_check_failed_sources: list[str] = text_array_column()
     # Version of the "what counts as new" window the first check recorded
-    # citations under. Firestore: citation_window.
+    # citations under.
     citation_window: Optional[int] = Field(default=None, sa_type=Integer)
-    # Identity keys ("doi:…", "id:w…") of citing papers reported while the
-    # data lived in Firestore, whose details were not kept. They count as
-    # already reported, so those papers are never announced twice.
-    # Firestore: notified_keys.
+    # Identity keys ("doi:…", "id:w…") of citing papers reported without
+    # their details being kept. They count as already reported, so those
+    # papers are never announced twice.
     known_citing_keys: list[str] = text_array_column()
 
     created_at: datetime = created_at_column()

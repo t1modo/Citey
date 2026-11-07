@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.25",
-    "firebase": "^11.1.0",
     "framer-motion": "^11.12.0",
     "next": "^15.0.0",
     "posthog-js": "^1.446.0",

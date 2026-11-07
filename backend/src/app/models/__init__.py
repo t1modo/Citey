@@ -2,8 +2,7 @@
 Postgres tables, as SQLModel models (SQLAlchemy 2.1 ORM tables that are also
 Pydantic models).
 
-Firestore keeps a copy of every paper under each user who tracks it, and a
-copy of each citing paper inside every alert. Here a paper is one row in
+A paper is one row in
 ``works`` however many people track it, a citing paper is one row in
 ``citing_works``, and "A cites B" is one row in ``citations``. What differs
 per user (who tracks what, and which alerts they have seen or been emailed)

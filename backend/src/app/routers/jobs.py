@@ -4,8 +4,8 @@ Jobs router.
 The nightly and weekly schedules run as Inngest functions
 (app/inngest_functions.py). These endpoints are for checks run by hand:
   1. POST /jobs/run          — X-Cron-Secret header: checks every user
-  2. POST /jobs/run          — Firebase Bearer token: checks only that user
-  3. POST /jobs/email-test   — requires Firebase Bearer token
+  2. POST /jobs/run          — Clerk session token: checks only that user
+  3. POST /jobs/email-test   — requires Clerk session token
 """
 
 import hmac
@@ -26,7 +26,7 @@ from app.config import Settings, get_settings
 from app.core.concurrency import run_blocking
 from app.core.db import get_session
 from app.deps import enforce_cooldown
-from app.firebase_client import verify_token
+from app.clerk_auth import verify_token
 from app.schemas import JobRunRequest
 from app.services import convert, user_service
 from app.store import AlertStore, UserStore
@@ -48,7 +48,7 @@ async def _authorize_job_request(
     """
     Accept either:
     - A valid X-Cron-Secret header value, or
-    - A valid Firebase Bearer token.
+    - A valid Clerk session token.
 
     Returns a string identity label (e.g. "cron" or the uid) for logging.
     Raises HTTP 401/403 if neither credential is valid.
@@ -68,11 +68,11 @@ async def _authorize_job_request(
             detail="Invalid cron secret.",
         )
 
-    # 2. Fall back to Firebase Bearer token.
+    # 2. Fall back to Clerk session token.
     if credentials and credentials.credentials:
         try:
             decoded = await run_blocking(verify_token, credentials.credentials)
-            uid: str = decoded.get("uid") or decoded.get("user_id", "")
+            uid: str = decoded.get("uid", "")
             if uid:
                 return uid
         except Exception as exc:
@@ -81,7 +81,7 @@ async def _authorize_job_request(
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail=(
-            "Provide a valid X-Cron-Secret header or a Firebase Bearer token "
+            "Provide a valid X-Cron-Secret header or a Clerk session token "
             "to trigger this job."
         ),
         headers={"WWW-Authenticate": "Bearer"},
@@ -132,9 +132,9 @@ async def run_job(
     Trigger the citation-check job.
 
     - When called via X-Cron-Secret (scheduled cron): checks all users.
-    - When called via Firebase Bearer token (manual user trigger): checks only that user.
+    - When called via Clerk session token (manual user trigger): checks only that user.
 
-    Authorization: X-Cron-Secret header **or** Firebase Bearer token.
+    Authorization: X-Cron-Secret header **or** Clerk session token.
     """
     from app.services import email_service as email_svc
 
@@ -205,7 +205,7 @@ async def cleanup_notifications(
     """
     Delete alerts older than 30 days (by when they were found).
 
-    Authorization: X-Cron-Secret header **or** Firebase Bearer token.
+    Authorization: X-Cron-Secret header **or** Clerk session token.
     When called by an authenticated user, only cleans up their own notifications.
     """
     from app.services.citation_service import cleanup_old_notifications, _NOTIFICATION_TTL_DAYS
@@ -252,7 +252,7 @@ async def sync_publications(
     Checks each linked OpenAlex author for new publications not yet in their
     trackedWorks collection, and auto-adds them.
 
-    Authorization: X-Cron-Secret header **or** Firebase Bearer token.
+    Authorization: X-Cron-Secret header **or** Clerk session token.
     """
     from app.services import email_service as email_svc
     from app.services.publication_sync import (
@@ -316,7 +316,7 @@ async def cleanup_orphan_users(
 ) -> dict:
     """
     Delete accounts (profile, tracking and alerts) that have no
-    corresponding Firebase Auth account.
+    Clerk account.
 
     Authorization: X-Cron-Secret header only. This touches every account, so
     end users must never be able to trigger it.
@@ -351,7 +351,7 @@ async def email_test(
         )
     try:
         decoded = await run_blocking(verify_token, credentials.credentials)
-        uid: str = decoded.get("uid") or decoded.get("user_id", "")
+        uid: str = decoded.get("uid", "")
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

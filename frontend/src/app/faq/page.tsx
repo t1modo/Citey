@@ -196,7 +196,7 @@ const faqItems: FaqItem[] = [
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>
             <strong className="text-ink">Email address</strong>: for account
-            authentication (via Firebase Auth) and sending you citation alerts.
+            authentication (via Clerk) and sending you citation alerts.
           </li>
           <li>
             <strong className="text-ink">DOIs of tracked works</strong>: to know which

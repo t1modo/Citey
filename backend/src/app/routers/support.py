@@ -32,7 +32,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.config import Settings, get_settings
 from app.core.concurrency import run_blocking
 from app.core.db import get_session
-from app.firebase_client import verify_token
+from app.clerk_auth import verify_token
 from app.store import LimitStore
 
 logger = logging.getLogger(__name__)
@@ -105,7 +105,7 @@ async def _optional_uid(credentials: HTTPAuthorizationCredentials | None) -> str
         return None
     try:
         decoded = await run_blocking(verify_token, credentials.credentials)
-        return decoded.get("uid") or decoded.get("user_id")
+        return decoded.get("uid")
     except Exception:  # noqa: BLE001  (signed out senders are welcome too)
         return None
 

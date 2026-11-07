@@ -13,7 +13,7 @@ from app.models.user import User
 
 class Alert(Base, table=True):
     """
-    A citation as one user sees it. Firestore: ``users/{uid}/notifications``.
+    A citation as one user sees it.
     """
 
     __tablename__ = "alerts"

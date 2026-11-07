@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.concurrency import run_blocking
-from app.firebase_client import verify_token
+from app.clerk_auth import verify_token
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +15,8 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
 ) -> str:
     """
-    Extract and verify the Firebase Bearer token from the Authorization header.
-    Returns the authenticated user's UID.
+    Extract and verify the Clerk session token (Bearer) from the Authorization header.
+    Returns the authenticated user's Clerk user ID.
     Raises HTTP 401 if the token is missing or invalid.
     """
     if credentials is None or not credentials.credentials:
@@ -38,7 +38,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
-    uid: str = decoded.get("uid") or decoded.get("user_id", "")
+    uid: str = decoded.get("uid", "")
     if not uid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
