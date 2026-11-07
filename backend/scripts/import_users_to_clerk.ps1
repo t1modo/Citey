@@ -167,12 +167,18 @@ try {
         }
     }
 
+    # The tool joins --file onto its own folder even when the path is
+    # absolute, so it needs the export's path relative to that folder.
+    $toolUri = New-Object System.Uri ((Join-Path $ToolDir "x"))
+    $usersUri = New-Object System.Uri $UsersPath
+    $relativeUsers = [System.Uri]::UnescapeDataString($toolUri.MakeRelativeUri($usersUri).ToString()) -replace '/', '\'
+
     # The secret key is passed through the environment, not the command line,
     # so it doesn't show up in the process list or shell history.
     $toolArgs = @(
         "migrate", "-y",
         "-t", "firebase",
-        "-f", $UsersPath,
+        "-f", $relativeUsers,
         "--firebase-signer-key", $env:FIREBASE_HASH_SIGNER_KEY,
         "--firebase-salt-separator", $env:FIREBASE_HASH_SALT_SEPARATOR,
         "--firebase-rounds", $env:FIREBASE_HASH_ROUNDS,
