@@ -43,8 +43,20 @@ cd backend && uv sync && uv run uvicorn main:app --reload
 cd frontend && cp .env.example .env.local && npm install && npm run dev
 ```
 
-Fill `frontend/.env.local` with your Firebase web config. Run the backend
-tests with `cd backend && uv run pytest`.
+Fill `frontend/.env.local` with your Firebase web config.
+
+Run the tests:
+
+```bash
+cd backend && uv run pytest        # backend
+cd frontend && npm test            # frontend (Vitest), or npm run test:watch
+```
+
+Both run on every pull request (`.github/workflows/tests.yml`). The backend's
+live API checks are skipped there; run them with
+`CITEY_LIVE_TESTS=1 uv run pytest tests/test_live_researchers.py`.
+Dependabot (`.github/dependabot.yml`) opens weekly PRs for the uv and npm
+dependencies, and monthly ones for GitHub Actions and the Docker base images.
 
 To run the scheduled jobs, keep `INNGEST_DEV=1` in `backend/.env` and start
 the Inngest Dev Server next to the API:
