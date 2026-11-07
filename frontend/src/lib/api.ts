@@ -1,4 +1,4 @@
-import { auth } from "@/lib/firebase";
+import { getSessionToken } from "@/lib/session-token";
 import { track } from "@/lib/analytics";
 import type {
   UserProfile,
@@ -87,12 +87,10 @@ async function authFetch(
   path: string,
   init: RequestInit = {}
 ): Promise<Response> {
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
+  const idToken = await getSessionToken();
+  if (!idToken) {
     throw new Error("Not authenticated");
   }
-
-  const idToken = await currentUser.getIdToken();
 
   const headers = new Headers(init.headers ?? {});
   headers.set("Authorization", `Bearer ${idToken}`);
@@ -159,9 +157,8 @@ export async function addWorkChecked(
   doi: string,
   force = false
 ): Promise<AddWorkResult> {
-  const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error("Not authenticated");
-  const idToken = await currentUser.getIdToken();
+  const idToken = await getSessionToken();
+  if (!idToken) throw new Error("Not authenticated");
 
   const res = await fetchWithRetry(`${BASE_URL}/works`, {
     method: "POST",
@@ -311,9 +308,8 @@ export async function importByAuthor(
   confirmMerge = false,
   extraSources: string[] = [],
 ): Promise<ImportByAuthorResult> {
-  const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error("Not authenticated");
-  const idToken = await currentUser.getIdToken();
+  const idToken = await getSessionToken();
+  if (!idToken) throw new Error("Not authenticated");
 
   const res = await fetchWithRetry(`${BASE_URL}/works/import`, {
     method: "POST",
@@ -393,7 +389,7 @@ export interface SupportMessageInput {
 /** Send a contact form message. Works signed in or out; rate limited server side. */
 export async function sendSupportMessage(input: SupportMessageInput): Promise<string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const token = await auth.currentUser?.getIdToken().catch(() => undefined);
+  const token = await getSessionToken().catch(() => null);
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetchWithRetry(`${BASE_URL}/support`, {

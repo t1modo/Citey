@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, FormEvent, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/components/Logo";
@@ -9,6 +9,8 @@ import { sendVerificationEmail } from "@/lib/api";
 import { FirebaseError } from "firebase/app";
 import { auth } from "@/lib/firebase";
 import { track } from "@/lib/analytics";
+import { SignIn, SignUp } from "@clerk/nextjs";
+import { CLERK_ENABLED } from "@/lib/auth-mode";
 
 function firebaseErrorMessage(err: unknown): string {
   if (err instanceof FirebaseError) {
@@ -36,6 +38,38 @@ function firebaseErrorMessage(err: unknown): string {
 }
 
 export default function SignUpPage() {
+  return CLERK_ENABLED ? (
+    // useSearchParams needs a Suspense boundary on a statically built page.
+    <Suspense>
+      <ClerkSignInPage />
+    </Suspense>
+  ) : (
+    <FirebaseSignUpPage />
+  );
+}
+
+/** Sign in and sign up with Clerk's own forms; ?mode=signup shows sign-up. */
+function ClerkSignInPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const mode = useSearchParams().get("mode") === "signup" ? "signup" : "signin";
+
+  useEffect(() => {
+    if (!loading && user) router.replace("/dashboard");
+  }, [user, loading, router]);
+
+  return (
+    <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-16">
+      {mode === "signup" ? (
+        <SignUp routing="hash" signInUrl="/signup" forceRedirectUrl="/dashboard" />
+      ) : (
+        <SignIn routing="hash" signUpUrl="/signup?mode=signup" forceRedirectUrl="/dashboard" />
+      )}
+    </div>
+  );
+}
+
+function FirebaseSignUpPage() {
   const { signIn, signUp, user, loading: authLoading } = useAuth();
   const router = useRouter();
 
