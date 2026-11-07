@@ -1,6 +1,8 @@
 # Dependabot opens PRs that update dependencies; the Tests workflow checks
-# each one. Minor and patch updates come grouped in one PR per ecosystem so
-# they don't flood the PR list. Security fixes are sent as soon as they are
+# each one. Once a month, minor and patch updates come grouped in one PR per
+# ecosystem so they don't flood the PR list. Major versions (a new Node,
+# ESLint or Next release) can break the build and are upgraded by hand, so
+# Dependabot skips them. Security fixes are sent as soon as they are
 # published, whatever the schedule.
 version: 2
 
@@ -9,9 +11,11 @@ updates:
   - package-ecosystem: uv
     directory: /backend
     schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       backend-minor-and-patch:
         update-types: [minor, patch]
@@ -22,9 +26,11 @@ updates:
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       frontend-minor-and-patch:
         update-types: [minor, patch]
@@ -47,5 +53,11 @@ updates:
     directories: [/backend, /frontend]
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      base-images:
+        patterns: ["*"]
     commit-message:
       prefix: docker
