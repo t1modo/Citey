@@ -1,9 +1,8 @@
 import json
 import logging
-from typing import Any
 
 import firebase_admin
-from firebase_admin import auth, credentials, firestore
+from firebase_admin import auth, credentials
 
 from app.config import get_settings
 
@@ -49,16 +48,6 @@ def ensure_firebase() -> None:
     """Set up the Admin SDK before a Firebase Auth call. Checking a sign-in
     token does this too, but a nightly job has no token to check."""
     _initialize_firebase()
-
-
-def get_db() -> Any:
-    """Return the Firestore client, initializing Firebase if necessary.
-
-    The app's data lives in Postgres; only scripts/copy_firestore_to_postgres.py
-    still reads Firestore.
-    """
-    _initialize_firebase()
-    return firestore.client()
 
 
 def verify_token(token: str) -> dict:

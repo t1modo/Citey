@@ -22,10 +22,10 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 
 
 def _doc_to_profile(uid: str, data: dict) -> UserProfile:
-    """Convert a raw Firestore document dict to a UserProfile."""
+    """Convert the user dict (app.services.convert.user_data) to a UserProfile."""
     created_at = data.get("created_at")
     if hasattr(created_at, "timestamp"):
-        # Firestore DatetimeWithNanoseconds → Python datetime
+        # A naive datetime is UTC.
         created_at = created_at.replace(tzinfo=timezone.utc) if created_at.tzinfo is None else created_at
 
     from app.services.email_service import resolve_recipient

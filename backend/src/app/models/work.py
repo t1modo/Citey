@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 class Work(Base, table=True):
     """
-    One paper, shared by everyone who tracks it. Firestore copies it into
+    One paper, shared by everyone who tracks it. Firestore copied it into
     ``users/{uid}/trackedWorks/{key}`` once per user.
     """
 

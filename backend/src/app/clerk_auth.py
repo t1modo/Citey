@@ -8,8 +8,8 @@ Frontend API host.
 
 The session token template adds ``external_id`` (the user's Firebase UID,
 set when existing users were imported) and ``email``. ``uid`` is the
-external ID when there is one, so a migrated user keeps their Firestore
-data; a user who signed up with Clerk has the Clerk user ID instead.
+external ID when there is one, so a migrated user keeps the data stored
+under their Firebase UID; a user who signed up with Clerk has the Clerk user ID instead.
 """
 
 from __future__ import annotations

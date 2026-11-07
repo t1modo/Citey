@@ -158,14 +158,6 @@ Code reaches Postgres in layers: **routers → services → stores → database*
   tracker and announces its recent citations; `convert` turns rows into the
   API's shapes. The router (or job) commits once per request.
 
-To copy the data from Firestore into Postgres (read-only on the Firestore
-side, every write an upsert, one transaction per user):
-
-```bash
-uv run python scripts/copy_firestore_to_postgres.py --dry-run   # copy, then roll back
-uv run python scripts/copy_firestore_to_postgres.py
-```
-
 Production is the Neon project `citey`. Migrations are not run on deploy yet:
 apply them with `DATABASE_URL_UNPOOLED` set to Neon's direct connection
 string before deploying code that needs them.

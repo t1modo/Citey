@@ -52,8 +52,8 @@ PUBLICATION_SYNC_EVENT = "citey/publication-sync.requested"
 
 # Per-user runs that may be checking at once, shared by the citation check
 # and the publication sync (both start at midnight on Sundays). The old
-# sweep checked one user at a time; two keeps OpenAlex, Semantic Scholar and
-# Firestore well inside their limits while halving the night's wall time.
+# sweep checked one user at a time; two keeps OpenAlex and Semantic Scholar
+# well inside their limits while halving the night's wall time.
 SOURCES_CONCURRENCY = 2
 _SOURCES_LIMIT = inngest.Concurrency(scope="env", key='"citey-sources"', limit=SOURCES_CONCURRENCY)
 # Never two runs for one user at once: two checks could both find a

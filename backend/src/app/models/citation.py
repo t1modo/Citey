@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 class CitingWork(Base, table=True):
     """
-    A paper that cites a tracked one, stored once. Firestore copies its
+    A paper that cites a tracked one, stored once. Firestore copied its
     details into every alert as citing_work_*.
     """
 
