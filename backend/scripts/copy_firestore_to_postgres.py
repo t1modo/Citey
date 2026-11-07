@@ -29,7 +29,7 @@ from app.config import get_settings
 from app.core.concurrency import run_blocking
 from app.core.db import make_engine
 from app.firebase_client import get_db
-from app.store.from_firestore import Copied, copy_user
+from app.services.firestore_copy import Copied, copy_user
 
 
 def _read_user(db, uid: str) -> tuple[dict, dict, dict]:

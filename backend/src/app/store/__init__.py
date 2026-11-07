@@ -1,15 +1,35 @@
 """
-Reading and writing Citey's data in Postgres, over the async session
-(app.core.db.get_session). Routers and jobs call these instead of building
-queries themselves.
+Database access, and nothing else: one store per area, each over the
+request's AsyncSession (app.core.db.get_session).
 
-    users      accounts, settings, linked authors, cooldowns
-    works      papers and who tracks them
-    citations  citing papers and "A cites B", for the citation check
-    alerts     each user's citations: listing, seen, emailed, pruning
-    limits     contact form rate limits
-    convert    rows to the API shapes in app.schemas
+    base.py       BaseStore: the session, get / add / delete / refresh
+    user.py       UserStore      users
+    work.py       WorkStore      works, user_works (who tracks what)
+    citation.py   CitationStore  citing_works, citing_work_keys, citations
+    alert.py      AlertStore     alerts (each user's citations)
+    limit.py      LimitStore     support_limits
 
-Functions flush but never commit: the caller commits once its whole change
-is made, so a request either saves everything or nothing.
+Stores return model rows and never commit. Services (app.services) use
+them: they decide what should happen, convert rows to the API's shapes,
+and commit once per request.
+
+    work_store = WorkStore(session)
+    work = await work_store.get_by_key("10.1__x")
 """
+
+from app.store.alert import AlertRow, AlertStore
+from app.store.base import BaseStore
+from app.store.citation import CitationStore
+from app.store.limit import LimitStore
+from app.store.user import UserStore
+from app.store.work import WorkStore
+
+__all__ = [
+    "AlertRow",
+    "AlertStore",
+    "BaseStore",
+    "CitationStore",
+    "LimitStore",
+    "UserStore",
+    "WorkStore",
+]

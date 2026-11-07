@@ -1,5 +1,5 @@
 """
-Copying Firestore data into Postgres (app.store.from_firestore), with
+Copying Firestore data into Postgres (app.services.firestore_copy), with
 Firestore documents as plain dicts. Needs TEST_DATABASE_URL.
 """
 
@@ -8,8 +8,9 @@ from datetime import datetime, timezone
 from sqlmodel import select
 
 from app.models import Alert, Citation, CitingWork, User, UserWork, Work
-from app.store import alerts, citations, works
-from app.store.from_firestore import as_datetime, copy_user
+from app.services import alert_service
+from app.services.firestore_copy import as_datetime, copy_user
+from app.store import CitationStore, WorkStore
 from tests.conftest import needs_db
 
 T1 = datetime(2026, 10, 1, tzinfo=timezone.utc)
@@ -58,16 +59,16 @@ async def test_a_user_is_copied_with_settings_papers_and_alerts(pg_session) -> N
     assert user.last_publication_sync_at == T1
     assert user.created_at == datetime(2025, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
 
-    work = await works.get_by_key(pg_session, "10.1__attention")
+    work = await WorkStore(pg_session).get_by_key("10.1__attention")
     assert work.openalex_id == "W123" and work.citation_window == 4 and work.last_checked_at == T1
     # Keys reported in Firestore, plus the copied notification's.
-    known = await citations.known_keys(pg_session, work.id)
+    known = await CitationStore(pg_session).known_keys(work.id)
     assert {"doi:10.9/old-one", "doi:10.9/new-one", "id:10.9/new-one"} <= known
 
-    [n] = await alerts.for_user(pg_session, "ada")
+    [n] = await alert_service.notifications(pg_session, "ada")
     assert n.cited_work_id == "10.1__attention" and n.citing_work_doi == "10.9/new-one"
     assert n.citing_affiliations == ["MIT"] and n.created_at == T2 and not n.seen and not n.emailed
-    [(_, uw)] = await works.tracked(pg_session, "ada")
+    [(_, uw)] = await WorkStore(pg_session).tracked("ada")
     assert uw.added_at == T1
 
 

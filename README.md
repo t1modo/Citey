@@ -76,11 +76,14 @@ backend/
     main.py           FastAPI app (Vercel entrypoint: src.app.main:app)
     models/           database tables (SQLModel): base.py, user.py, work.py,
                       citation.py, alert.py, support.py
+    store/            database access only: base.py (BaseStore), user.py,
+                      work.py, citation.py, alert.py, limit.py
     schemas/          API request/response shapes (SQLModel, no table)
     core/             infrastructure: db.py (async Postgres), concurrency.py
     config.py, ...
     routers/          one module per /api/... area
-    services/         citation sources, email, publication sync
+    services/         the rules: tracking, alerts, citation checks, sources,
+                      email, publication sync; they use the stores
     templates/email/  email templates, shipped inside the package
   migrations/         Alembic migrations
   tests/              pytest
@@ -140,9 +143,17 @@ the SQL the PR's new migrations will run, and the SQL that undoes them. Read
 it before merging. Locally:
 `DATABASE_URL=postgresql://x@localhost/x ../.github/scripts/migration-draft.sh origin/main`.
 
-Code reads and writes Postgres through `app.store` (users, works,
-citations, alerts, limits): small async functions over the session that
-flush but never commit, so each request commits once.
+Code reaches Postgres in layers: **routers → services → stores → database**.
+
+- `app/store/` does database access and nothing else: `BaseStore` (in
+  `base.py`) holds the request's session, and each area has its own store,
+  `UserStore` (`user.py`), `WorkStore` (`work.py`), `CitationStore`
+  (`citation.py`), `AlertStore` (`alert.py`) and `LimitStore` (`limit.py`).
+  Stores return model rows and never commit.
+- `app/services/` holds the rules and uses the stores: for example
+  `tracking_service.track_paper` creates the shared paper, adds the user as a
+  tracker and announces its recent citations; `convert` turns rows into the
+  API's shapes. The router (or job) commits once per request.
 
 To copy the data from Firestore into Postgres (read-only on the Firestore
 side, every write an upsert, one transaction per user):
