@@ -8,6 +8,9 @@ const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 export default clerkEnabled ? clerkMiddleware() : () => NextResponse.next();
 
 export const config = {
+  // Vercel Services can't deploy Edge Functions, which is where Next.js puts
+  // middleware by default.
+  runtime: "nodejs",
   // Pages only: not Next.js internals, static files, the PostHog relay, or
   // /api (served by the FastAPI backend, which checks tokens itself).
   matcher: [
