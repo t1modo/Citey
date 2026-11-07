@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from app.config import Settings, get_settings
-from main import app
+from app.main import app
 
 
 def _settings(**overrides) -> Settings:
