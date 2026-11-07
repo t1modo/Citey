@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings, get_settings
 from app.services.email_service import make_confirm_email_url
-from main import create_app
+from app.main import create_app
 
 
 def _client() -> TestClient:

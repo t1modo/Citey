@@ -4,11 +4,11 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from main import app
+from app.main import app
 
 
 def test_db_health_reports_not_configured_without_database_url():
-    with patch("app.db.get_settings") as settings:
+    with patch("app.core.db.get_settings") as settings:
         settings.return_value.database_url = ""
         resp = TestClient(app).get("/api/health/db")
     assert resp.status_code == 503
@@ -20,7 +20,7 @@ def test_db_health_runs_write_and_read_in_a_rolled_back_transaction():
     cur.fetchone.side_effect = [("neondb", "17.5"), ("ok",), (1,)]
     conn = MagicMock()
     conn.cursor.return_value.__enter__.return_value = cur
-    with patch("app.db.get_settings") as settings, patch("app.db.psycopg.connect") as connect:
+    with patch("app.core.db.get_settings") as settings, patch("app.core.db.psycopg.connect") as connect:
         settings.return_value.database_url = "postgresql://u:p@host/neondb"
         connect.return_value.__enter__.return_value = conn
         resp = TestClient(app).get("/api/health/db")
@@ -32,8 +32,8 @@ def test_db_health_runs_write_and_read_in_a_rolled_back_transaction():
 
 
 def test_db_health_hides_connection_errors():
-    with patch("app.db.get_settings") as settings, patch(
-        "app.db.psycopg.connect", side_effect=RuntimeError("could not connect to ep-secret-host")
+    with patch("app.core.db.get_settings") as settings, patch(
+        "app.core.db.psycopg.connect", side_effect=RuntimeError("could not connect to ep-secret-host")
     ):
         settings.return_value.database_url = "postgresql://u:p@host/neondb"
         resp = TestClient(app).get("/api/health/db")

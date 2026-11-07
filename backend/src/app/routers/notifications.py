@@ -9,7 +9,7 @@ from fastapi.responses import PlainTextResponse
 
 from app.deps import get_current_user
 from app.firebase_client import get_db
-from app.models import Notification, PaginatedNotifications
+from app.schemas import Notification, PaginatedNotifications
 
 logger = logging.getLogger(__name__)
 

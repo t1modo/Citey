@@ -23,7 +23,7 @@ from app.config import API_PREFIX, Settings
 logger = logging.getLogger(__name__)
 
 # Path to the templates directory (two levels up from this file).
-_TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates" / "email"
+_TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates" / "email"
 
 
 async def _send(params: resend.Emails.SendParams) -> dict:

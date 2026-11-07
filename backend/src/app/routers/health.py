@@ -17,7 +17,7 @@ async def health_check() -> dict:
 @router.get("/health/db")
 async def database_health_check():
     """Neon Postgres: connect, write and read back in a rolled back transaction."""
-    from app import db
+    from app.core import db
 
     try:
         result = await asyncio.to_thread(db.check)

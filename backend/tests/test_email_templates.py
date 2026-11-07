@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from app.models import Notification
+from app.schemas import Notification
 
 _TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates" / "email"
 

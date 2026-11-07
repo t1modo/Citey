@@ -92,7 +92,7 @@ def create_client(settings: Settings | None = None) -> inngest.Inngest:
     dev_url = dev if _is_dev(dev) and "://" in dev else None
     return inngest.Inngest(
         app_id=APP_ID,
-        logger=logging.getLogger("app.inngest"),
+        logger=logging.getLogger("citey.inngest"),
         is_production=not _is_dev(dev),
         signing_key=settings.inngest_signing_key or None,
         event_key=settings.inngest_event_key or None,

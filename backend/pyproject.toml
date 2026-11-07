@@ -33,10 +33,26 @@ dev = [
     "respx==0.23.1",
 ]
 
-# An app, not a library: uv installs the dependencies but never builds or
-# installs the project itself.
+# The code is the app package in src/app. uv installs it (editable
+# locally, as a wheel in Docker and on Vercel), so `import app` works from
+# tests, scripts, Alembic and uvicorn alike.
+[build-system]
+requires = ["uv_build>=0.9.11,<0.10"]
+build-backend = "uv_build"
+
 [tool.uv]
-package = false
+package = true
+# Rebuild the installed wheel whenever the code changes, not only when this
+# file does. Without this, uv reuses its cached build of the project, and
+# Docker and Vercel (which both keep uv's cache) can ship old code.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "uv.lock" },
+    { file = "src/**/*" },
+]
+
+[tool.uv.build-backend]
+module-name = "app"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -17,7 +17,7 @@ import pytest
 # Use a recent date so papers pass the 30-day publication_date filter in process_tracked_work.
 _RECENT_DATE = (datetime.now(tz=timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
-from app.models import TrackedWork
+from app.schemas import TrackedWork
 from app.services.citation_service import process_tracked_work
 
 # ---------------------------------------------------------------------------

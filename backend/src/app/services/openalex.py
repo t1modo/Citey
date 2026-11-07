@@ -260,7 +260,7 @@ async def get_citing_works(
 
 
 def _is_work_id(value: str) -> bool:
-    from app.models import is_openalex_work_id
+    from app.schemas import is_openalex_work_id
     return is_openalex_work_id(value)
 
 

@@ -21,7 +21,7 @@ from typing import Any
 
 from firebase_admin import auth as firebase_auth
 
-from app.models import Notification, TrackedWork, is_openalex_work_id
+from app.schemas import Notification, TrackedWork, is_openalex_work_id
 from app.services.citing_identity import is_junk, keys_for_normalized, merge_records
 from app.services import crossref as crossref_svc
 from app.services import europe_pmc as europe_pmc_svc

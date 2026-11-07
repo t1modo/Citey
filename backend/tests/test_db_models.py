@@ -19,8 +19,8 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.db import DatabaseNotConfigured, make_engine, sqlalchemy_url
-from app.db_models import (
+from app.core.db import DatabaseNotConfigured, make_engine, sqlalchemy_url
+from app.models import (
     Alert,
     Citation,
     CitingWork,
@@ -91,7 +91,7 @@ def test_neon_urls_use_the_psycopg_driver() -> None:
 
 
 def test_session_needs_a_database_url(monkeypatch) -> None:
-    from app import db
+    from app.core import db
     from app.config import Settings
 
     monkeypatch.setattr(db, "get_settings", lambda: Settings(database_url=""))
@@ -106,7 +106,7 @@ def test_session_needs_a_database_url(monkeypatch) -> None:
 
 @needs_db
 def test_migrations_match_the_models(engine) -> None:
-    # Raises if app/db_models.py changed without a new migration.
+    # Raises if a table in app/models/ changed without a new migration.
     command.check(_alembic_config())
 
 

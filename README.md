@@ -37,7 +37,7 @@ The backend uses [uv](https://docs.astral.sh/uv/).
 
 ```bash
 # API on :8000
-cd backend && uv sync && uv run uvicorn main:app --reload
+cd backend && uv sync && uv run uvicorn app.main:app --reload
 
 # Site on :3000
 cd frontend && cp .env.example .env.local && npm install && npm run dev
@@ -68,10 +68,32 @@ npx --ignore-scripts=false inngest-cli@latest dev -u http://localhost:8000/api/i
 Add or upgrade a backend dependency with `uv add <package>`, which updates
 `pyproject.toml` and `uv.lock`.
 
+### Backend layout
+
+```
+backend/
+  src/app/            the API, as the installable package `app`
+    main.py           FastAPI app (Vercel entrypoint: src.app.main:app)
+    models/           database tables (SQLModel): base.py, user.py, work.py,
+                      citation.py, alert.py, support.py
+    schemas/          API request/response shapes (SQLModel, no table)
+    core/             infrastructure: db.py (Postgres connections and sessions)
+    config.py, ...
+    routers/          one module per /api/... area
+    services/         citation sources, email, publication sync
+    templates/email/  email templates, shipped inside the package
+  migrations/         Alembic migrations
+  tests/              pytest
+  scripts/            one-off maintenance scripts
+```
+
+`uv sync` installs `app` in editable mode, so `import app` works from the
+tests, scripts, Alembic and `uvicorn app.main:app`.
+
 ### Database (Postgres)
 
 The Postgres tables are SQLModel models (SQLAlchemy 2.1 ORM tables that are
-also Pydantic models) in `backend/app/db_models.py`, and Alembic migrations
+also Pydantic models) in `backend/src/app/models/`, and Alembic migrations
 in `backend/migrations/`. `docker compose up` starts a local Postgres 18 and
 applies the migrations before the API starts; Compose always uses that local
 database, never Neon.
@@ -79,15 +101,24 @@ database, never Neon.
 ```bash
 cd backend
 uv run alembic upgrade head                              # apply migrations
-uv run alembic revision --autogenerate -m "add x to y"   # after editing db_models.py
+uv run alembic revision --autogenerate -m "add x to y"   # after editing app/models/
 uv run alembic check                                     # models and migrations agree?
 ```
 
 Read the generated migration before committing it. The schema tests need a
 throwaway database: with Compose running,
 `TEST_DATABASE_URL=postgresql://citey:citey@localhost:5432/citey_test uv run pytest`.
-CI runs them against its own Postgres and fails if a model changed without a
-migration.
+CI runs them against its own Postgres. A separate Migrations job:
+- fails if there is more than one Alembic head (two branches each added a
+  migration);
+- applies every migration to an empty database;
+- fails if a model changed without a migration (`alembic check`);
+- downgrades to empty and upgrades again.
+
+On a pull request it also writes a **migration SQL draft** to the job summary:
+the SQL the PR's new migrations will run, and the SQL that undoes them. Read
+it before merging. Locally:
+`DATABASE_URL=postgresql://x@localhost/x ../.github/scripts/migration-draft.sh origin/main`.
 
 Production is the Neon project `citey`. Migrations are not run on deploy yet:
 apply them with `DATABASE_URL_UNPOOLED` set to Neon's direct connection
@@ -125,7 +156,7 @@ retired with Render, so those stop working.
 ## Scheduled jobs
 
 [Inngest](https://www.inngest.com/) runs the jobs by calling
-`/api/inngest`; the functions are in `backend/app/inngest_functions.py`.
+`/api/inngest`; the functions are in `backend/src/app/inngest_functions.py`.
 Schedules are in Pacific time and follow daylight saving time.
 
 | Job | When | How |

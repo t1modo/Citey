@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models import TrackedWork
+from app.schemas import TrackedWork
 from app.services.citation_service import (
     _CITATION_WINDOW_VERSION,
     process_tracked_work,

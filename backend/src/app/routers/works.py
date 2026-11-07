@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.deps import enforce_cooldown, get_current_user
 from app.firebase_client import get_db
-from app.models import AddWorkRequest, ImportByAuthorRequest, TrackedWork, is_openalex_work_id
+from app.schemas import AddWorkRequest, ImportByAuthorRequest, TrackedWork, is_openalex_work_id
 from app.services.crossref import resolve_doi
 from app.services.normalize import dedupe_works_by_title, doi_to_work_id, normalize_doi
 from app.services.text_clean import clean_names, clean_text

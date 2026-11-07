@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from app.config import get_settings
 from app.deps import get_current_user
 from app.firebase_client import get_db
-from app.models import LinkedAuthorEntry, UpdateProfileRequest, UserProfile
+from app.schemas import LinkedAuthorEntry, UpdateProfileRequest, UserProfile
 
 logger = logging.getLogger(__name__)
 
