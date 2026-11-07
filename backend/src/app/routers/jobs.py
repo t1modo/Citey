@@ -12,6 +12,7 @@ import hmac
 import logging
 import threading
 from datetime import datetime, timezone
+from typing import Any
 
 # Minimum seconds between manual job triggers from the same user.
 _MANUAL_CHECK_COOLDOWN = 600      # /jobs/run       — 10 minutes
@@ -21,8 +22,8 @@ _EMAIL_TEST_COOLDOWN   = 3600     # /jobs/email-test — 60 minutes
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.async_utils import run_off_loop
 from app.config import Settings, get_settings
+from app.core.concurrency import run_blocking, run_off_loop
 from app.deps import enforce_cooldown
 from app.firebase_client import verify_token
 from app.schemas import JobRunRequest
@@ -67,7 +68,7 @@ async def _authorize_job_request(
     # 2. Fall back to Firebase Bearer token.
     if credentials and credentials.credentials:
         try:
-            decoded = verify_token(credentials.credentials)
+            decoded = await run_blocking(verify_token, credentials.credentials)
             uid: str = decoded.get("uid") or decoded.get("user_id", "")
             if uid:
                 return uid
@@ -156,7 +157,8 @@ async def run_job(
     else:
         # Manual trigger by an authenticated user — scope to their papers only.
         from app.services.citation_service import run_job_for_user
-        user_doc = _db.collection("users").document(caller_id).get()
+        # Firestore calls block, so each runs off the event loop.
+        user_doc = await run_blocking(_db.collection("users").document(caller_id).get)
         user_data: dict = user_doc.to_dict() or {} if user_doc.exists else {}
 
         # Rate-limit manual checks (account creation time counts, so new
@@ -171,8 +173,10 @@ async def run_job(
         # Record the cooldown before running, so a second click while this
         # check is still going is refused instead of starting a parallel one.
         if not body.dry_run:
-            _db.collection("users").document(caller_id).set(
-                {"last_manual_check_at": now}, merge=True
+            await run_blocking(
+                _db.collection("users").document(caller_id).set,
+                {"last_manual_check_at": now},
+                merge=True,
             )
 
         works_processed, new_notifications = await _off_loop(
@@ -229,16 +233,9 @@ async def cleanup_notifications(
         # Scoped to the requesting user only.
         from datetime import datetime, timedelta, timezone
         cutoff = datetime.now(tz=timezone.utc) - timedelta(days=_NOTIFICATION_TTL_DAYS)
-        notifs_ref = _db.collection("users").document(caller_id).collection("notifications")
-        old_docs = list(notifs_ref.where("created_at", "<", cutoff).stream())
-        if old_docs and not body.dry_run:
-            # Firestore batches are capped at 500 writes — chunk if needed.
-            for i in range(0, len(old_docs), 500):
-                batch = _db.batch()
-                for doc in old_docs[i : i + 500]:
-                    batch.delete(doc.reference)
-                batch.commit()
-        count = len(old_docs)
+        count = await run_blocking(
+            _delete_user_notifications_before, _db, caller_id, cutoff, body.dry_run
+        )
         summary = {"users_processed": 1, "notifications_deleted": count}
 
     n = summary["notifications_deleted"]
@@ -249,6 +246,20 @@ async def cleanup_notifications(
     )
     logger.info("Notification cleanup complete: %s", summary)
     return summary
+
+
+def _delete_user_notifications_before(db: Any, uid: str, cutoff: datetime, dry_run: bool) -> int:
+    """Delete one user's notifications created before *cutoff* (blocking: Firestore)."""
+    notifs_ref = db.collection("users").document(uid).collection("notifications")
+    old_docs = list(notifs_ref.where("created_at", "<", cutoff).stream())
+    if old_docs and not dry_run:
+        # Firestore batches are capped at 500 writes — chunk if needed.
+        for i in range(0, len(old_docs), 500):
+            batch = db.batch()
+            for doc in old_docs[i : i + 500]:
+                batch.delete(doc.reference)
+            batch.commit()
+    return len(old_docs)
 
 
 @router.post("/sync-publications")
@@ -291,7 +302,8 @@ async def sync_publications(
             time_budget_seconds=body.time_budget_seconds,
         )
     else:
-        user_doc = _db.collection("users").document(caller_id).get()
+        # Firestore calls block, so each runs off the event loop.
+        user_doc = await run_blocking(_db.collection("users").document(caller_id).get)
         user_data: dict = user_doc.to_dict() or {} if user_doc.exists else {}
 
         now = datetime.now(tz=timezone.utc)
@@ -311,8 +323,10 @@ async def sync_publications(
             settings=settings,
         )
         if not body.dry_run:
-            _db.collection("users").document(caller_id).set(
-                {"last_manual_sync_at": now}, merge=True
+            await run_blocking(
+                _db.collection("users").document(caller_id).set,
+                {"last_manual_sync_at": now},
+                merge=True,
             )
         summary = {"users_processed": 1, "works_added": added}
 
@@ -366,7 +380,7 @@ async def email_test(
             headers={"WWW-Authenticate": "Bearer"},
         )
     try:
-        decoded = verify_token(credentials.credentials)
+        decoded = await run_blocking(verify_token, credentials.credentials)
         uid: str = decoded.get("uid") or decoded.get("user_id", "")
     except Exception as exc:
         raise HTTPException(
@@ -386,7 +400,7 @@ async def email_test(
 
     db = _get_db()
     user_ref = db.collection("users").document(uid)
-    snapshot = user_ref.get()
+    snapshot = await run_blocking(user_ref.get)
     if not snapshot.exists:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -422,6 +436,6 @@ async def email_test(
             detail=f"Email delivery failed: {exc}",
         ) from exc
 
-    user_ref.set({"last_email_test_at": now}, merge=True)
+    await run_blocking(user_ref.set, {"last_email_test_at": now}, merge=True)
     logger.info("Test email sent to %s for uid=%s", to_email, uid)
     return {"message": f"Test email sent to {to_email}."}

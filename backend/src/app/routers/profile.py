@@ -9,6 +9,7 @@ from firebase_admin import firestore
 from pydantic import BaseModel
 
 from app.config import get_settings
+from app.core.concurrency import run_blocking
 from app.deps import get_current_user
 from app.firebase_client import get_db
 from app.schemas import LinkedAuthorEntry, UpdateProfileRequest, UserProfile
@@ -51,7 +52,7 @@ def _doc_to_profile(uid: str, data: dict) -> UserProfile:
 
 
 @router.get("", response_model=UserProfile)
-def get_profile(
+async def get_profile(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> UserProfile:
@@ -59,6 +60,11 @@ def get_profile(
     Fetch the current user's profile from Firestore.
     If no document exists, a default profile is created and returned.
     """
+    return await run_blocking(_get_profile_sync, uid=uid, db=db)
+
+
+def _get_profile_sync(uid: str, db: Any) -> UserProfile:
+    """The blocking (Firestore) part of get_profile, run on a worker thread."""
     ref = db.collection("users").document(uid)
     snapshot = ref.get()
 
@@ -104,7 +110,7 @@ async def update_profile(
     the new address is confirmed.
     """
     ref = db.collection("users").document(uid)
-    current = (ref.get().to_dict() or {})
+    current = ((await run_blocking(ref.get)).to_dict() or {})
 
     # Only include fields that were explicitly provided (not None).
     updates: dict = {}
@@ -131,13 +137,13 @@ async def update_profile(
     )
 
     if updates:
-        ref.set(updates, merge=True)
+        await run_blocking(ref.set, updates, merge=True)
         logger.info("Updated profile for uid=%s: fields=%s", uid, list(updates.keys()))
 
     if needs_confirmation:
         await _send_confirmation(uid, new_email, current, ref, request)
 
-    snapshot = ref.get()
+    snapshot = await run_blocking(ref.get)
     data = snapshot.to_dict() or {}
     return _doc_to_profile(uid, data)
 
@@ -168,20 +174,25 @@ async def _send_confirmation(
             confirm_url=make_confirm_email_url(uid, email, api_base, settings),
             settings=settings,
         )
-        ref.set({"last_confirm_email_at": now}, merge=True)
+        await run_blocking(ref.set, {"last_confirm_email_at": now}, merge=True)
         logger.info("Sent notification email confirmation for uid=%s", uid)
     except Exception as exc:  # noqa: BLE001
         logger.error("Could not send confirmation email for uid=%s: %s", uid, exc)
 
 
 @router.get("/confirm-notification-email", include_in_schema=False)
-def confirm_notification_email(
+async def confirm_notification_email(
     uid: str = Query(..., max_length=128),
     email: str = Query(..., max_length=254),
     token: str = Query(..., max_length=128),
     db: Any = Depends(get_db),
 ) -> RedirectResponse:
     """Target of the link in the confirmation email; no login required."""
+    return await run_blocking(_confirm_notification_email_sync, uid=uid, email=email, token=token, db=db)
+
+
+def _confirm_notification_email_sync(uid: str, email: str, token: str, db: Any) -> RedirectResponse:
+    """The blocking (Firestore) part of confirm_notification_email, run on a worker thread."""
     from app.services.email_service import verify_signed_token
 
     settings = get_settings()
@@ -210,7 +221,7 @@ def _delete_subcollections(db: Any, user_ref: Any) -> None:
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
-def delete_account(
+async def delete_account(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> None:
@@ -228,6 +239,11 @@ def delete_account(
     (e.g. the record was already removed), the error is logged but does NOT
     cause the endpoint to fail — all Firestore data has already been wiped.
     """
+    return await run_blocking(_delete_account_sync, uid=uid, db=db)
+
+
+def _delete_account_sync(uid: str, db: Any) -> None:
+    """The blocking (Firestore) part of delete_account, run on a worker thread."""
     from firebase_admin import auth as firebase_auth
 
     user_ref = db.collection("users").document(uid)
@@ -251,7 +267,7 @@ def delete_account(
 
 
 @router.delete("/linked-author", status_code=status.HTTP_204_NO_CONTENT)
-def unlink_author(
+async def unlink_author(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> None:
@@ -259,6 +275,11 @@ def unlink_author(
     Unlink the current author profile and delete all tracked works + notifications.
     This resets the account so the user can link a different author.
     """
+    return await run_blocking(_unlink_author_sync, uid=uid, db=db)
+
+
+def _unlink_author_sync(uid: str, db: Any) -> None:
+    """The blocking (Firestore) part of unlink_author, run on a worker thread."""
     user_ref = db.collection("users").document(uid)
 
     _delete_subcollections(db, user_ref)
@@ -280,7 +301,7 @@ class UnsubscribeRequest(BaseModel):
 
 
 @router.post("/unsubscribe", status_code=status.HTTP_200_OK)
-def unsubscribe(
+async def unsubscribe(
     body: UnsubscribeRequest,
     db: Any = Depends(get_db),
 ) -> dict:
@@ -290,6 +311,11 @@ def unsubscribe(
     Validates the HMAC token generated by email_service.make_unsubscribe_url(),
     then sets notify_enabled=False on the user's profile.
     """
+    return await run_blocking(_unsubscribe_sync, body=body, db=db)
+
+
+def _unsubscribe_sync(body: UnsubscribeRequest, db: Any) -> dict:
+    """The blocking (Firestore) part of unsubscribe, run on a worker thread."""
     from app.services.email_service import verify_signed_token
 
     settings = get_settings()

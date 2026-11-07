@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
 
+from app.core.concurrency import run_blocking, run_off_loop
 from app.deps import get_current_user
 from app.firebase_client import get_db
 from app.schemas import Notification, PaginatedNotifications
@@ -60,7 +61,7 @@ _MAX_LIMIT = 100
 
 
 @router.get("", response_model=PaginatedNotifications)
-def list_notifications(
+async def list_notifications(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
     page: int = Query(default=1, ge=1),
@@ -72,6 +73,11 @@ def list_notifications(
     Sorting is done in Python after streaming the full collection so that
     documents with a null/missing created_at are not silently excluded.
     """
+    return await run_blocking(_list_notifications_sync, uid=uid, db=db, page=page, limit=limit)
+
+
+def _list_notifications_sync(uid: str, db: Any, page: int, limit: int) -> PaginatedNotifications:
+    """The blocking (Firestore) part of list_notifications, run on a worker thread."""
     found_since = datetime.now(tz=timezone.utc) - timedelta(days=30)
 
     docs = (
@@ -137,7 +143,7 @@ def _notification_to_bibtex(n: Notification) -> str:
 
 
 @router.get("/export.bib", response_class=PlainTextResponse)
-def export_bibtex(
+async def export_bibtex(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> PlainTextResponse:
@@ -146,6 +152,11 @@ def export_bibtex(
     file.  Unlike the paginated list endpoint this returns the full history
     (no 30-day window) so researchers can build a complete reference list.
     """
+    return await run_blocking(_export_bibtex_sync, uid=uid, db=db)
+
+
+def _export_bibtex_sync(uid: str, db: Any) -> PlainTextResponse:
+    """The blocking (Firestore) part of export_bibtex, run on a worker thread."""
     _EXPORT_CAP = 5_000
 
     docs = (
@@ -183,17 +194,23 @@ async def prune_notifications(
     """
     from app.services.citation_service import prune_user_notifications
 
-    deleted = await prune_user_notifications(uid=uid, db=db, dry_run=False)
+    # The prune makes blocking Firestore calls: run it on its own loop.
+    deleted = await run_off_loop(prune_user_notifications, uid=uid, db=db, dry_run=False)
     logger.info("Manual prune for uid=%s: %d notification(s) deleted.", uid, deleted)
     return {"deleted": deleted}
 
 
 @router.post("/seen/all", status_code=204)
-def mark_all_seen(
+async def mark_all_seen(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> None:
     """Mark every unseen notification as seen for the authenticated user."""
+    return await run_blocking(_mark_all_seen_sync, uid=uid, db=db)
+
+
+def _mark_all_seen_sync(uid: str, db: Any) -> None:
+    """The blocking (Firestore) part of mark_all_seen, run on a worker thread."""
     unseen_docs = list(
         db.collection("users")
         .document(uid)
@@ -219,12 +236,17 @@ def mark_all_seen(
 
 
 @router.post("/{notification_id}/seen", response_model=Notification)
-def mark_seen(
+async def mark_seen(
     notification_id: str,
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> Notification:
     """Mark a single notification as seen."""
+    return await run_blocking(_mark_seen_sync, notification_id=notification_id, uid=uid, db=db)
+
+
+def _mark_seen_sync(notification_id: str, uid: str, db: Any) -> Notification:
+    """The blocking (Firestore) part of mark_seen, run on a worker thread."""
     ref = (
         db.collection("users")
         .document(uid)

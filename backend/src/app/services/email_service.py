@@ -5,13 +5,11 @@ Templates are Jinja2 HTML and plain-text files located in
 ``templates/email/``.
 """
 
-import asyncio
 import hashlib
 import hmac
 import html
 import logging
 from datetime import datetime, timezone
-from functools import partial
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -19,6 +17,7 @@ import resend
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.config import API_PREFIX, Settings
+from app.core.concurrency import run_blocking
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ _TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates" / "email"
 
 async def _send(params: resend.Emails.SendParams) -> dict:
     """Run the blocking resend.Emails.send() in a thread so it doesn't block the event loop."""
-    return await asyncio.to_thread(partial(resend.Emails.send, params))
+    return await run_blocking(resend.Emails.send, params)
 
 
 def _hmac_hex(secret: str, purpose: str, uid: str) -> str:

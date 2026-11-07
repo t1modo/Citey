@@ -3,6 +3,7 @@ import logging
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.core.concurrency import run_blocking
 from app.firebase_client import verify_token
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,8 @@ async def get_current_user(
 
     token = credentials.credentials
     try:
-        decoded = verify_token(token)
+        # Checking a token can fetch the issuer's public keys: off the loop.
+        decoded = await run_blocking(verify_token, token)
     except Exception as exc:
         logger.warning("Token verification failed: %s", exc)
         raise HTTPException(

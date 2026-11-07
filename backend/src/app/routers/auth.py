@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from firebase_admin import auth as firebase_auth
 
 from app.config import Settings, get_settings
+from app.core.concurrency import run_blocking
 from app.deps import enforce_cooldown, get_current_user
 from app.firebase_client import get_db
 from app.services.email_service import send_verification_email
@@ -37,8 +38,9 @@ async def send_email_verification(
     from datetime import datetime, timezone
 
     # Rate-limit: enforce cooldown between resend attempts.
+    # Firestore and Firebase Auth calls block, so each runs off the loop.
     user_ref = db.collection("users").document(uid)
-    user_snap = user_ref.get()
+    user_snap = await run_blocking(user_ref.get)
     enforce_cooldown(
         (user_snap.to_dict() or {}) if user_snap.exists else {},
         "last_verification_email_at", _VERIFICATION_COOLDOWN,
@@ -46,7 +48,7 @@ async def send_email_verification(
     )
 
     try:
-        fb_user = firebase_auth.get_user(uid)
+        fb_user = await run_blocking(firebase_auth.get_user, uid)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -70,7 +72,8 @@ async def send_email_verification(
     )
 
     try:
-        verification_link = firebase_auth.generate_email_verification_link(
+        verification_link = await run_blocking(
+            firebase_auth.generate_email_verification_link,
             fb_user.email,
             action_code_settings=action_code_settings,
         )
@@ -99,5 +102,5 @@ async def send_email_verification(
 
     # Stamp the send time so the cooldown check above works on subsequent calls.
     now_utc = datetime.now(tz=timezone.utc)
-    user_ref.set({"last_verification_email_at": now_utc}, merge=True)
+    await run_blocking(user_ref.set, {"last_verification_email_at": now_utc}, merge=True)
     logger.info("Verification email sent to %s (uid=%s)", fb_user.email, uid)

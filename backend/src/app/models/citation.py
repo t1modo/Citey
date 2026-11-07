@@ -37,7 +37,7 @@ class CitingWork(Base, table=True):
     created_at: datetime = created_at_column()
 
     keys: list["CitingWorkKey"] = Relationship(
-        back_populates="citing_work", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        back_populates="citing_work", sa_relationship_kwargs={"cascade": "all, delete-orphan", "passive_deletes": True}
     )
     citations: list["Citation"] = Relationship(back_populates="citing_work")
 
@@ -76,5 +76,5 @@ class Citation(Base, table=True):
     work: Work = Relationship(back_populates="citations")
     citing_work: CitingWork = Relationship(back_populates="citations")
     alerts: list["Alert"] = Relationship(
-        back_populates="citation", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        back_populates="citation", sa_relationship_kwargs={"cascade": "all, delete-orphan", "passive_deletes": True}
     )

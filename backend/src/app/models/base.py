@@ -33,6 +33,11 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# Relationships that own children (cascade "all, delete-orphan") also set
+# passive_deletes: the database's ON DELETE CASCADE removes the children, so
+# deleting a parent never has to load them first, which async code can't do
+# lazily.
+
 # Each helper builds a new Field, since a column belongs to exactly one table.
 
 

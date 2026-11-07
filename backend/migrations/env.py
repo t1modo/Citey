@@ -1,10 +1,12 @@
 """
-Alembic environment. Migrations run against DATABASE_URL_UNPOOLED, Neon's
+Alembic environment, on the same async engine as the app. Migrations run
+against DATABASE_URL_UNPOOLED, Neon's
 direct connection, when it is set: schema changes take locks and run long
 statements, which the pooler is not meant for. Without it they use
 DATABASE_URL. A URL passed in the Alembic config (as the tests do) wins.
 """
 
+import asyncio
 from logging.config import fileConfig
 
 from alembic import context
@@ -51,13 +53,23 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
+def _run_migrations(connection) -> None:
+    _configure(connection=connection)
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+async def _run_migrations_async() -> None:
     engine = make_engine(_database_url())
-    with engine.connect() as connection:
-        _configure(connection=connection)
-        with context.begin_transaction():
-            context.run_migrations()
-    engine.dispose()
+    async with engine.connect() as connection:
+        # Alembic's migration code is synchronous; run_sync hands it the
+        # async connection's sync facade.
+        await connection.run_sync(_run_migrations)
+    await engine.dispose()
+
+
+def run_migrations_online() -> None:
+    asyncio.run(_run_migrations_async())
 
 
 if context.is_offline_mode():

@@ -21,8 +21,8 @@ dependencies = [
     "python-dotenv==1.2.4",
     "pytz==2024.2",
     "resend==2.51.0",
-    "sqlalchemy==2.1.8",
-    "sqlmodel==0.0.48",
+    "sqlalchemy[asyncio]==2.1.8",
+    "sqlmodel[asyncio]==0.0.48",
     "uvicorn[standard]==0.54.0",
 ]
 
