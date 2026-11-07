@@ -1,19 +1,27 @@
 """
 Tests for app.services.publication_sync.
 
-All Firestore I/O and OpenAlex HTTP calls are replaced with lightweight
-in-process mocks — no real network or Firebase connections required.
+OpenAlex and email are mocked. The sync itself runs against a real
+database (TEST_DATABASE_URL, see tests/conftest.py): tests that need it are
+marked ``needs_db`` and skipped without one.
 """
 
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.models import User
+from app.services import convert, tracking_service
 from app.services.normalize import dedupe_works_by_title, normalize_doi
 from app.services.publication_sync import (
     sync_new_publications_for_all_users,
     sync_new_publications_for_user,
 )
+from app.store import UserStore, WorkStore
+from tests.conftest import needs_db
+
+NOW = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -87,28 +95,40 @@ def _make_oa_work(doi: str, title: str = "Test Paper") -> dict:
     }
 
 
-def _make_db(existing_doc_ids: list[str] | None = None):
-    """
-    Build a minimal Firestore mock.
+def _openalex(*works: dict):
+    """OpenAlex answers the author's works with *works*."""
+    return patch(
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
+        new=AsyncMock(return_value=list(works)),
+    )
 
-    Returns (db, works_ref, user_ref) so tests can assert on calls.
-    """
-    existing_doc_ids = existing_doc_ids or []
-    stream_docs = [MagicMock(id=doc_id) for doc_id in existing_doc_ids]
 
-    works_ref = MagicMock()
-    works_ref.stream.return_value = stream_docs
-    # works_ref.document(work_id).set(...) — all resolve to the same mock
-    works_ref.document.return_value.set = MagicMock()
+def _email_service() -> MagicMock:
+    svc = MagicMock()
+    svc.send_new_publications_email = AsyncMock()
+    return svc
 
-    user_ref = MagicMock()
-    user_ref.collection.return_value = works_ref
-    user_ref.set = MagicMock()
 
-    db = MagicMock()
-    db.collection.return_value.document.return_value = user_ref
+async def _user(s, uid: str = "u1", email: str = "", **fields) -> User:
+    """A user linked to OpenAlex author A123 unless *fields* say otherwise."""
+    fields.setdefault("linked_author_id", "A123")
+    return await UserStore(s).create(uid, email=email, **fields)
 
-    return db, works_ref, user_ref
+
+async def _track(s, uid: str, doi: str) -> None:
+    key = doi.replace("/", "__")
+    await tracking_service.track_paper(s, uid, key, {"doi": doi, "title": doi}, now=NOW)
+
+
+async def _sync(s, uid: str = "u1", *, email_service=None, dry_run: bool = False) -> int:
+    """Sync *uid*, reading the user from the database as the jobs do."""
+    return await sync_new_publications_for_user(
+        uid=uid,
+        session=s,
+        email_service=email_service or _email_service(),
+        dry_run=dry_run,
+        settings=_make_settings(),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -117,43 +137,46 @@ def _make_db(existing_doc_ids: list[str] | None = None):
 
 
 async def test_skips_user_without_linked_author() -> None:
-    db, _, _ = _make_db()
-    result = await sync_new_publications_for_user(
-        uid="u1",
-        user_data={},
-        db=db,
-        email_service=MagicMock(),
-        dry_run=False,
-        settings=_make_settings(),
-    )
+    """No linked author: nothing is fetched and the database is not touched."""
+    session = MagicMock()
+    with _openalex() as oa:
+        result = await sync_new_publications_for_user(
+            uid="u1",
+            user_data={},
+            session=session,
+            email_service=MagicMock(),
+            dry_run=False,
+            settings=_make_settings(),
+        )
     assert result == 0
-    db.collection.assert_not_called()
+    assert session.mock_calls == []
+    oa.assert_not_awaited()
 
 
 async def test_skips_s2_linked_author() -> None:
-    db, _, _ = _make_db()
-    result = await sync_new_publications_for_user(
-        uid="u1",
-        user_data={"linked_author_id": "S2:12345"},
-        db=db,
-        email_service=MagicMock(),
-        dry_run=False,
-        settings=_make_settings(),
-    )
+    """Semantic Scholar profiles can't list every work, so they are skipped."""
+    session = MagicMock()
+    with _openalex() as oa:
+        result = await sync_new_publications_for_user(
+            uid="u1",
+            user_data={"linked_author_id": "S2:12345"},
+            session=session,
+            email_service=MagicMock(),
+            dry_run=False,
+            settings=_make_settings(),
+        )
     assert result == 0
-    db.collection.assert_not_called()
+    assert session.mock_calls == []
+    oa.assert_not_awaited()
 
 
 async def test_returns_zero_when_openalex_returns_empty() -> None:
-    db, _, _ = _make_db()
-    with patch(
-        "app.services.publication_sync.openalex_svc.get_works_by_author",
-        new=AsyncMock(return_value=[]),
-    ):
+    """An author with no works on OpenAlex adds nothing."""
+    with _openalex():
         result = await sync_new_publications_for_user(
             uid="u1",
             user_data={"linked_author_id": "A123"},
-            db=db,
+            session=MagicMock(),
             email_service=MagicMock(),
             dry_run=False,
             settings=_make_settings(),
@@ -161,47 +184,25 @@ async def test_returns_zero_when_openalex_returns_empty() -> None:
     assert result == 0
 
 
-async def test_skips_works_without_doi() -> None:
-    db, works_ref, _ = _make_db()
-    no_doi_work = {**_make_oa_work("10.1234/x"), "doi": None}
-
-    with patch(
-        "app.services.publication_sync.openalex_svc.get_works_by_author",
-        new=AsyncMock(return_value=[no_doi_work]),
-    ):
-        result = await sync_new_publications_for_user(
-            uid="u1",
-            user_data={"linked_author_id": "A123"},
-            db=db,
-            email_service=MagicMock(),
-            dry_run=False,
-            settings=_make_settings(),
-        )
-
+@needs_db
+async def test_skips_works_without_doi(pg_session) -> None:
+    """A work with no DOI can't be tracked, so it is left out."""
+    await _user(pg_session)
+    with _openalex({**_make_oa_work("10.1234/x"), "doi": None}):
+        result = await _sync(pg_session)
     assert result == 0
-    works_ref.document.return_value.set.assert_not_called()
+    assert await WorkStore(pg_session).tracked_keys("u1") == set()
 
 
-async def test_skips_works_already_tracked() -> None:
-    # DOI "10.1234/existing" → work_id "10.1234__existing"
-    existing_id = "10.1234__existing"
-    db, works_ref, _ = _make_db(existing_doc_ids=[existing_id])
-
-    with patch(
-        "app.services.publication_sync.openalex_svc.get_works_by_author",
-        new=AsyncMock(return_value=[_make_oa_work("10.1234/existing")]),
-    ):
-        result = await sync_new_publications_for_user(
-            uid="u1",
-            user_data={"linked_author_id": "A123"},
-            db=db,
-            email_service=MagicMock(),
-            dry_run=False,
-            settings=_make_settings(),
-        )
-
+@needs_db
+async def test_skips_works_already_tracked(pg_session) -> None:
+    """A paper the user already tracks is not added again."""
+    await _user(pg_session)
+    await _track(pg_session, "u1", "10.1234/existing")
+    with _openalex(_make_oa_work("10.1234/existing")):
+        result = await _sync(pg_session)
     assert result == 0
-    works_ref.document.return_value.set.assert_not_called()
+    assert await WorkStore(pg_session).tracked_keys("u1") == {"10.1234__existing"}
 
 
 # ---------------------------------------------------------------------------
@@ -209,73 +210,49 @@ async def test_skips_works_already_tracked() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_adds_new_works_and_returns_count() -> None:
-    db, works_ref, _ = _make_db()
-
-    with patch(
-        "app.services.publication_sync.openalex_svc.get_works_by_author",
-        new=AsyncMock(return_value=[
-            _make_oa_work("10.1234/paper-one", "Paper One"),
-            _make_oa_work("10.1234/paper-two", "Paper Two"),
-        ]),
+@needs_db
+async def test_adds_new_works_and_returns_count(pg_session) -> None:
+    """Every new publication becomes a tracked paper, with OpenAlex's metadata."""
+    await _user(pg_session)
+    with _openalex(
+        _make_oa_work("10.1234/paper-one", "Paper One"),
+        _make_oa_work("10.1234/paper-two", "Paper Two"),
     ):
-        result = await sync_new_publications_for_user(
-            uid="u1",
-            user_data={"linked_author_id": "A123"},
-            db=db,
-            email_service=MagicMock(),
-            dry_run=False,
-            settings=_make_settings(),
-        )
+        result = await _sync(pg_session)
 
     assert result == 2
-    assert works_ref.document.return_value.set.call_count == 2
+    works = WorkStore(pg_session)
+    assert await works.tracked_keys("u1") == {"10.1234__paper-one", "10.1234__paper-two"}
+    one = await works.get_by_key("10.1234__paper-one")
+    assert one.title == "Paper One" and one.doi == "10.1234/paper-one"
+    assert one.authors == ["Jane Smith"] and one.year == 2024
 
 
-async def test_only_adds_works_not_already_tracked() -> None:
-    existing_id = "10.1234__old"
-    db, works_ref, _ = _make_db(existing_doc_ids=[existing_id])
-
-    with patch(
-        "app.services.publication_sync.openalex_svc.get_works_by_author",
-        new=AsyncMock(return_value=[
-            _make_oa_work("10.1234/old", "Old Paper"),   # already tracked
-            _make_oa_work("10.1234/new", "New Paper"),   # should be added
-        ]),
+@needs_db
+async def test_only_adds_works_not_already_tracked(pg_session) -> None:
+    """Of an old and a new paper, only the new one is added."""
+    await _user(pg_session)
+    await _track(pg_session, "u1", "10.1234/old")
+    with _openalex(
+        _make_oa_work("10.1234/old", "Old Paper"),   # already tracked
+        _make_oa_work("10.1234/new", "New Paper"),   # should be added
     ):
-        result = await sync_new_publications_for_user(
-            uid="u1",
-            user_data={"linked_author_id": "A123"},
-            db=db,
-            email_service=MagicMock(),
-            dry_run=False,
-            settings=_make_settings(),
-        )
+        result = await _sync(pg_session)
 
     assert result == 1
-    assert works_ref.document.return_value.set.call_count == 1
+    assert await WorkStore(pg_session).tracked_keys("u1") == {"10.1234__old", "10.1234__new"}
 
 
-async def test_records_last_publication_sync_timestamp() -> None:
-    db, _, user_ref = _make_db()
+@needs_db
+async def test_records_last_publication_sync_timestamp(pg_session) -> None:
+    """A sync that adds papers records when it ran on the user's row."""
+    user = await _user(pg_session)
+    with _openalex(_make_oa_work("10.1234/new")):
+        await _sync(pg_session)
 
-    with patch(
-        "app.services.publication_sync.openalex_svc.get_works_by_author",
-        new=AsyncMock(return_value=[_make_oa_work("10.1234/new")]),
-    ):
-        await sync_new_publications_for_user(
-            uid="u1",
-            user_data={"linked_author_id": "A123"},
-            db=db,
-            email_service=MagicMock(),
-            dry_run=False,
-            settings=_make_settings(),
-        )
-
-    # The user document should receive a set() call with the sync timestamp
-    user_ref.set.assert_called_once()
-    call_args = user_ref.set.call_args
-    assert "last_publication_sync" in call_args[0][0]
+    user = await UserStore(pg_session).refresh(user)
+    assert user.last_publication_sync_at is not None
+    assert convert.user_data(user)["last_publication_sync"] == user.last_publication_sync_at
 
 
 # ---------------------------------------------------------------------------
@@ -283,26 +260,17 @@ async def test_records_last_publication_sync_timestamp() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_dry_run_returns_count_without_writing() -> None:
-    db, works_ref, user_ref = _make_db()
-
-    with patch(
-        "app.services.publication_sync.openalex_svc.get_works_by_author",
-        new=AsyncMock(return_value=[_make_oa_work("10.1234/dry-paper")]),
-    ):
-        result = await sync_new_publications_for_user(
-            uid="u1",
-            user_data={"linked_author_id": "A123"},
-            db=db,
-            email_service=MagicMock(),
-            dry_run=True,
-            settings=_make_settings(),
-        )
+@needs_db
+async def test_dry_run_returns_count_without_writing(pg_session) -> None:
+    """A dry run counts the new papers but tracks nothing and records no sync."""
+    user = await _user(pg_session)
+    with _openalex(_make_oa_work("10.1234/dry-paper")):
+        result = await _sync(pg_session, dry_run=True)
 
     assert result == 1
-    # Nothing written to Firestore
-    works_ref.document.return_value.set.assert_not_called()
-    user_ref.set.assert_not_called()
+    assert await WorkStore(pg_session).tracked_keys("u1") == set()
+    assert await WorkStore(pg_session).get_by_key("10.1234__dry-paper") is None
+    assert (await UserStore(pg_session).refresh(user)).last_publication_sync_at is None
 
 
 # ---------------------------------------------------------------------------
@@ -310,30 +278,19 @@ async def test_dry_run_returns_count_without_writing() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_sends_email_when_both_flags_enabled() -> None:
-    db, _, _ = _make_db()
-    email_svc = MagicMock()
-    email_svc.send_new_publications_email = AsyncMock()
-
-    with patch(
-        "app.services.publication_sync.openalex_svc.get_works_by_author",
-        new=AsyncMock(return_value=[_make_oa_work("10.1234/new", "Great Paper")]),
-    ):
-        await sync_new_publications_for_user(
-            uid="u1",
-            user_data={
-                "linked_author_id": "A123",
-                "notify_new_publications": True,
-                "notify_enabled": True,
-                "email": "jane@example.com",
-                "notification_email": "jane@example.com",
-                "display_name": "Dr. Jane",
-            },
-            db=db,
-            email_service=email_svc,
-            dry_run=False,
-            settings=_make_settings(),
-        )
+@needs_db
+async def test_sends_email_when_both_flags_enabled(pg_session) -> None:
+    """With both notification flags on, the user hears about the new titles."""
+    await _user(
+        pg_session,
+        email="jane@example.com",
+        display_name="Dr. Jane",
+        notify_new_publications=True,
+        notify_enabled=True,
+    )
+    email_svc = _email_service()
+    with _openalex(_make_oa_work("10.1234/new", "Great Paper")):
+        await _sync(pg_session, email_service=email_svc)
 
     email_svc.send_new_publications_email.assert_awaited_once()
     kwargs = email_svc.send_new_publications_email.call_args.kwargs
@@ -342,102 +299,49 @@ async def test_sends_email_when_both_flags_enabled() -> None:
     assert kwargs["new_titles"] == ["Great Paper"]
 
 
-async def test_falls_back_to_account_email_when_no_notification_email() -> None:
-    db, _, _ = _make_db()
-    email_svc = MagicMock()
-    email_svc.send_new_publications_email = AsyncMock()
-
-    with patch(
-        "app.services.publication_sync.openalex_svc.get_works_by_author",
-        new=AsyncMock(return_value=[_make_oa_work("10.1234/new")]),
-    ):
-        await sync_new_publications_for_user(
-            uid="u1",
-            user_data={
-                "linked_author_id": "A123",
-                "notify_new_publications": True,
-                "notify_enabled": True,
-                "email": "fallback@example.com",
-            },
-            db=db,
-            email_service=email_svc,
-            dry_run=False,
-            settings=_make_settings(),
-        )
+@needs_db
+async def test_falls_back_to_account_email_when_no_notification_email(pg_session) -> None:
+    """With no notification address set, the email goes to the account email."""
+    user = await _user(pg_session, email="fallback@example.com")
+    await UserStore(pg_session).update_fields("u1", notification_email=None)
+    await UserStore(pg_session).refresh(user)
+    email_svc = _email_service()
+    with _openalex(_make_oa_work("10.1234/new")):
+        await _sync(pg_session, email_service=email_svc)
 
     kwargs = email_svc.send_new_publications_email.call_args.kwargs
     assert kwargs["to_email"] == "fallback@example.com"
 
 
-async def test_no_email_when_notify_new_publications_false() -> None:
-    db, _, _ = _make_db()
-    email_svc = MagicMock()
-    email_svc.send_new_publications_email = AsyncMock()
-
-    with patch(
-        "app.services.publication_sync.openalex_svc.get_works_by_author",
-        new=AsyncMock(return_value=[_make_oa_work("10.1234/new")]),
-    ):
-        await sync_new_publications_for_user(
-            uid="u1",
-            user_data={
-                "linked_author_id": "A123",
-                "notify_new_publications": False,
-                "notify_enabled": True,
-                "notification_email": "jane@example.com",
-            },
-            db=db,
-            email_service=email_svc,
-            dry_run=False,
-            settings=_make_settings(),
-        )
+@needs_db
+async def test_no_email_when_notify_new_publications_false(pg_session) -> None:
+    """A user who turned off new-publication emails gets none."""
+    await _user(pg_session, email="jane@example.com", notify_new_publications=False, notify_enabled=True)
+    email_svc = _email_service()
+    with _openalex(_make_oa_work("10.1234/new")):
+        await _sync(pg_session, email_service=email_svc)
 
     email_svc.send_new_publications_email.assert_not_awaited()
 
 
-async def test_no_email_when_global_notifications_disabled() -> None:
-    db, _, _ = _make_db()
-    email_svc = MagicMock()
-    email_svc.send_new_publications_email = AsyncMock()
-
-    with patch(
-        "app.services.publication_sync.openalex_svc.get_works_by_author",
-        new=AsyncMock(return_value=[_make_oa_work("10.1234/new")]),
-    ):
-        await sync_new_publications_for_user(
-            uid="u1",
-            user_data={
-                "linked_author_id": "A123",
-                "notify_new_publications": True,
-                "notify_enabled": False,
-                "notification_email": "jane@example.com",
-            },
-            db=db,
-            email_service=email_svc,
-            dry_run=False,
-            settings=_make_settings(),
-        )
+@needs_db
+async def test_no_email_when_global_notifications_disabled(pg_session) -> None:
+    """A user who turned off all emails gets none."""
+    await _user(pg_session, email="jane@example.com", notify_new_publications=True, notify_enabled=False)
+    email_svc = _email_service()
+    with _openalex(_make_oa_work("10.1234/new")):
+        await _sync(pg_session, email_service=email_svc)
 
     email_svc.send_new_publications_email.assert_not_awaited()
 
 
-async def test_no_email_when_no_address_on_profile() -> None:
-    db, _, _ = _make_db()
-    email_svc = MagicMock()
-    email_svc.send_new_publications_email = AsyncMock()
-
-    with patch(
-        "app.services.publication_sync.openalex_svc.get_works_by_author",
-        new=AsyncMock(return_value=[_make_oa_work("10.1234/new")]),
-    ):
-        await sync_new_publications_for_user(
-            uid="u1",
-            user_data={"linked_author_id": "A123"},  # no email field at all
-            db=db,
-            email_service=email_svc,
-            dry_run=False,
-            settings=_make_settings(),
-        )
+@needs_db
+async def test_no_email_when_no_address_on_profile(pg_session) -> None:
+    """With no address anywhere on the profile, no email is sent."""
+    await _user(pg_session)  # no email at all
+    email_svc = _email_service()
+    with _openalex(_make_oa_work("10.1234/new")):
+        await _sync(pg_session, email_service=email_svc)
 
     email_svc.send_new_publications_email.assert_not_awaited()
 
@@ -458,74 +362,62 @@ class _AllUids(set):
 def _no_firebase_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     """The all-users jobs look up Firebase Auth to skip orphans; stub it."""
     monkeypatch.setattr(
-        "app.services.citation_service._get_auth_uids", lambda: _AllUids()
+        "app.services.citation_service._get_auth_uids", AsyncMock(return_value=_AllUids())
     )
 
 
-async def test_all_users_skips_users_without_linked_author() -> None:
-    u_linked = MagicMock()
-    u_linked.id = "u_linked"
-    u_linked.to_dict.return_value = {"linked_author_id": "A123"}
+async def _users(s, **linked: str | None) -> None:
+    """Users by uid, each linked to the given author (None: not linked),
+    committed as the sweep would find them."""
+    for uid, author in linked.items():
+        await UserStore(s).create(uid, linked_author_id=author)
+    await s.commit()
 
-    u_unlinked = MagicMock()
-    u_unlinked.id = "u_unlinked"
-    u_unlinked.to_dict.return_value = {}
 
-    db = MagicMock()
-    db.collection.return_value.stream.return_value = [u_linked, u_unlinked]
+async def _sweep(s) -> dict:
+    return await sync_new_publications_for_all_users(
+        session=s,
+        email_service=MagicMock(),
+        dry_run=False,
+        settings=_make_settings(),
+    )
+
+
+@needs_db
+async def test_all_users_skips_users_without_linked_author(pg_session) -> None:
+    """Only users with a linked author are synced."""
+    await _users(pg_session, u_linked="A123", u_unlinked=None)
 
     with patch(
         "app.services.publication_sync.sync_new_publications_for_user",
         new=AsyncMock(return_value=0),
     ) as mock_per_user:
-        await sync_new_publications_for_all_users(
-            db=db,
-            email_service=MagicMock(),
-            dry_run=False,
-            settings=_make_settings(),
-        )
+        await _sweep(pg_session)
 
     assert mock_per_user.call_count == 1
     assert mock_per_user.call_args.kwargs["uid"] == "u_linked"
+    assert mock_per_user.call_args.kwargs["user_data"]["linked_author_id"] == "A123"
 
 
-async def test_all_users_returns_correct_summary() -> None:
-    users = []
-    for i in range(3):
-        u = MagicMock()
-        u.id = f"u{i}"
-        u.to_dict.return_value = {"linked_author_id": f"A{i}"}
-        users.append(u)
-
-    db = MagicMock()
-    db.collection.return_value.stream.return_value = users
+@needs_db
+async def test_all_users_returns_correct_summary(pg_session) -> None:
+    """The summary adds up users synced and papers added across everyone."""
+    await _users(pg_session, u0="A0", u1="A1", u2="A2")
 
     with patch(
         "app.services.publication_sync.sync_new_publications_for_user",
         new=AsyncMock(return_value=2),  # 2 new works per user
     ):
-        summary = await sync_new_publications_for_all_users(
-            db=db,
-            email_service=MagicMock(),
-            dry_run=False,
-            settings=_make_settings(),
-        )
+        summary = await _sweep(pg_session)
 
     assert summary["users_processed"] == 3
     assert summary["works_added"] == 6
 
 
-async def test_all_users_continues_after_per_user_failure() -> None:
-    u1 = MagicMock()
-    u1.id = "u1"
-    u1.to_dict.return_value = {"linked_author_id": "A1"}
-
-    u2 = MagicMock()
-    u2.id = "u2"
-    u2.to_dict.return_value = {"linked_author_id": "A2"}
-
-    db = MagicMock()
-    db.collection.return_value.stream.return_value = [u1, u2]
+@needs_db
+async def test_all_users_continues_after_per_user_failure(pg_session) -> None:
+    """One user's failure doesn't stop the sweep for the rest."""
+    await _users(pg_session, u1="A1", u2="A2")
 
     call_count = 0
 
@@ -540,51 +432,47 @@ async def test_all_users_continues_after_per_user_failure() -> None:
         "app.services.publication_sync.sync_new_publications_for_user",
         new=_flaky_sync,
     ):
-        summary = await sync_new_publications_for_all_users(
-            db=db,
-            email_service=MagicMock(),
-            dry_run=False,
-            settings=_make_settings(),
-        )
+        summary = await _sweep(pg_session)
 
     # u1 failed (exception swallowed), u2 succeeded with 3 new works
     assert summary["users_processed"] == 1
     assert summary["works_added"] == 3
 
 
-async def test_all_users_empty_db_returns_zero_summary() -> None:
-    db = MagicMock()
-    db.collection.return_value.stream.return_value = []
-
-    summary = await sync_new_publications_for_all_users(
-        db=db,
-        email_service=MagicMock(),
-        dry_run=False,
-        settings=_make_settings(),
-    )
+@needs_db
+async def test_all_users_empty_db_returns_zero_summary(pg_session) -> None:
+    """With no users, the sweep reports nothing done."""
+    summary = await _sweep(pg_session)
 
     assert summary["users_processed"] == 0
     assert summary["works_added"] == 0
+    assert summary["next_cursor"] is None
 
 
-@pytest.mark.asyncio
-async def test_all_users_skips_orphaned_firestore_users(monkeypatch: pytest.MonkeyPatch) -> None:
+@needs_db
+async def test_all_users_skips_users_without_a_sign_in_account(pg_session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Users with no Firebase Auth account (orphans) are not synced."""
     monkeypatch.setattr(
-        "app.services.citation_service._get_auth_uids", lambda: {"u_real"}
+        "app.services.citation_service._get_auth_uids", AsyncMock(return_value={"u_real"})
     )
-    real, orphan = MagicMock(), MagicMock()
-    real.id, orphan.id = "u_real", "u_orphan"
-    real.to_dict.return_value = {"linked_author_id": "A1"}
-    orphan.to_dict.return_value = {"linked_author_id": "A2"}
-    db = MagicMock()
-    db.collection.return_value.stream.return_value = [real, orphan]
+    await _users(pg_session, u_real="A1", u_orphan="A2")
 
     with patch(
         "app.services.publication_sync.sync_new_publications_for_user",
         new=AsyncMock(return_value=0),
     ) as mock_per_user:
-        await sync_new_publications_for_all_users(
-            db=db, email_service=MagicMock(), dry_run=False, settings=_make_settings(),
-        )
+        await _sweep(pg_session)
 
     assert [c.kwargs["uid"] for c in mock_per_user.call_args_list] == ["u_real"]
+
+
+@needs_db
+async def test_all_users_adds_papers_end_to_end(pg_session) -> None:
+    """Without stubbing the per-user sync, the sweep tracks each linked user's new papers."""
+    await _users(pg_session, u1="A1", u2=None)
+    with _openalex(_make_oa_work("10.1234/new", "New Paper")):
+        summary = await _sweep(pg_session)
+
+    assert summary == {"users_processed": 1, "works_added": 1, "next_cursor": None}
+    assert await WorkStore(pg_session).tracked_keys("u1") == {"10.1234__new"}
+    assert await WorkStore(pg_session).tracked_keys("u2") == set()

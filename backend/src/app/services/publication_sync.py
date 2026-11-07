@@ -2,8 +2,7 @@
 Publication sync service.
 
 Periodically checks each user's linked OpenAlex author profile for new
-publications that aren't yet in their trackedWorks collection, and
-auto-adds them.
+publications they don't track yet, and adds them.
 
 Only OpenAlex-linked authors are synced; S2-only links are skipped because
 the S2 works API does not provide a reliable full publication list.
@@ -13,7 +12,8 @@ import logging
 import time
 from datetime import datetime, timezone
 from types import ModuleType
-from typing import Any
+
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import Settings
 from app.services import openalex as openalex_svc
@@ -21,6 +21,8 @@ from app.services.openalex import extract_topics, extract_venue
 
 from app.services.email_service import resolve_recipient
 from app.services.normalize import dedupe_works_by_title, doi_to_work_id, normalize_doi
+from app.services import convert, tracking_service
+from app.store import UserStore, WorkStore
 
 logger = logging.getLogger(__name__)
 
@@ -29,18 +31,24 @@ logger = logging.getLogger(__name__)
 
 async def sync_new_publications_for_user(
     uid: str,
-    user_data: dict,
-    db: Any,
+    session: AsyncSession,
     email_service: ModuleType,
     dry_run: bool,
     settings: Settings,
+    user_data: dict | None = None,
 ) -> int:
     """
-    Diff the user's trackedWorks against their OpenAlex author profile and
-    auto-add any publications that are missing.
+    Diff the papers the user tracks against their OpenAlex author profile
+    and add any publications that are missing. *user_data* (the user as
+    convert.user_data gives it) is read from the database when not given.
 
-    Returns the number of works added (0 on dry_run or no new works).
+    Returns the number of works added (or, in a dry run, that would be).
     """
+    if user_data is None:
+        user = await UserStore(session).get(uid)
+        if user is None:
+            return 0
+        user_data = convert.user_data(user)
     linked_author_id: str | None = user_data.get("linked_author_id")
     if not linked_author_id:
         return 0
@@ -63,10 +71,9 @@ async def sync_new_publications_for_user(
         logger.info("No works returned from OpenAlex for uid=%s", uid)
         return 0
 
-    # Load the user's existing tracked DOIs (use the doc ID which is doi.replace("/", "__")).
-    works_ref = db.collection("users").document(uid).collection("trackedWorks")
-    # Compare case-insensitively: older imports stored mixed-case DOI IDs.
-    existing_ids: set[str] = {doc.id.lower() for doc in works_ref.stream()}
+    # The papers already tracked, by key (doi with "/" replaced), compared
+    # case-insensitively: older imports stored mixed-case keys.
+    existing_ids: set[str] = await WorkStore(session).tracked_keys(uid)
     # Works the user deleted on purpose must not be re-added by the sync.
     dismissed: set[str] = {d.lower() for d in (user_data.get("dismissed_work_ids") or [])}
 
@@ -95,7 +102,7 @@ async def sync_new_publications_for_user(
         openalex_citation_count: int | None = raw.get("cited_by_count")
 
         if not dry_run:
-            works_ref.document(work_id).set({
+            await tracking_service.track_paper(session, uid, work_id, {
                 "doi": doi,
                 "openalex_id": openalex_id,
                 "title": title,
@@ -104,10 +111,8 @@ async def sync_new_publications_for_user(
                 "venue": extract_venue(raw),
                 "work_type": raw.get("type"),
                 "topics": extract_topics(raw),
-                "added_at": now,
-                "last_checked_at": None,
                 "openalex_citation_count": openalex_citation_count,
-            })
+            }, now=now)
             existing_ids.add(work_id)
 
         added_titles.append(title)
@@ -123,10 +128,9 @@ async def sync_new_publications_for_user(
     if dry_run:
         return count
 
-    # Record sync timestamp on the user document.
-    db.collection("users").document(uid).set(
-        {"last_publication_sync": now}, merge=True
-    )
+    # Record the sync time, and keep the new papers even if the email fails.
+    await UserStore(session).update_fields(uid, last_publication_sync_at=now)
+    await session.commit()
 
     # Send email notification if the user has opted in.
     notify_pubs = user_data.get("notify_new_publications", True)
@@ -152,7 +156,7 @@ async def sync_new_publications_for_user(
 
 
 async def sync_new_publications_for_all_users(
-    db: Any,
+    session: AsyncSession,
     email_service: ModuleType,
     dry_run: bool,
     settings: Settings,
@@ -167,7 +171,7 @@ async def sync_new_publications_for_all_users(
     Returns {users_processed, works_added, next_cursor}; next_cursor is None
     when every user is done.
     """
-    from app.services.citation_service import _get_auth_uids, out_of_time, users_after
+    from app.services.citation_service import _get_auth_uids, out_of_time
 
     users_processed = 0
     total_added = 0
@@ -175,24 +179,25 @@ async def sync_new_publications_for_all_users(
     next_cursor: str | None = None
     last_done: str | None = cursor
 
-    auth_uids = _get_auth_uids()
-    for user_doc in users_after(db, cursor):
+    auth_uids = await _get_auth_uids()
+    users = UserStore(session)
+    for uid in await users.ids_after(cursor):
         if out_of_time(started, time_budget_seconds):
             next_cursor = last_done
             break
-        uid: str = user_doc.id
         last_done = uid
         if uid not in auth_uids:
-            logger.warning("Skipping orphaned Firestore user uid=%s in publication sync", uid)
+            logger.warning("Skipping user uid=%s with no sign-in account in publication sync", uid)
             continue
-        data: dict = user_doc.to_dict() or {}
+        user = await users.get(uid)
+        data: dict = convert.user_data(user) if user else {}
         if not data.get("linked_author_id"):
             continue
         try:
             added = await sync_new_publications_for_user(
                 uid=uid,
                 user_data=data,
-                db=db,
+                session=session,
                 email_service=email_service,
                 dry_run=dry_run,
                 settings=settings,
@@ -200,6 +205,7 @@ async def sync_new_publications_for_all_users(
             total_added += added
             users_processed += 1
         except Exception as exc:
+            await session.rollback()
             logger.error("Publication sync failed for uid=%s: %s", uid, exc, exc_info=True)
 
     return {

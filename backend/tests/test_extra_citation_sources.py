@@ -8,9 +8,10 @@ import pytest
 import respx
 from httpx import Response
 
-from app.services import europe_pmc, opencitations
+from app.services import alert_service, europe_pmc, opencitations
 from app.services.source_errors import SourceUnavailable
-from tests.test_citation_accuracy import LONG, WORK_PATH, _DB, _day, _oa, _work
+from tests.conftest import needs_db
+from tests.test_citation_accuracy import LONG, _alerted, _day, _known, _oa, _stored, _work
 
 from app.services.citation_service import _CITATION_WINDOW_VERSION, process_tracked_work
 
@@ -18,7 +19,7 @@ OTHER = "Measuring agreement between citation indexes across scholarly fields"
 BIO = "Single cell imaging of mitochondrial calcium flux in cultured neurons"
 
 
-async def _check(db, work, *, oa=(), oc=(), epmc=(), hydrate=(), crossref=None, **kw):
+async def _check(session, work, *, oa=(), oc=(), epmc=(), hydrate=(), crossref=None, **kw):
     hyd = AsyncMock(return_value=list(hydrate))
     cr = AsyncMock(return_value=crossref)
     with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=list(oa))), \
@@ -27,7 +28,7 @@ async def _check(db, work, *, oa=(), oc=(), epmc=(), hydrate=(), crossref=None, 
          patch("app.services.citation_service.europe_pmc_svc.get_citing_works", new=AsyncMock(return_value=list(epmc))), \
          patch("app.services.citation_service.openalex_svc.get_works_by_ids", new=hyd), \
          patch("app.services.citation_service.crossref_svc.get_citing_metadata", new=cr):
-        result = await process_tracked_work("u1", work, db, **kw)
+        result = await process_tracked_work(session, work, **kw)
     return result, hyd, cr
 
 
@@ -50,107 +51,134 @@ def _epmc(title: str, *, doi: str | None, pub: str, rid: str = "42") -> dict:
 # ---------------------------------------------------------------------------
 
 
-async def test_opencitations_only_citation_is_filled_in_from_openalex_and_reported() -> None:
-    db = _DB()
+@needs_db
+async def test_opencitations_only_citation_is_filled_in_from_openalex_and_reported(pg_session) -> None:
+    """A citation only OpenCitations knows is described from OpenAlex by its
+    ID and alerted."""
+    work = await _work(pg_session, baseline_done=True)
     oc = [{"doi": "10.9/new", "openalex_id": "https://openalex.org/W77", "pmid": None,
            "publication_date": _day(3)}]
     (count, notes), hyd, cr = await _check(
-        db, _work(), oc=oc, hydrate=[_oa(OTHER, doi="10.9/new", pub=_day(3), wid="W77")],
-        baseline_done=True,
+        pg_session, work, oc=oc, hydrate=[_oa(OTHER, doi="10.9/new", pub=_day(3), wid="W77")],
     )
     assert count == 1
     assert notes[0].citing_work_title == OTHER
+    assert await _alerted(pg_session) == ["10.9/new"]
     hyd.assert_awaited_once()
     assert hyd.await_args.kwargs["openalex_ids"] == ["https://openalex.org/W77"]
     cr.assert_not_awaited()
 
 
-async def test_citations_openalex_already_returned_are_not_looked_up_again() -> None:
-    db = _DB()
+@needs_db
+async def test_citations_openalex_already_returned_are_not_looked_up_again(pg_session) -> None:
+    """No extra OpenAlex lookup for a paper OpenAlex already returned."""
+    work = await _work(pg_session, baseline_done=True)
     oc = [{"doi": "10.9/a", "openalex_id": "https://openalex.org/W5", "pmid": None,
            "publication_date": _day(3)}]
     (count, _), hyd, _ = await _check(
-        db, _work(), oa=[_oa(LONG, doi="10.9/a", pub=_day(3), wid="W5")], oc=oc, baseline_done=True,
+        pg_session, work, oa=[_oa(LONG, doi="10.9/a", pub=_day(3), wid="W5")], oc=oc,
     )
     assert count == 1
     hyd.assert_not_awaited()
 
 
-async def test_crossref_fills_in_what_openalex_does_not_have() -> None:
-    db = _DB()
+@needs_db
+async def test_crossref_fills_in_what_openalex_does_not_have(pg_session) -> None:
+    """A DOI OpenAlex does not know is described by Crossref."""
+    work = await _work(pg_session, baseline_done=True)
     oc = [{"doi": "10.9/cr", "openalex_id": None, "pmid": None, "publication_date": _day(2)}]
     rec = {"id": "crossref:10.9/cr", "doi": "10.9/cr", "arxiv_id": None, "type": "journal-article",
            "title": OTHER, "authors": ["Ana Lee"], "affiliations": [], "year": int(_day(2)[:4]),
            "publication_date": _day(2), "url": "https://doi.org/10.9/cr"}
-    (count, notes), hyd, cr = await _check(db, _work(), oc=oc, hydrate=[], crossref=rec, baseline_done=True)
+    (count, notes), hyd, cr = await _check(pg_session, work, oc=oc, hydrate=[], crossref=rec)
     assert count == 1 and notes[0].citing_work_doi == "10.9/cr"
+    assert await _alerted(pg_session) == ["10.9/cr"]
     assert hyd.await_args.kwargs["dois"] == ["10.9/cr"]
     cr.assert_awaited_once_with("10.9/cr")
 
 
-async def test_retracted_paper_found_by_opencitations_is_not_reported() -> None:
-    db = _DB()
+@needs_db
+async def test_retracted_paper_found_by_opencitations_is_not_reported(pg_session) -> None:
+    """OpenAlex marks it retracted: no alert, and Crossref is not asked."""
+    work = await _work(pg_session, baseline_done=True)
     oc = [{"doi": "10.9/r", "openalex_id": "https://openalex.org/W8", "pmid": None,
            "publication_date": _day(2)}]
     retracted = {**_oa(OTHER, doi="10.9/r", pub=_day(2), wid="W8"), "is_retracted": True}
-    (count, _), _, cr = await _check(db, _work(), oc=oc, hydrate=[retracted], baseline_done=True)
+    (count, _), _, cr = await _check(pg_session, work, oc=oc, hydrate=[retracted])
     assert count == 0
+    assert await _alerted(pg_session) == []
     cr.assert_not_awaited()
 
 
-async def test_europe_pmc_citation_is_reported_with_openalex_metadata_when_available() -> None:
-    db = _DB()
+@needs_db
+async def test_europe_pmc_citation_is_reported_with_openalex_metadata_when_available(pg_session) -> None:
+    """A Europe PMC find takes OpenAlex's cleaner affiliations."""
+    work = await _work(pg_session, baseline_done=True)
     oa_version = _oa(BIO, doi="10.9/bio", pub=_day(4), wid="W9")
     oa_version["authorships"] = [{"author": {"display_name": "Yang Xu"},
                                   "institutions": [{"display_name": "Zhejiang University"}]}]
     (count, notes), hyd, _ = await _check(
-        db, _work(), epmc=[_epmc(BIO, doi="10.9/bio", pub=_day(4))], hydrate=[oa_version],
-        baseline_done=True,
+        pg_session, work, epmc=[_epmc(BIO, doi="10.9/bio", pub=_day(4))], hydrate=[oa_version],
     )
     assert count == 1
     assert notes[0].citing_affiliations == ["Zhejiang University"]
+    [alert] = await alert_service.notifications(pg_session, "u1")
+    assert alert.citing_affiliations == ["Zhejiang University"]
     assert hyd.await_args.kwargs["dois"] == ["10.9/bio"]
 
 
-async def test_europe_pmc_record_stands_alone_when_openalex_lacks_it() -> None:
-    db = _DB()
+@needs_db
+async def test_europe_pmc_record_stands_alone_when_openalex_lacks_it(pg_session) -> None:
+    """Without an OpenAlex record, Europe PMC's own details are used, cleaned."""
+    work = await _work(pg_session, baseline_done=True)
     (count, notes), _, _ = await _check(
-        db, _work(), epmc=[_epmc(BIO, doi=None, pub=_day(4))], baseline_done=True,
+        pg_session, work, epmc=[_epmc(BIO, doi=None, pub=_day(4))],
     )
     assert count == 1
     assert notes[0].citing_work_title == BIO
     assert notes[0].citing_authors == ["Yang Xu"]
     assert notes[0].citing_affiliations == ["Department of Chemistry, Zhejiang University"]
     assert notes[0].citing_work_url == "https://europepmc.org/article/MED/42"
+    [alert] = await alert_service.notifications(pg_session, "u1")
+    assert alert.citing_work_title == BIO
+    assert alert.citing_work_url == "https://europepmc.org/article/MED/42"
 
 
-async def test_same_paper_from_every_source_is_one_alert() -> None:
-    db = _DB()
+@needs_db
+async def test_same_paper_from_every_source_is_one_alert(pg_session) -> None:
+    """OpenAlex, OpenCitations and Europe PMC reporting one paper: one alert."""
+    work = await _work(pg_session, baseline_done=True)
     oc = [{"doi": "10.9/a", "openalex_id": "https://openalex.org/W5", "pmid": None,
            "publication_date": _day(3)}]
     (count, _), _, _ = await _check(
-        db, _work(), oa=[_oa(LONG, doi="10.9/a", pub=_day(3), wid="W5")], oc=oc,
-        epmc=[_epmc(LONG, doi="10.9/A", pub=_day(3))], baseline_done=True,
+        pg_session, work, oa=[_oa(LONG, doi="10.9/a", pub=_day(3), wid="W5")], oc=oc,
+        epmc=[_epmc(LONG, doi="10.9/A", pub=_day(3))],
     )
     assert count == 1
+    assert await _alerted(pg_session) == ["10.9/a"]
 
 
-async def test_new_sources_start_with_a_quiet_baseline() -> None:
-    db = _DB()
+@needs_db
+async def test_new_sources_start_with_a_quiet_baseline(pg_session) -> None:
+    """Before the version 4 baseline, an old citation the new sources found
+    is recorded as known, not alerted."""
+    work = await _work(pg_session)
     oc = [{"doi": "10.9/old", "openalex_id": "https://openalex.org/W6", "pmid": None,
            "publication_date": _day(200)}]
     (count, _), _, _ = await _check(
-        db, _work(), oc=oc, hydrate=[_oa(OTHER, doi="10.9/old", pub=_day(200), wid="W6")],
-        baseline_done=False,
+        pg_session, work, oc=oc, hydrate=[_oa(OTHER, doi="10.9/old", pub=_day(200), wid="W6")],
     )
     assert count == 0
-    stored = db.store[WORK_PATH]
-    assert "doi:10.9/old" in stored["notified_keys"]
-    assert stored["citation_window"] == _CITATION_WINDOW_VERSION == 4
+    assert await _alerted(pg_session) == []
+    assert "doi:10.9/old" in await _known(pg_session, work)
+    assert (await _stored(pg_session, work)).citation_window == _CITATION_WINDOW_VERSION == 4
 
 
-async def test_failed_lookup_keeps_the_baseline_open() -> None:
-    db = _DB()
+@needs_db
+async def test_failed_lookup_keeps_the_baseline_open(pg_session) -> None:
+    """Citing papers that could not be described count as an OpenCitations
+    failure, so the baseline is not finished without them."""
+    work = await _work(pg_session)
     oc = [{"doi": "10.9/x", "openalex_id": "https://openalex.org/W6", "pmid": None,
            "publication_date": _day(200)}]
     failures: list[str] = []
@@ -159,21 +187,27 @@ async def test_failed_lookup_keeps_the_baseline_open() -> None:
          patch("app.services.citation_service.opencitations_svc.get_citing_refs", new=AsyncMock(return_value=oc)), \
          patch("app.services.citation_service.openalex_svc.get_works_by_ids",
                new=AsyncMock(side_effect=SourceUnavailable("openalex", "429"))):
-        await process_tracked_work("u1", _work(), db, baseline_done=False, source_failures=failures)
+        await process_tracked_work(pg_session, work, source_failures=failures)
     assert failures == ["opencitations"]
-    assert "citation_window" not in db.store[WORK_PATH]
+    stored = await _stored(pg_session, work)
+    assert stored.citation_window is None
+    assert stored.last_check_failed_sources == ["opencitations"]
 
 
-async def test_source_outage_is_a_failure_not_an_empty_list() -> None:
-    db = _DB()
+@needs_db
+async def test_source_outage_is_a_failure_not_an_empty_list(pg_session) -> None:
+    """Europe PMC being down is recorded as a failure and keeps the baseline open."""
+    work = await _work(pg_session)
     failures: list[str] = []
     with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=[])), \
          patch("app.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
          patch("app.services.citation_service.europe_pmc_svc.get_citing_works",
                new=AsyncMock(side_effect=SourceUnavailable("europe_pmc", "503"))):
-        await process_tracked_work("u1", _work(), db, baseline_done=False, source_failures=failures)
+        await process_tracked_work(pg_session, work, source_failures=failures)
     assert failures == ["europe_pmc"]
-    assert "citation_window" not in db.store[WORK_PATH]
+    stored = await _stored(pg_session, work)
+    assert stored.citation_window is None
+    assert stored.last_check_failed_sources == ["europe_pmc"]
 
 
 # ---------------------------------------------------------------------------

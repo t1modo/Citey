@@ -6,16 +6,18 @@ Firebase's own built-in verification email is never triggered.
 """
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from firebase_admin import auth as firebase_auth
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import Settings, get_settings
 from app.core.concurrency import run_blocking
+from app.core.db import get_session
 from app.deps import enforce_cooldown, get_current_user
-from app.firebase_client import get_db
+from app.services import user_service
 from app.services.email_service import send_verification_email
+from app.store import UserStore
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ _VERIFICATION_COOLDOWN = 60
 @router.post("/send-verification", status_code=status.HTTP_204_NO_CONTENT)
 async def send_email_verification(
     uid: str = Depends(get_current_user),
-    db: Any = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> None:
     """
@@ -38,11 +40,9 @@ async def send_email_verification(
     from datetime import datetime, timezone
 
     # Rate-limit: enforce cooldown between resend attempts.
-    # Firestore and Firebase Auth calls block, so each runs off the loop.
-    user_ref = db.collection("users").document(uid)
-    user_snap = await run_blocking(user_ref.get)
+    # Firebase Auth calls block, so each runs off the loop.
     enforce_cooldown(
-        (user_snap.to_dict() or {}) if user_snap.exists else {},
+        await user_service.user_data(session, uid),
         "last_verification_email_at", _VERIFICATION_COOLDOWN,
         "Verification email sent recently. Please wait before resending.",
     )
@@ -102,5 +102,7 @@ async def send_email_verification(
 
     # Stamp the send time so the cooldown check above works on subsequent calls.
     now_utc = datetime.now(tz=timezone.utc)
-    await run_blocking(user_ref.set, {"last_verification_email_at": now_utc}, merge=True)
+    await user_service.ensure_user(session, uid)
+    await UserStore(session).update_fields(uid, last_verification_email_at=now_utc)
+    await session.commit()
     logger.info("Verification email sent to %s (uid=%s)", fb_user.email, uid)

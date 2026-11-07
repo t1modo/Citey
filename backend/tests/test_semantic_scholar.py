@@ -14,7 +14,6 @@ import re
 
 import httpx
 import pytest
-import respx
 from httpx import Response
 
 from app.services.semantic_scholar import (

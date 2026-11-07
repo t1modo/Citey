@@ -3,7 +3,7 @@ Contact form: the only public way to reach support.
 
 A published email address cannot be rate limited, so the site sends people
 here instead. Each message is emailed to SUPPORT_INBOX (or SUPPORT_EMAIL when
-that is unset) with Reply-To set to the sender. Limits live in Firestore so they survive restarts:
+that is unset) with Reply-To set to the sender. Limits live in Postgres so they survive restarts:
 
 * per connection: 3 messages per hour
 * per sender address: 3 messages per day
@@ -22,15 +22,18 @@ import logging
 import os
 import re
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, field_validator
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import Settings, get_settings
 from app.core.concurrency import run_blocking
-from app.firebase_client import get_db, verify_token
+from app.core.db import get_session
+from app.firebase_client import verify_token
+from app.store import LimitStore
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +46,6 @@ PER_IP_PER_HOUR = 3
 PER_EMAIL_PER_DAY = 3
 SITE_PER_DAY = 20
 MIN_FILL_MS = 3000
-
-_LIMITS_COLLECTION = "supportLimits"
 
 
 class SupportMessage(BaseModel):
@@ -99,24 +100,6 @@ def _hash(settings: Settings, value: str) -> str:
     return hmac.new(secret, value.lower().encode(), hashlib.sha256).hexdigest()[:32]
 
 
-def _take(db: Any, key: str, limit: int, window_seconds: int, now: datetime) -> bool:
-    """Count one use of *key*; False when it is already at *limit* in the window."""
-    ref = db.collection(_LIMITS_COLLECTION).document(key)
-    snap = ref.get()
-    data = snap.to_dict() if snap.exists else {}
-    start = data.get("window_start")
-    if isinstance(start, datetime) and start.tzinfo is None:
-        start = start.replace(tzinfo=timezone.utc)
-    if not isinstance(start, datetime) or (now - start).total_seconds() >= window_seconds:
-        ref.set({"window_start": now, "count": 1})
-        return True
-    count = int(data.get("count") or 0)
-    if count >= limit:
-        return False
-    ref.update({"count": count + 1})
-    return True
-
-
 async def _optional_uid(credentials: HTTPAuthorizationCredentials | None) -> str | None:
     if not credentials or not credentials.credentials:
         return None
@@ -132,7 +115,7 @@ async def send_support_message(
     body: SupportMessage,
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_optional_bearer),
-    db: Any = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> dict:
     accepted = {"message": "Thanks. We'll reply to your email."}
@@ -150,12 +133,18 @@ async def send_support_message(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         detail="You've sent several messages recently. Please try again later.",
     )
-    # The limits live in Firestore, whose client blocks: off the loop.
-    if not await run_blocking(_take, db, ip_key, PER_IP_PER_HOUR, 3600, now):
+    # Checked in order, like the original: a connection already over its
+    # limit doesn't use up the sender's or the site's allowance.
+    limits = LimitStore(session)
+    if not await limits.take(ip_key, PER_IP_PER_HOUR, 3600, now):
+        await session.commit()
         raise too_many
-    if not await run_blocking(_take, db, email_key, PER_EMAIL_PER_DAY, 86400, now):
+    if not await limits.take(email_key, PER_EMAIL_PER_DAY, 86400, now):
+        await session.commit()
         raise too_many
-    if not await run_blocking(_take, db, day_key, SITE_PER_DAY, 86400, now):
+    site_ok = await limits.take(day_key, SITE_PER_DAY, 86400, now)
+    await session.commit()
+    if not site_ok:
         logger.warning("Support form: site wide daily limit reached.")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

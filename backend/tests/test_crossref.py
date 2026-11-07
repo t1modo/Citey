@@ -5,7 +5,6 @@ Tests for app.services.crossref using respx to mock outbound HTTP calls.
 import re
 
 import pytest
-import respx
 from fastapi import HTTPException
 from httpx import Response
 

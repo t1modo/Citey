@@ -12,7 +12,6 @@ import hmac
 import logging
 import threading
 from datetime import datetime, timezone
-from typing import Any
 
 # Minimum seconds between manual job triggers from the same user.
 _MANUAL_CHECK_COOLDOWN = 600      # /jobs/run       — 10 minutes
@@ -21,12 +20,16 @@ _EMAIL_TEST_COOLDOWN   = 3600     # /jobs/email-test — 60 minutes
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import Settings, get_settings
-from app.core.concurrency import run_blocking, run_off_loop
+from app.core.concurrency import run_blocking
+from app.core.db import get_session
 from app.deps import enforce_cooldown
 from app.firebase_client import verify_token
 from app.schemas import JobRunRequest
+from app.services import convert, user_service
+from app.store import AlertStore, UserStore
 
 logger = logging.getLogger(__name__)
 
@@ -103,12 +106,9 @@ async def _run_exclusive(name: str, job, /, **kwargs):
             detail=f"A {name.replace('_', ' ')} run is already in progress.",
         )
     try:
-        return await _off_loop(job, **kwargs)
+        return await job(**kwargs)
     finally:
         lock.release()
-
-
-_off_loop = run_off_loop
 
 
 async def _require_cron(caller_id: str = Depends(_authorize_job_request)) -> str:
@@ -126,6 +126,7 @@ async def run_job(
     body: JobRunRequest,
     caller_id: str = Depends(_authorize_job_request),
     settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
 ) -> dict:
     """
     Trigger the citation-check job.
@@ -135,10 +136,8 @@ async def run_job(
 
     Authorization: X-Cron-Secret header **or** Firebase Bearer token.
     """
-    from app.firebase_client import get_db as _get_db
     from app.services import email_service as email_svc
 
-    _db = _get_db()
     logger.info("Job /run triggered by caller_id=%s dry_run=%s", caller_id, body.dry_run)
 
     if caller_id == "cron":
@@ -146,7 +145,7 @@ async def run_job(
         summary = await _run_exclusive(
             "citation_check",
             run_job_for_all_users,
-            db=_db,
+            session=session,
             email_service=email_svc,
             dry_run=body.dry_run,
             settings=settings,
@@ -157,9 +156,7 @@ async def run_job(
     else:
         # Manual trigger by an authenticated user — scope to their papers only.
         from app.services.citation_service import run_job_for_user
-        # Firestore calls block, so each runs off the event loop.
-        user_doc = await run_blocking(_db.collection("users").document(caller_id).get)
-        user_data: dict = user_doc.to_dict() or {} if user_doc.exists else {}
+        user_data: dict = convert.user_data(await user_service.ensure_user(session, caller_id))
 
         # Rate-limit manual checks (account creation time counts, so new
         # accounts can't skip the limit).
@@ -173,17 +170,12 @@ async def run_job(
         # Record the cooldown before running, so a second click while this
         # check is still going is refused instead of starting a parallel one.
         if not body.dry_run:
-            await run_blocking(
-                _db.collection("users").document(caller_id).set,
-                {"last_manual_check_at": now},
-                merge=True,
-            )
+            await UserStore(session).update_fields(caller_id, last_manual_check_at=now)
+            await session.commit()
 
-        works_processed, new_notifications = await _off_loop(
-            run_job_for_user,
+        works_processed, new_notifications = await run_job_for_user(
             uid=caller_id,
-            user_data=user_data,
-            db=_db,
+            session=session,
             email_service=email_svc,
             dry_run=body.dry_run,
             settings=settings,
@@ -208,17 +200,16 @@ async def run_job(
 async def cleanup_notifications(
     body: JobRunRequest,
     caller_id: str = Depends(_authorize_job_request),
+    session: AsyncSession = Depends(get_session),
 ) -> dict:
     """
-    Delete notification documents older than 30 days (by created_at).
+    Delete alerts older than 30 days (by when they were found).
 
     Authorization: X-Cron-Secret header **or** Firebase Bearer token.
     When called by an authenticated user, only cleans up their own notifications.
     """
-    from app.firebase_client import get_db as _get_db
     from app.services.citation_service import cleanup_old_notifications, _NOTIFICATION_TTL_DAYS
 
-    _db = _get_db()
     logger.info(
         "Job /cleanup-notifications triggered by caller_id=%s dry_run=%s",
         caller_id,
@@ -227,15 +218,15 @@ async def cleanup_notifications(
 
     if caller_id == "cron":
         summary = await _run_exclusive(
-            "notification_cleanup", cleanup_old_notifications, db=_db, dry_run=body.dry_run
+            "notification_cleanup", cleanup_old_notifications, session=session, dry_run=body.dry_run
         )
     else:
         # Scoped to the requesting user only.
         from datetime import datetime, timedelta, timezone
         cutoff = datetime.now(tz=timezone.utc) - timedelta(days=_NOTIFICATION_TTL_DAYS)
-        count = await run_blocking(
-            _delete_user_notifications_before, _db, caller_id, cutoff, body.dry_run
-        )
+        count = await AlertStore(session).prune(cutoff, uid=caller_id, dry_run=body.dry_run)
+        if not body.dry_run:
+            await session.commit()
         summary = {"users_processed": 1, "notifications_deleted": count}
 
     n = summary["notifications_deleted"]
@@ -248,25 +239,12 @@ async def cleanup_notifications(
     return summary
 
 
-def _delete_user_notifications_before(db: Any, uid: str, cutoff: datetime, dry_run: bool) -> int:
-    """Delete one user's notifications created before *cutoff* (blocking: Firestore)."""
-    notifs_ref = db.collection("users").document(uid).collection("notifications")
-    old_docs = list(notifs_ref.where("created_at", "<", cutoff).stream())
-    if old_docs and not dry_run:
-        # Firestore batches are capped at 500 writes — chunk if needed.
-        for i in range(0, len(old_docs), 500):
-            batch = db.batch()
-            for doc in old_docs[i : i + 500]:
-                batch.delete(doc.reference)
-            batch.commit()
-    return len(old_docs)
-
-
 @router.post("/sync-publications")
 async def sync_publications(
     body: JobRunRequest,
     caller_id: str = Depends(_authorize_job_request),
     settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
 ) -> dict:
     """
     Trigger the publication-sync job.
@@ -276,14 +254,12 @@ async def sync_publications(
 
     Authorization: X-Cron-Secret header **or** Firebase Bearer token.
     """
-    from app.firebase_client import get_db as _get_db
     from app.services import email_service as email_svc
     from app.services.publication_sync import (
         sync_new_publications_for_all_users,
         sync_new_publications_for_user,
     )
 
-    _db = _get_db()
     logger.info(
         "Job /sync-publications triggered by caller_id=%s dry_run=%s",
         caller_id,
@@ -294,7 +270,7 @@ async def sync_publications(
         summary = await _run_exclusive(
             "publication_sync",
             sync_new_publications_for_all_users,
-            db=_db,
+            session=session,
             email_service=email_svc,
             dry_run=body.dry_run,
             settings=settings,
@@ -302,9 +278,7 @@ async def sync_publications(
             time_budget_seconds=body.time_budget_seconds,
         )
     else:
-        # Firestore calls block, so each runs off the event loop.
-        user_doc = await run_blocking(_db.collection("users").document(caller_id).get)
-        user_data: dict = user_doc.to_dict() or {} if user_doc.exists else {}
+        user_data: dict = convert.user_data(await user_service.ensure_user(session, caller_id))
 
         now = datetime.now(tz=timezone.utc)
         enforce_cooldown(
@@ -313,21 +287,17 @@ async def sync_publications(
             fallback_field="created_at",
         )
 
-        added = await _off_loop(
-            sync_new_publications_for_user,
+        added = await sync_new_publications_for_user(
             uid=caller_id,
             user_data=user_data,
-            db=_db,
+            session=session,
             email_service=email_svc,
             dry_run=body.dry_run,
             settings=settings,
         )
         if not body.dry_run:
-            await run_blocking(
-                _db.collection("users").document(caller_id).set,
-                {"last_manual_sync_at": now},
-                merge=True,
-            )
+            await UserStore(session).update_fields(caller_id, last_manual_sync_at=now)
+            await session.commit()
         summary = {"users_processed": 1, "works_added": added}
 
     logger.info("Publication sync complete: %s", summary)
@@ -342,24 +312,23 @@ async def sync_publications(
 async def cleanup_orphan_users(
     body: JobRunRequest,
     caller_id: str = Depends(_require_cron),
+    session: AsyncSession = Depends(get_session),
 ) -> dict:
     """
-    Delete Firestore user documents (and their subcollections) that have no
+    Delete accounts (profile, tracking and alerts) that have no
     corresponding Firebase Auth account.
 
     Authorization: X-Cron-Secret header only. This touches every account, so
     end users must never be able to trigger it.
     """
-    from app.firebase_client import get_db as _get_db
     from app.services.citation_service import cleanup_orphan_users as _cleanup
 
-    _db = _get_db()
     logger.info(
         "Job /cleanup-orphan-users triggered by caller_id=%s dry_run=%s",
         caller_id,
         body.dry_run,
     )
-    summary = await _run_exclusive("orphan_cleanup", _cleanup, db=_db, dry_run=body.dry_run)
+    summary = await _run_exclusive("orphan_cleanup", _cleanup, session=session, dry_run=body.dry_run)
     logger.info("Orphan cleanup complete: %s", summary)
     return summary
 
@@ -370,6 +339,7 @@ async def email_test(
         HTTPBearer(auto_error=False)
     ),
     settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Send a test email to the authenticated user's notification_email."""
     # Verify token
@@ -395,19 +365,16 @@ async def email_test(
             detail="Token does not contain a valid user ID.",
         )
 
-    from app.firebase_client import get_db as _get_db
     from app.services.email_service import resolve_recipient, send_test_email
 
-    db = _get_db()
-    user_ref = db.collection("users").document(uid)
-    snapshot = await run_blocking(user_ref.get)
-    if not snapshot.exists:
+    user = await UserStore(session).get(uid)
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User profile not found. Create a profile first.",
         )
 
-    data = snapshot.to_dict() or {}
+    data = convert.user_data(user)
 
     now = datetime.now(tz=timezone.utc)
     enforce_cooldown(
@@ -436,6 +403,7 @@ async def email_test(
             detail=f"Email delivery failed: {exc}",
         ) from exc
 
-    await run_blocking(user_ref.set, {"last_email_test_at": now}, merge=True)
+    await UserStore(session).update_fields(uid, last_email_test_at=now)
+    await session.commit()
     logger.info("Test email sent to %s for uid=%s", to_email, uid)
     return {"message": f"Test email sent to {to_email}."}

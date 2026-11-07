@@ -119,3 +119,10 @@ async def check() -> dict:
         "write_read_ok": written == "ok" and read_back == 1,
         "latency_ms": round((time.perf_counter() - started) * 1000),
     }
+
+
+@asynccontextmanager
+async def session_scope() -> AsyncIterator[AsyncSession]:
+    """An async ORM session outside a request (jobs, scripts), closed on exit."""
+    async with AsyncSession(get_engine(), expire_on_commit=False) as session:
+        yield session

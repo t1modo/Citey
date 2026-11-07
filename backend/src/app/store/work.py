@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import delete, func, literal_column
+from sqlalchemy import delete, func, literal_column, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import select
 
@@ -65,6 +65,11 @@ class WorkStore(BaseStore[Work]):
             },
         )
         return (await self.session.exec(stmt.returning(Work.id))).scalar_one()
+
+    async def update_fields(self, work_id: int, **fields: Any) -> None:
+        """Set columns on the paper's row (column names as in app.models.Work)."""
+        if fields:
+            await self.session.exec(update(Work).where(Work.id == work_id).values(**fields))
 
     async def add_tracker(self, uid: str, work_id: int, added_at: datetime) -> bool:
         """*uid* tracks *work_id* from *added_at*. False when they already did."""
