@@ -35,3 +35,18 @@ def test_user_without_a_password_is_created_without_one():
 
 def test_record_without_email_is_skipped():
     assert mod.clerk_user_body({"localId": "fb3"}, PARAMS) is None
+
+
+def test_password_checker_reproduces_firebases_published_example():
+    """firebase/scrypt's README example: user1password with these parameters."""
+    import base64
+
+    spec = importlib.util.spec_from_file_location("verify", _PATH.parent / "verify_firebase_password.py")
+    verify = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verify)
+    signer = base64.b64decode(
+        "jxspr8Ki0RYycVU8zykbdLGjFQ3McFUH0uiiTvC8pVMXAn210wjLNmdZJzxUECKbm0QsEmYUSDzZvpjeJ9WmXA==")
+    computed = verify.firebase_hash(
+        "user1password", base64.b64decode("42xEC+ixf3L2lw=="), base64.b64decode("Bw=="), signer, 8, 14)
+    assert base64.b64encode(computed).decode() == (
+        "lSrfV15cpx95/sZS2W9c9Kp6i/LVgQNDNC/qzrCnh1SAyZvqmZqAjTdn3aoItz+VHjoZilo78198JAdRuid5lQ==")
