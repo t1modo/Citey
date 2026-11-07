@@ -9,20 +9,14 @@ otherwise. The schema is dropped and rebuilt, so only local hosts are
 accepted.
 """
 
-import os
-from pathlib import Path
-from urllib.parse import urlsplit
-
 import pytest
 from alembic import command
-from alembic.config import Config
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.core.db import DatabaseNotConfigured, make_engine, sqlalchemy_url
+from app.core.db import DatabaseNotConfigured, sqlalchemy_url
 from app.models import (
     Alert,
     Citation,
@@ -32,46 +26,13 @@ from app.models import (
     UserWork,
     Work,
 )
-
-BACKEND = Path(__file__).resolve().parent.parent
-TEST_URL = os.environ.get("TEST_DATABASE_URL", "")
-_LOCAL_HOSTS = {"localhost", "127.0.0.1", "postgres", "::1"}
-
-needs_db = pytest.mark.skipif(not TEST_URL, reason="set TEST_DATABASE_URL to a throwaway Postgres")
-
-
-def _alembic_config() -> Config:
-    cfg = Config(str(BACKEND / "alembic.ini"))
-    cfg.set_main_option("sqlalchemy.url", TEST_URL)
-    cfg.attributes["configure_logger"] = False
-    return cfg
-
-
-@pytest.fixture(scope="module")
-def migrated():
-    """Rebuild the schema once per module: down and up again, so the
-    downgrade is exercised too. Alembic runs its own event loop, so this
-    fixture is synchronous."""
-    host = urlsplit(sqlalchemy_url(TEST_URL)).hostname
-    if host not in _LOCAL_HOSTS:
-        pytest.fail(f"TEST_DATABASE_URL must point at a local throwaway database, not {host!r}")
-    cfg = _alembic_config()
-    command.upgrade(cfg, "head")
-    command.downgrade(cfg, "base")
-    command.upgrade(cfg, "head")
+from tests.conftest import alembic_config as _alembic_config
+from tests.conftest import needs_db
 
 
 @pytest.fixture
-async def session(migrated):
-    engine = make_engine(TEST_URL)
-    async with AsyncSession(engine, expire_on_commit=False) as s:
-        yield s
-    async with engine.begin() as conn:
-        tables = await conn.run_sync(
-            lambda sync_conn: [t for t in inspect(sync_conn).get_table_names() if t != "alembic_version"]
-        )
-        await conn.execute(text(f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE"))
-    await engine.dispose()
+def session(pg_session):
+    return pg_session
 
 
 def _paper(key: str = "10.1234/abc", **kw) -> Work:
