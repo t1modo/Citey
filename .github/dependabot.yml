@@ -1,0 +1,51 @@
+# Dependabot opens PRs that update dependencies; the Tests workflow checks
+# each one. Minor and patch updates come grouped in one PR per ecosystem so
+# they don't flood the PR list. Security fixes are sent as soon as they are
+# published, whatever the schedule.
+version: 2
+
+updates:
+  # Backend: reads backend/pyproject.toml and updates backend/uv.lock.
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      backend-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: backend
+
+  # Frontend: frontend/package.json and package-lock.json.
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      frontend-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: frontend
+
+  # Actions used by .github/workflows.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  # Base images in backend/Dockerfile and frontend/Dockerfile.
+  - package-ecosystem: docker
+    directories: [/backend, /frontend]
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: docker

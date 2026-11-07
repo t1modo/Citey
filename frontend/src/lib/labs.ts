@@ -270,6 +270,8 @@ const RULES: Rule[] = [
   [t => t.includes("hebrew university"),                                        "Hebrew University"],
 ];
 
+const UC_CAMPUSES = new Set(["UC Berkeley", "UCLA", "UCSD", "UCSB", "UC Davis", "UC Irvine", "UCSF"]);
+
 export function labBadgeClass(lab: string): string {
   return LAB_COLORS[lab] ?? "bg-purple-500/15 text-purple-300 border-purple-500/20";
 }
@@ -287,6 +289,13 @@ export function detectLabs(affiliations: string[]): string[] {
       labs.push(label);
       seen.add(label);
     }
+  }
+
+  // "UC" is the fallback for a campus with no rule of its own. A named campus
+  // also matches "university of california", so drop the fallback then.
+  if (labs.some((l) => UC_CAMPUSES.has(l))) {
+    const i = labs.indexOf("UC");
+    if (i !== -1) labs.splice(i, 1);
   }
 
   if (labs.length === 0) {
