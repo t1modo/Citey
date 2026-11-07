@@ -13,6 +13,7 @@ Clerk user ID, the token's ``sub``.
 from __future__ import annotations
 
 import base64
+from contextvars import ContextVar
 from functools import lru_cache
 
 import jwt
@@ -20,6 +21,11 @@ import jwt
 from app.config import get_settings
 
 _LEEWAY_SECONDS = 5
+
+# The signed-in user's email from their verified session token (the
+# instance's token template adds an ``email`` claim), for the current
+# request. Set by deps.get_current_user; read when a profile is created.
+signed_in_email: ContextVar[str | None] = ContextVar("signed_in_email", default=None)
 
 
 def frontend_api(publishable_key: str) -> str:
