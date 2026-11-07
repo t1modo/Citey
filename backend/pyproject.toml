@@ -42,6 +42,14 @@ build-backend = "uv_build"
 
 [tool.uv]
 package = true
+# Rebuild the installed wheel whenever the code changes, not only when this
+# file does. Without this, uv reuses its cached build of the project, and
+# Docker and Vercel (which both keep uv's cache) can ship old code.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "uv.lock" },
+    { file = "src/**/*" },
+]
 
 [tool.uv.build-backend]
 module-name = "app"
