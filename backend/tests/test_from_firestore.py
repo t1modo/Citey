@@ -111,3 +111,32 @@ async def test_notifications_for_papers_no_longer_tracked_are_skipped(pg_session
     copied = await copy_user(pg_session, "ada", ADA, {}, {"n1": NOTE})
     assert copied.alerts == 0 and "not tracked" in copied.skipped[0]
     assert (await pg_session.exec(select(Citation))).all() == []
+
+
+def test_a_paper_key_is_its_lowercased_doi() -> None:
+    from app.services.firestore_copy import canonical_key
+
+    assert canonical_key("10.48550__arXiv.2506.02005", {"doi": "10.48550/arXiv.2506.02005"}) == (
+        "10.48550__arxiv.2506.02005"
+    )
+    assert canonical_key("10.1__x", {"doi": "https://doi.org/10.1/X"}) == "10.1__x"
+    assert canonical_key("W123", {}) == "W123"
+
+
+@needs_db
+async def test_one_paper_under_two_spellings_of_its_key_is_one_row(pg_session) -> None:
+    """Older imports kept the DOI's case in the document ID; two users with
+    the same arXiv paper under different spellings share one row."""
+    upper = {**PAPER, "doi": "10.48550/arXiv.2506.02005"}
+    lower = {**PAPER, "doi": "10.48550/arxiv.2506.02005"}
+    note = {**NOTE, "cited_work_id": "10.48550__arXiv.2506.02005"}
+    await copy_user(pg_session, "ada", ADA, {"10.48550__arXiv.2506.02005": upper}, {"n1": note})
+    await copy_user(pg_session, "grace", {"email": "g@x.org"}, {"10.48550__arxiv.2506.02005": lower}, {})
+    await pg_session.commit()
+
+    [work] = (await pg_session.exec(select(Work))).all()
+    assert work.key == "10.48550__arxiv.2506.02005" and work.doi == "10.48550/arxiv.2506.02005"
+    assert len((await pg_session.exec(select(UserWork))).all()) == 2
+    # Ada's notification, which named the mixed-case ID, still points at it.
+    [n] = await alert_service.notifications(pg_session, "ada")
+    assert n.cited_work_id == "10.48550__arxiv.2506.02005"

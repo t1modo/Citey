@@ -20,6 +20,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.schemas import is_openalex_work_id
 from app.services.citing_identity import identity_keys
+from app.services.normalize import doi_to_work_id, normalize_doi
 from app.store import AlertStore, CitationStore, UserStore, WorkStore
 
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
@@ -86,10 +87,12 @@ async def copy_user(
     work_store, citation_store, alert_store = WorkStore(session), CitationStore(session), AlertStore(session)
     await _copy_profile(UserStore(session), uid, user)
 
+    # Firestore document ID -> paper row. Notifications name the paper by
+    # the user's own document ID, which older imports wrote in mixed case.
     work_ids: dict[str, int] = {}
-    for key, data in tracked.items():
-        work_ids[key] = await work_store.merge(_work_values(key, data))
-        await work_store.add_tracker(uid, work_ids[key], as_datetime(data.get("added_at")) or EPOCH)
+    for doc_id, data in tracked.items():
+        work_ids[doc_id] = await work_store.merge(_work_values(canonical_key(doc_id, data), data))
+        await work_store.add_tracker(uid, work_ids[doc_id], as_datetime(data.get("added_at")) or EPOCH)
         out.tracked += 1
 
     for doc_id, data in notifications.items():
@@ -151,6 +154,17 @@ async def _copy_profile(user_store: UserStore, uid: str, user: dict[str, Any]) -
     await user_store.upsert(uid, values, created_at=as_datetime(user.get("created_at")))
 
 
+def canonical_key(doc_id: str, data: dict[str, Any]) -> str:
+    """
+    The paper's key as the app writes it: its lowercased DOI with "/" as
+    "__". Older imports used the DOI's original case for the document ID, so
+    one paper could be "10.48550__arXiv.1" for one user and
+    "10.48550__arxiv.1" for another; both become the same row.
+    """
+    doi = normalize_doi(data.get("doi"))
+    return doi_to_work_id(doi) if doi else doc_id
+
+
 def _work_values(key: str, data: dict[str, Any]) -> dict[str, Any]:
     """The paper row from one user's Firestore copy. WorkStore.merge combines
     several users' copies: the latest check wins, and already-reported keys
@@ -159,7 +173,7 @@ def _work_values(key: str, data: dict[str, Any]) -> dict[str, Any]:
     checked = as_datetime(data.get("last_checked_at"))
     values = {
         "key": key,
-        "doi": (data.get("doi") or "").strip().lower() or None,
+        "doi": normalize_doi(data.get("doi")),
         "openalex_id": oa_id,
         "title": data.get("title") or "Untitled",
         "authors": list(data.get("authors") or []),
