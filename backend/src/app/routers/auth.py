@@ -13,6 +13,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import Settings, get_settings
 from app.core.concurrency import run_blocking
+from app.firebase_client import ensure_firebase
 from app.core.db import get_session
 from app.deps import enforce_cooldown, get_current_user
 from app.services import user_service
@@ -48,6 +49,7 @@ async def send_email_verification(
     )
 
     try:
+        ensure_firebase()
         fb_user = await run_blocking(firebase_auth.get_user, uid)
     except Exception as exc:
         raise HTTPException(

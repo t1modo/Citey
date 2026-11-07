@@ -27,6 +27,7 @@ from firebase_admin import auth as firebase_auth
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.concurrency import run_blocking
+from app.firebase_client import ensure_firebase
 from app.models import Work
 from app.schemas import Notification, is_openalex_work_id
 from app.services import alert_service, convert
@@ -587,6 +588,7 @@ async def _email_digest(
 
     email_verified = True
     try:
+        ensure_firebase()
         user_record = await run_blocking(firebase_auth.get_user, uid)
         email_verified = user_record.email_verified
     except Exception as exc:  # noqa: BLE001
@@ -778,6 +780,8 @@ async def cleanup_old_notifications(session: AsyncSession, dry_run: bool = False
 
 def _list_auth_uids() -> set[str]:
     """Every Firebase Auth user UID (paginated). Blocking."""
+    # A nightly job has no sign-in token, so nothing else has set up the SDK.
+    ensure_firebase()
     uids: set[str] = set()
     page = firebase_auth.list_users()
     while page:

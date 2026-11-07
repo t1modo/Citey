@@ -9,6 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import get_settings
 from app.core.concurrency import run_blocking
+from app.firebase_client import ensure_firebase
 from app.core.db import get_session
 from app.deps import get_current_user
 from app.schemas import LinkedAuthorEntry, UpdateProfileRequest, UserProfile
@@ -193,6 +194,7 @@ async def delete_account(
     await session.commit()
 
     try:
+        ensure_firebase()
         await run_blocking(firebase_auth.delete_user, uid)
         logger.info("Deleted Firebase Auth record for uid=%s", uid)
     except Exception as exc:

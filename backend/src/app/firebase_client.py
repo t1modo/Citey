@@ -45,6 +45,12 @@ def _initialize_firebase() -> firebase_admin.App:
     return _app
 
 
+def ensure_firebase() -> None:
+    """Set up the Admin SDK before a Firebase Auth call. Checking a sign-in
+    token does this too, but a nightly job has no token to check."""
+    _initialize_firebase()
+
+
 def get_db() -> Any:
     """Return the Firestore client, initializing Firebase if necessary.
 
