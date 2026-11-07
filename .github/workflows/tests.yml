@@ -55,14 +55,74 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --locked
 
-      # Fails if a table in src/app/models/ changed without a migration.
-      - name: Check migrations match the models
-        env:
-          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
-        run: uv run alembic upgrade head && uv run alembic check
-
       - name: Run tests
         run: uv run pytest -q
+
+  migrations:
+    name: Migrations (Alembic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: citey
+          POSTGRES_PASSWORD: citey
+          POSTGRES_DB: citey_migrations
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U citey -d citey_migrations"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgresql://citey:citey@localhost:5432/citey_migrations
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The draft compares against the base branch's migrations.
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.9.11"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      # Two branches that each added a migration leave two heads; merge them
+      # with `alembic merge heads` before this can deploy.
+      - name: Check there is one migration head
+        run: |
+          heads="$(uv run alembic heads)"
+          echo "$heads"
+          if [ "$(printf '%s\n' "$heads" | grep -c .)" -ne 1 ]; then
+            echo "::error::More than one Alembic head. Run 'uv run alembic merge heads -m \"merge\"'."
+            exit 1
+          fi
+
+      - name: Apply every migration to an empty database
+        run: uv run alembic upgrade head
+
+      # Fails if a table in src/app/models/ changed without a migration.
+      - name: Check the models match the migrations
+        run: uv run alembic check
+
+      - name: Downgrade to empty and upgrade again
+        run: uv run alembic downgrade base && uv run alembic upgrade head
+
+      # The SQL this PR's migrations will run, in the job summary.
+      - name: Draft the SQL for this PR's migrations
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --quiet origin "${{ github.base_ref }}"
+          ../.github/scripts/migration-draft.sh "origin/${{ github.base_ref }}" | tee -a "$GITHUB_STEP_SUMMARY"
 
   frontend:
     name: Frontend (typecheck + Vitest)

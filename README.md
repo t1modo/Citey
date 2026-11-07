@@ -108,8 +108,17 @@ uv run alembic check                                     # models and migrations
 Read the generated migration before committing it. The schema tests need a
 throwaway database: with Compose running,
 `TEST_DATABASE_URL=postgresql://citey:citey@localhost:5432/citey_test uv run pytest`.
-CI runs them against its own Postgres and fails if a model changed without a
-migration.
+CI runs them against its own Postgres. A separate Migrations job:
+- fails if there is more than one Alembic head (two branches each added a
+  migration);
+- applies every migration to an empty database;
+- fails if a model changed without a migration (`alembic check`);
+- downgrades to empty and upgrades again.
+
+On a pull request it also writes a **migration SQL draft** to the job summary:
+the SQL the PR's new migrations will run, and the SQL that undoes them. Read
+it before merging. Locally:
+`DATABASE_URL=postgresql://x@localhost/x ../.github/scripts/migration-draft.sh origin/main`.
 
 Production is the Neon project `citey`. Migrations are not run on deploy yet:
 apply them with `DATABASE_URL_UNPOOLED` set to Neon's direct connection
