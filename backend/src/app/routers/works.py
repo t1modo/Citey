@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.core.concurrency import run_blocking
 from app.deps import enforce_cooldown, get_current_user
 from app.firebase_client import get_db
 from app.schemas import AddWorkRequest, ImportByAuthorRequest, TrackedWork, is_openalex_work_id
@@ -159,7 +160,8 @@ async def add_work(
     # includes that author (or one of their known aliases) before adding.
     # The user can pass force=True to bypass this check.
     if not body.force:
-        user_snap = db.collection("users").document(uid).get()
+        # Firestore calls block, so each runs off the event loop.
+        user_snap = await run_blocking(db.collection("users").document(uid).get)
         user_data = user_snap.to_dict() or {} if user_snap.exists else {}
         # Both fields must be present — if either was cleared by an unlink the
         # check is inactive.  This prevents a stale linked_author_name from
@@ -221,7 +223,7 @@ async def add_work(
     work_id = doi_to_work_id(work_info["doi"])
 
     ref = db.collection("users").document(uid).collection("trackedWorks").document(work_id)
-    snapshot = ref.get()
+    snapshot = await run_blocking(ref.get)
     if snapshot.exists:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -242,11 +244,13 @@ async def add_work(
         "last_checked_at": None,
         "openalex_citation_count": work_info.get("openalex_citation_count"),
     }
-    ref.set(doc_data)
+    await run_blocking(ref.set, doc_data)
     # Adding a paper by hand undoes an earlier dismissal.
     from firebase_admin import firestore
-    db.collection("users").document(uid).set(
-        {"dismissed_work_ids": firestore.ArrayRemove([work_id])}, merge=True
+    await run_blocking(
+        db.collection("users").document(uid).set,
+        {"dismissed_work_ids": firestore.ArrayRemove([work_id])},
+        merge=True,
     )
     logger.info("Added tracked work %s for uid=%s", work_id, uid)
 
@@ -427,9 +431,10 @@ async def import_works_by_author(
     from app.services import openalex as openalex_svc
     from app.services import semantic_scholar as s2_svc
 
-    # Enforce single linked-author policy.
+    # Enforce single linked-author policy. Firestore calls block, so each
+    # runs off the event loop.
     user_ref = db.collection("users").document(uid)
-    user_snap = user_ref.get()
+    user_snap = await run_blocking(user_ref.get)
     user_data = user_snap.to_dict() or {} if user_snap.exists else {}
 
     # Rate-limit bulk imports to prevent Firestore write floods.
@@ -526,9 +531,49 @@ async def import_works_by_author(
         )
 
     works_ref = user_ref.collection("trackedWorks")
+    now = datetime.now(tz=timezone.utc)
+    imported, skipped = await run_blocking(
+        _write_imported_works,
+        db,
+        works_ref,
+        raw_works,
+        dismissed={d.lower() for d in (user_data.get("dismissed_work_ids") or [])},
+        now=now,
+    )
+
+    # Persist author linkage and the import timestamp in one write.
+    user_updates: dict = {"last_import_at": now}
+    if not stored_id:
+        user_updates["linked_author_id"] = incoming_short
+        if author_display_name:
+            user_updates["linked_author_name"] = author_display_name
+        logger.info("Linked uid=%s to author %s (%s)", uid, incoming_short, author_display_name)
+    elif is_new_author and body.confirm_merge:
+        user_updates["additional_linked_authors"] = additional + [
+            {"id": incoming_short, "name": author_display_name}
+        ]
+        logger.info(
+            "Merged author %s (%s) into uid=%s additional linked authors",
+            incoming_short, author_display_name, uid,
+        )
+    await run_blocking(user_ref.set, user_updates, merge=True)
+
+    logger.info("Bulk import: %d imported, %d skipped for uid=%s", imported, skipped, uid)
+    return {"imported": imported, "skipped": skipped}
+
+
+_MAX_TRACKED_WORKS = 500
+
+
+def _write_imported_works(
+    db: Any, works_ref: Any, raw_works: list[dict], *, dismissed: set[str], now: datetime
+) -> tuple[int, int]:
+    """
+    Write an import's new papers to Firestore and return (imported, skipped).
+    Blocking (Firestore), so the import runs it on a worker thread.
+    """
     # Case-insensitive: older imports stored mixed-case DOI document IDs.
     existing_ids = {doc.id.lower() for doc in works_ref.stream()}
-    dismissed = {d.lower() for d in (user_data.get("dismissed_work_ids") or [])}
 
     # Cap total tracked works at 500 per user to prevent runaway Firestore
     # writes and excessive citation-check workload.
@@ -536,7 +581,6 @@ async def import_works_by_author(
 
     imported = 0
     skipped = 0
-    now = datetime.now(tz=timezone.utc)
     batch = db.batch()
     pending = 0
 
@@ -584,28 +628,7 @@ async def import_works_by_author(
     if pending:
         batch.commit()
 
-    # Persist author linkage and the import timestamp in one write.
-    user_updates: dict = {"last_import_at": now}
-    if not stored_id:
-        user_updates["linked_author_id"] = incoming_short
-        if author_display_name:
-            user_updates["linked_author_name"] = author_display_name
-        logger.info("Linked uid=%s to author %s (%s)", uid, incoming_short, author_display_name)
-    elif is_new_author and body.confirm_merge:
-        user_updates["additional_linked_authors"] = additional + [
-            {"id": incoming_short, "name": author_display_name}
-        ]
-        logger.info(
-            "Merged author %s (%s) into uid=%s additional linked authors",
-            incoming_short, author_display_name, uid,
-        )
-    user_ref.set(user_updates, merge=True)
-
-    logger.info("Bulk import: %d imported, %d skipped for uid=%s", imported, skipped, uid)
-    return {"imported": imported, "skipped": skipped}
-
-
-_MAX_TRACKED_WORKS = 500
+    return imported, skipped
 
 
 def _doi_set(works: list[dict]) -> set[str]:
@@ -671,7 +694,7 @@ async def _gather_cross_source_works(
 
 
 @router.delete("/{work_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_work(
+async def delete_work(
     work_id: str,
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
@@ -682,6 +705,11 @@ def delete_work(
     doesn't quietly add it back. Plain ``def``: FastAPI runs it in a worker
     thread, so the blocking Firestore calls don't stall the event loop.
     """
+    return await run_blocking(_delete_work_sync, work_id=work_id, uid=uid, db=db)
+
+
+def _delete_work_sync(work_id: str, uid: str, db: Any) -> None:
+    """The blocking (Firestore) part of delete_work, run on a worker thread."""
     from firebase_admin import firestore
 
     from app.services.citation_service import _commit_in_batches
@@ -708,11 +736,16 @@ def delete_work(
 
 
 @router.get("", response_model=list[TrackedWork])
-def list_works(
+async def list_works(
     uid: str = Depends(get_current_user),
     db: Any = Depends(get_db),
 ) -> list[TrackedWork]:
     """Return all tracked works with citation counts, sorted by publication year descending."""
+    return await run_blocking(_list_works_sync, uid=uid, db=db)
+
+
+def _list_works_sync(uid: str, db: Any) -> list[TrackedWork]:
+    """The blocking (Firestore) part of list_works, run on a worker thread."""
     found_since = datetime.now(tz=timezone.utc) - timedelta(days=30)
     total_counts: defaultdict[str, int] = defaultdict(int)
     recent_counts: defaultdict[str, int] = defaultdict(int)

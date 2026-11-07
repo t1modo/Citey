@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from fastapi import APIRouter
@@ -20,7 +19,7 @@ async def database_health_check():
     from app.core import db
 
     try:
-        result = await asyncio.to_thread(db.check)
+        result = await db.check()
     except db.DatabaseNotConfigured:
         return JSONResponse({"status": "not_configured"}, status_code=503)
     except Exception as exc:  # noqa: BLE001

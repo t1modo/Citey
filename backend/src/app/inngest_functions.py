@@ -27,7 +27,7 @@ import inngest.fast_api
 import pytz
 from fastapi import FastAPI
 
-from app.async_utils import run_off_loop
+from app.core.concurrency import run_off_loop
 from app.config import API_PREFIX, Settings, get_settings
 from app.firebase_client import get_db
 from app.services import email_service

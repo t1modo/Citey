@@ -77,7 +77,7 @@ backend/
     models/           database tables (SQLModel): base.py, user.py, work.py,
                       citation.py, alert.py, support.py
     schemas/          API request/response shapes (SQLModel, no table)
-    core/             infrastructure: db.py (Postgres connections and sessions)
+    core/             infrastructure: db.py (async Postgres), concurrency.py
     config.py, ...
     routers/          one module per /api/... area
     services/         citation sources, email, publication sync
@@ -89,6 +89,26 @@ backend/
 
 `uv sync` installs `app` in editable mode, so `import app` works from the
 tests, scripts, Alembic and `uvicorn app.main:app`.
+
+### Async
+
+The backend is async throughout: every route handler and dependency is
+`async def`, and one event loop serves every request, so nothing may block
+it.
+
+- Postgres goes through `app.core.db`: an async engine and `AsyncSession`
+  (`Depends(get_session)`), or `async with connect()` for raw SQL. Load
+  relationships up front (`selectinload(...)`); lazy loading doesn't work in
+  async code.
+- The blocking SDKs still in use (Firestore, Firebase Auth, Resend) are called
+  through `run_blocking(fn, ...)`, or `run_off_loop(job, ...)` for a whole
+  Firestore-backed job, from `app.core.concurrency`, so they run on worker
+  threads.
+
+`tests/test_async_backend.py` enforces this: every handler and dependency
+must be async, and every route is called against a fake Firestore and fake
+Firebase Auth that fail the test if a blocking call runs on the serving
+loop. A new route goes in that test's `REQUESTS` (or `NO_BLOCKING_IO`).
 
 ### Database (Postgres)
 

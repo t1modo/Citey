@@ -64,8 +64,8 @@ class User(Base, table=True):
     created_at: datetime = created_at_column()
 
     tracked: list["UserWork"] = Relationship(
-        back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan", "passive_deletes": True}
     )
     alerts: list["Alert"] = Relationship(
-        back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan", "passive_deletes": True}
     )

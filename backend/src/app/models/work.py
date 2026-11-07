@@ -50,7 +50,7 @@ class Work(Base, table=True):
 
     trackers: list["UserWork"] = Relationship(back_populates="work")
     citations: list["Citation"] = Relationship(
-        back_populates="work", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        back_populates="work", sa_relationship_kwargs={"cascade": "all, delete-orphan", "passive_deletes": True}
     )
 
 

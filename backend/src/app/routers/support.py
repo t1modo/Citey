@@ -29,6 +29,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import Settings, get_settings
+from app.core.concurrency import run_blocking
 from app.firebase_client import get_db, verify_token
 
 logger = logging.getLogger(__name__)
@@ -116,11 +117,11 @@ def _take(db: Any, key: str, limit: int, window_seconds: int, now: datetime) -> 
     return True
 
 
-def _optional_uid(credentials: HTTPAuthorizationCredentials | None) -> str | None:
+async def _optional_uid(credentials: HTTPAuthorizationCredentials | None) -> str | None:
     if not credentials or not credentials.credentials:
         return None
     try:
-        decoded = verify_token(credentials.credentials)
+        decoded = await run_blocking(verify_token, credentials.credentials)
         return decoded.get("uid") or decoded.get("user_id")
     except Exception:  # noqa: BLE001  (signed out senders are welcome too)
         return None
@@ -149,11 +150,12 @@ async def send_support_message(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         detail="You've sent several messages recently. Please try again later.",
     )
-    if not _take(db, ip_key, PER_IP_PER_HOUR, 3600, now):
+    # The limits live in Firestore, whose client blocks: off the loop.
+    if not await run_blocking(_take, db, ip_key, PER_IP_PER_HOUR, 3600, now):
         raise too_many
-    if not _take(db, email_key, PER_EMAIL_PER_DAY, 86400, now):
+    if not await run_blocking(_take, db, email_key, PER_EMAIL_PER_DAY, 86400, now):
         raise too_many
-    if not _take(db, day_key, SITE_PER_DAY, 86400, now):
+    if not await run_blocking(_take, db, day_key, SITE_PER_DAY, 86400, now):
         logger.warning("Support form: site wide daily limit reached.")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -168,7 +170,7 @@ async def send_support_message(
             sender_name=body.name or "",
             subject=body.subject or "",
             message=body.message,
-            uid=_optional_uid(credentials),
+            uid=await _optional_uid(credentials),
             settings=settings,
         )
     except Exception as exc:  # noqa: BLE001
