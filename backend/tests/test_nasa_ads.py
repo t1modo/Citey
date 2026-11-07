@@ -19,7 +19,7 @@ import pytest
 import respx
 from httpx import Response
 
-from citey.services.nasa_ads import (
+from app.services.nasa_ads import (
     _ads_author_to_first_last,
     _first_last_to_ads,
     _normalize_work,
@@ -35,7 +35,7 @@ _FAKE_TOKEN = "test-ads-token"
 
 def _mock_token(monkeypatch: pytest.MonkeyPatch) -> None:
     """Patch _get_token so tests don't need a real ADS key in the env."""
-    monkeypatch.setattr("citey.services.nasa_ads._get_token", lambda: _FAKE_TOKEN)
+    monkeypatch.setattr("app.services.nasa_ads._get_token", lambda: _FAKE_TOKEN)
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +139,7 @@ async def test_search_authors_returns_empty_when_not_found(
 async def test_search_authors_returns_empty_when_no_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("citey.services.nasa_ads._get_token", lambda: "")
+    monkeypatch.setattr("app.services.nasa_ads._get_token", lambda: "")
     result = await search_authors("ADS No Token Author CC3")
     assert result == []
 
@@ -201,7 +201,7 @@ async def test_get_works_skips_docs_without_doi(
 async def test_get_works_returns_empty_when_no_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("citey.services.nasa_ads._get_token", lambda: "")
+    monkeypatch.setattr("app.services.nasa_ads._get_token", lambda: "")
     works = await get_works_by_author("ADS No Token Works Author GG7")
     assert works == []
 
@@ -238,7 +238,7 @@ async def test_get_works_paginates_multiple_pages(
         ]
     )
     # Temporarily lower _BATCH_SIZE to 2 to force pagination
-    import citey.services.nasa_ads as ads_mod
+    import app.services.nasa_ads as ads_mod
     original = ads_mod._BATCH_SIZE
     ads_mod._BATCH_SIZE = 2
     try:

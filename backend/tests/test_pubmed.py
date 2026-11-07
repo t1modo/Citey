@@ -16,7 +16,7 @@ import pytest
 import respx
 from httpx import Response
 
-from citey.services.pubmed import _normalize_work, get_works_by_author, search_authors
+from app.services.pubmed import _normalize_work, get_works_by_author, search_authors
 
 _BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 

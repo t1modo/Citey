@@ -19,7 +19,7 @@ import pytest
 import respx
 from httpx import Response
 
-from citey.services.dblp import (
+from app.services.dblp import (
     _coerce_authors,
     _extract_pid,
     _normalize_work,
@@ -252,7 +252,7 @@ async def test_get_works_paginates_multiple_pages() -> None:
         ]
     )
 
-    import citey.services.dblp as dblp_mod
+    import app.services.dblp as dblp_mod
     original = dblp_mod._PAGE_SIZE
     dblp_mod._PAGE_SIZE = 2
     try:

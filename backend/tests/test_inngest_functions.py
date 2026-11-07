@@ -13,8 +13,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from inngest.experimental import mocked
 
-from citey import inngest_functions as fns
-from citey.config import Settings
+from app import inngest_functions as fns
+from app.config import Settings
 
 
 class _RecordingClient(mocked.Inngest):

@@ -13,14 +13,14 @@ from pathlib import Path
 import pytest
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from citey.models import Notification
+from app.models import Notification
 
 _TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates" / "email"
 
 
 def _make_env() -> Environment:
     # Use the production environment so custom filters (safe_url) are present.
-    from citey.services.email_service import _get_jinja_env
+    from app.services.email_service import _get_jinja_env
     return _get_jinja_env()
 
 
@@ -281,7 +281,7 @@ class TestDigestTxt:
 # Redesign: shared layout, filters and the transactional templates
 # ---------------------------------------------------------------------------
 
-from citey.services.email_service import (  # noqa: E402
+from app.services.email_service import (  # noqa: E402
     _author_line,
     _greeting_name,
     _nice_date,
@@ -357,8 +357,8 @@ import pytest  # noqa: E402
 
 @pytest.mark.parametrize("name", ["verify", "confirm_address", "test"])
 def test_transactional_templates_render(name: str) -> None:
-    from citey.config import Settings
-    from citey.services.email_service import _base_context
+    from app.config import Settings
+    from app.services.email_service import _base_context
 
     ctx = {**_base_context(Settings()), "link": "https://citey.email/x?a=1&b=2", "recipient_name": "Ada"}
     html_body, text_body = _render(name, ctx)

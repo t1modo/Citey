@@ -2,9 +2,9 @@
 
 from fastapi.testclient import TestClient
 
-from citey.config import Settings, get_settings
-from citey.services.email_service import make_confirm_email_url
-from citey.main import create_app
+from app.config import Settings, get_settings
+from app.services.email_service import make_confirm_email_url
+from app.main import create_app
 
 
 def _client() -> TestClient:

@@ -10,7 +10,7 @@ import asyncio
 
 import pytest
 
-from citey.services.cache import AsyncTTLCache
+from app.services.cache import AsyncTTLCache
 
 
 # ---------------------------------------------------------------------------

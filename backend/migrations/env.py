@@ -10,9 +10,9 @@ from logging.config import fileConfig
 from alembic import context
 from sqlmodel import SQLModel
 
-import citey.db_models  # noqa: F401  (registers the tables on SQLModel.metadata)
-from citey.config import get_settings
-from citey.db import make_engine
+import app.db_models  # noqa: F401  (registers the tables on SQLModel.metadata)
+from app.config import get_settings
+from app.db import make_engine
 
 config = context.config
 if config.config_file_name is not None and config.attributes.get("configure_logger", True):
@@ -44,7 +44,7 @@ def _configure(**kwargs) -> None:
 
 def run_migrations_offline() -> None:
     """`alembic upgrade head --sql`: print the SQL instead of running it."""
-    from citey.db import sqlalchemy_url
+    from app.db import sqlalchemy_url
 
     _configure(url=sqlalchemy_url(_database_url()), literal_binds=True)
     with context.begin_transaction():

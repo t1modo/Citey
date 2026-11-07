@@ -2,7 +2,7 @@
 
 import pytest
 
-from citey.services.text_clean import clean_name, clean_names, clean_text
+from app.services.text_clean import clean_name, clean_names, clean_text
 
 
 @pytest.mark.parametrize(

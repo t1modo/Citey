@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from citey.services.normalize import dedupe_works_by_title, normalize_doi
-from citey.services.publication_sync import (
+from app.services.normalize import dedupe_works_by_title, normalize_doi
+from app.services.publication_sync import (
     sync_new_publications_for_all_users,
     sync_new_publications_for_user,
 )
@@ -147,7 +147,7 @@ async def test_skips_s2_linked_author() -> None:
 async def test_returns_zero_when_openalex_returns_empty() -> None:
     db, _, _ = _make_db()
     with patch(
-        "citey.services.publication_sync.openalex_svc.get_works_by_author",
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
         new=AsyncMock(return_value=[]),
     ):
         result = await sync_new_publications_for_user(
@@ -166,7 +166,7 @@ async def test_skips_works_without_doi() -> None:
     no_doi_work = {**_make_oa_work("10.1234/x"), "doi": None}
 
     with patch(
-        "citey.services.publication_sync.openalex_svc.get_works_by_author",
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
         new=AsyncMock(return_value=[no_doi_work]),
     ):
         result = await sync_new_publications_for_user(
@@ -188,7 +188,7 @@ async def test_skips_works_already_tracked() -> None:
     db, works_ref, _ = _make_db(existing_doc_ids=[existing_id])
 
     with patch(
-        "citey.services.publication_sync.openalex_svc.get_works_by_author",
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
         new=AsyncMock(return_value=[_make_oa_work("10.1234/existing")]),
     ):
         result = await sync_new_publications_for_user(
@@ -213,7 +213,7 @@ async def test_adds_new_works_and_returns_count() -> None:
     db, works_ref, _ = _make_db()
 
     with patch(
-        "citey.services.publication_sync.openalex_svc.get_works_by_author",
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
         new=AsyncMock(return_value=[
             _make_oa_work("10.1234/paper-one", "Paper One"),
             _make_oa_work("10.1234/paper-two", "Paper Two"),
@@ -237,7 +237,7 @@ async def test_only_adds_works_not_already_tracked() -> None:
     db, works_ref, _ = _make_db(existing_doc_ids=[existing_id])
 
     with patch(
-        "citey.services.publication_sync.openalex_svc.get_works_by_author",
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
         new=AsyncMock(return_value=[
             _make_oa_work("10.1234/old", "Old Paper"),   # already tracked
             _make_oa_work("10.1234/new", "New Paper"),   # should be added
@@ -260,7 +260,7 @@ async def test_records_last_publication_sync_timestamp() -> None:
     db, _, user_ref = _make_db()
 
     with patch(
-        "citey.services.publication_sync.openalex_svc.get_works_by_author",
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
         new=AsyncMock(return_value=[_make_oa_work("10.1234/new")]),
     ):
         await sync_new_publications_for_user(
@@ -287,7 +287,7 @@ async def test_dry_run_returns_count_without_writing() -> None:
     db, works_ref, user_ref = _make_db()
 
     with patch(
-        "citey.services.publication_sync.openalex_svc.get_works_by_author",
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
         new=AsyncMock(return_value=[_make_oa_work("10.1234/dry-paper")]),
     ):
         result = await sync_new_publications_for_user(
@@ -316,7 +316,7 @@ async def test_sends_email_when_both_flags_enabled() -> None:
     email_svc.send_new_publications_email = AsyncMock()
 
     with patch(
-        "citey.services.publication_sync.openalex_svc.get_works_by_author",
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
         new=AsyncMock(return_value=[_make_oa_work("10.1234/new", "Great Paper")]),
     ):
         await sync_new_publications_for_user(
@@ -348,7 +348,7 @@ async def test_falls_back_to_account_email_when_no_notification_email() -> None:
     email_svc.send_new_publications_email = AsyncMock()
 
     with patch(
-        "citey.services.publication_sync.openalex_svc.get_works_by_author",
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
         new=AsyncMock(return_value=[_make_oa_work("10.1234/new")]),
     ):
         await sync_new_publications_for_user(
@@ -375,7 +375,7 @@ async def test_no_email_when_notify_new_publications_false() -> None:
     email_svc.send_new_publications_email = AsyncMock()
 
     with patch(
-        "citey.services.publication_sync.openalex_svc.get_works_by_author",
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
         new=AsyncMock(return_value=[_make_oa_work("10.1234/new")]),
     ):
         await sync_new_publications_for_user(
@@ -401,7 +401,7 @@ async def test_no_email_when_global_notifications_disabled() -> None:
     email_svc.send_new_publications_email = AsyncMock()
 
     with patch(
-        "citey.services.publication_sync.openalex_svc.get_works_by_author",
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
         new=AsyncMock(return_value=[_make_oa_work("10.1234/new")]),
     ):
         await sync_new_publications_for_user(
@@ -427,7 +427,7 @@ async def test_no_email_when_no_address_on_profile() -> None:
     email_svc.send_new_publications_email = AsyncMock()
 
     with patch(
-        "citey.services.publication_sync.openalex_svc.get_works_by_author",
+        "app.services.publication_sync.openalex_svc.get_works_by_author",
         new=AsyncMock(return_value=[_make_oa_work("10.1234/new")]),
     ):
         await sync_new_publications_for_user(
@@ -458,7 +458,7 @@ class _AllUids(set):
 def _no_firebase_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     """The all-users jobs look up Firebase Auth to skip orphans; stub it."""
     monkeypatch.setattr(
-        "citey.services.citation_service._get_auth_uids", lambda: _AllUids()
+        "app.services.citation_service._get_auth_uids", lambda: _AllUids()
     )
 
 
@@ -475,7 +475,7 @@ async def test_all_users_skips_users_without_linked_author() -> None:
     db.collection.return_value.stream.return_value = [u_linked, u_unlinked]
 
     with patch(
-        "citey.services.publication_sync.sync_new_publications_for_user",
+        "app.services.publication_sync.sync_new_publications_for_user",
         new=AsyncMock(return_value=0),
     ) as mock_per_user:
         await sync_new_publications_for_all_users(
@@ -501,7 +501,7 @@ async def test_all_users_returns_correct_summary() -> None:
     db.collection.return_value.stream.return_value = users
 
     with patch(
-        "citey.services.publication_sync.sync_new_publications_for_user",
+        "app.services.publication_sync.sync_new_publications_for_user",
         new=AsyncMock(return_value=2),  # 2 new works per user
     ):
         summary = await sync_new_publications_for_all_users(
@@ -537,7 +537,7 @@ async def test_all_users_continues_after_per_user_failure() -> None:
         return 3
 
     with patch(
-        "citey.services.publication_sync.sync_new_publications_for_user",
+        "app.services.publication_sync.sync_new_publications_for_user",
         new=_flaky_sync,
     ):
         summary = await sync_new_publications_for_all_users(
@@ -570,7 +570,7 @@ async def test_all_users_empty_db_returns_zero_summary() -> None:
 @pytest.mark.asyncio
 async def test_all_users_skips_orphaned_firestore_users(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "citey.services.citation_service._get_auth_uids", lambda: {"u_real"}
+        "app.services.citation_service._get_auth_uids", lambda: {"u_real"}
     )
     real, orphan = MagicMock(), MagicMock()
     real.id, orphan.id = "u_real", "u_orphan"
@@ -580,7 +580,7 @@ async def test_all_users_skips_orphaned_firestore_users(monkeypatch: pytest.Monk
     db.collection.return_value.stream.return_value = [real, orphan]
 
     with patch(
-        "citey.services.publication_sync.sync_new_publications_for_user",
+        "app.services.publication_sync.sync_new_publications_for_user",
         new=AsyncMock(return_value=0),
     ) as mock_per_user:
         await sync_new_publications_for_all_users(

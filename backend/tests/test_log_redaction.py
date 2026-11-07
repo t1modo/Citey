@@ -2,11 +2,11 @@
 
 import logging
 
-from citey import log_redaction
+from app import log_redaction
 
 
 def test_httpx_request_lines_are_off_after_startup():
-    import citey.main  # noqa: F401  (installs the logging setup)
+    import app.main  # noqa: F401  (installs the logging setup)
 
     assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
     assert logging.getLogger("httpcore").getEffectiveLevel() >= logging.WARNING

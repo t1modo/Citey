@@ -17,7 +17,7 @@ import pytest
 import respx
 from httpx import Response
 
-from citey.services.semantic_scholar import (
+from app.services.semantic_scholar import (
     _match_canonical,
     _normalize_affiliation,
     _get_with_retry,
@@ -26,7 +26,7 @@ from citey.services.semantic_scholar import (
     get_citing_papers,
     normalize_citing_work,
 )
-from citey.services.source_errors import SourceUnavailable
+from app.services.source_errors import SourceUnavailable
 
 _RECENT_DATE = "2026-03-01"
 _RE_S2 = re.compile(r"https://api\.semanticscholar\.org/.*")
@@ -286,7 +286,7 @@ async def test_get_with_retry_persistent_500_returns_last_response(respx_mock) -
         resp = await _get_with_retry(client, "https://api.semanticscholar.org/test", {})
     assert resp is not None
     assert resp.status_code == 500
-    from citey.services.semantic_scholar import _MAX_RETRIES
+    from app.services.semantic_scholar import _MAX_RETRIES
     assert route.call_count == _MAX_RETRIES
 
 
@@ -352,8 +352,8 @@ async def test_citation_counts_failed_batch_returns_empty(respx_mock) -> None:
 
 def test_api_key_header_only_on_semantic_scholar_requests(monkeypatch) -> None:
     """S2_API_KEY is sent to Semantic Scholar and never to other hosts (arxiv.org PDFs)."""
-    from citey.config import get_settings
-    from citey.services import semantic_scholar as s2
+    from app.config import get_settings
+    from app.services import semantic_scholar as s2
 
     monkeypatch.setenv("S2_API_KEY", "test-key")
     get_settings.cache_clear()
@@ -370,7 +370,7 @@ def test_api_key_header_only_on_semantic_scholar_requests(monkeypatch) -> None:
 async def test_with_api_key_every_request_is_paced(monkeypatch, respx_mock) -> None:
     """The keyed limit is 1 request/second across all endpoints, so even
     unthrottled import calls must wait on the shared throttle."""
-    from citey.services import semantic_scholar as s2
+    from app.services import semantic_scholar as s2
 
     waits: list[float] = []
 

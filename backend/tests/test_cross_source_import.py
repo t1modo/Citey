@@ -16,8 +16,8 @@ import pytest
 import respx
 from httpx import Response
 
-from citey.routers.works import _names_match, _author_in_paper
-from citey.services.semantic_scholar import get_paper_with_authors
+from app.routers.works import _names_match, _author_in_paper
+from app.services.semantic_scholar import get_paper_with_authors
 
 _S2_API = "https://api.semanticscholar.org/graph/v1"
 

@@ -1,4 +1,4 @@
-# Only src/ (the citey package), the migrations and the uv files are
+# Only src/ (the app package), the migrations and the uv files are
 # needed in the image.
 .venv
 **/__pycache__

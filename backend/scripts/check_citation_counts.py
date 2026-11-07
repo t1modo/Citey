@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv(_PROJECT_ROOT / ".env")
 
 import httpx
-from citey.firebase_client import get_db
+from app.firebase_client import get_db
 
 
 async def fetch_oa_count(client: httpx.AsyncClient, openalex_id: str) -> int | None:

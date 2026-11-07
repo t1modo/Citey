@@ -7,8 +7,8 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from citey import clerk_auth, firebase_client
-from citey.config import Settings
+from app import clerk_auth, firebase_client
+from app.config import Settings
 
 PK = "pk_test_ZWFnZXItc2hhcmstMjg1Ni5jbGVyay5hY2NvdW50cy5kZXYk"
 ISS = "https://eager-shark-2856.clerk.accounts.dev"

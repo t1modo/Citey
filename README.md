@@ -37,7 +37,7 @@ The backend uses [uv](https://docs.astral.sh/uv/).
 
 ```bash
 # API on :8000
-cd backend && uv sync && uv run uvicorn citey.main:app --reload
+cd backend && uv sync && uv run uvicorn app.main:app --reload
 
 # Site on :3000
 cd frontend && cp .env.example .env.local && npm install && npm run dev
@@ -72,8 +72,8 @@ Add or upgrade a backend dependency with `uv add <package>`, which updates
 
 ```
 backend/
-  src/citey/          the API, as the installable package `citey`
-    main.py           FastAPI app (Vercel entrypoint: src.citey.main:app)
+  src/app/            the API, as the installable package `app`
+    main.py           FastAPI app (Vercel entrypoint: src.app.main:app)
     config.py, db.py, db_models.py, models.py, ...
     routers/          one module per /api/... area
     services/         citation sources, email, publication sync
@@ -83,13 +83,13 @@ backend/
   scripts/            one-off maintenance scripts
 ```
 
-`uv sync` installs `citey` in editable mode, so `import citey` works from the
-tests, scripts, Alembic and `uvicorn citey.main:app`.
+`uv sync` installs `app` in editable mode, so `import app` works from the
+tests, scripts, Alembic and `uvicorn app.main:app`.
 
 ### Database (Postgres)
 
 The Postgres tables are SQLModel models (SQLAlchemy 2.1 ORM tables that are
-also Pydantic models) in `backend/src/citey/db_models.py`, and Alembic migrations
+also Pydantic models) in `backend/src/app/db_models.py`, and Alembic migrations
 in `backend/migrations/`. `docker compose up` starts a local Postgres 18 and
 applies the migrations before the API starts; Compose always uses that local
 database, never Neon.
@@ -143,7 +143,7 @@ retired with Render, so those stop working.
 ## Scheduled jobs
 
 [Inngest](https://www.inngest.com/) runs the jobs by calling
-`/api/inngest`; the functions are in `backend/src/citey/inngest_functions.py`.
+`/api/inngest`; the functions are in `backend/src/app/inngest_functions.py`.
 Schedules are in Pacific time and follow daylight saving time.
 
 | Job | When | How |

@@ -16,8 +16,8 @@ load_dotenv(_PROJECT_ROOT / ".env")
 import logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-from citey.firebase_client import get_db
-from citey.services.citation_service import process_tracked_work, _doc_to_tracked_work
+from app.firebase_client import get_db
+from app.services.citation_service import process_tracked_work, _doc_to_tracked_work
 
 
 async def main(doi: str) -> None:

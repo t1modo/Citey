@@ -12,7 +12,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from citey.services.semantic_scholar import (
+from app.services.semantic_scholar import (
     get_citing_papers,
     normalize_citing_work,
     _extract_affiliations_from_arxiv_pdf,

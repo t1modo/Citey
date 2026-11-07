@@ -8,11 +8,11 @@ import pytest
 import respx
 from httpx import Response
 
-from citey.services import europe_pmc, opencitations
-from citey.services.source_errors import SourceUnavailable
+from app.services import europe_pmc, opencitations
+from app.services.source_errors import SourceUnavailable
 from tests.test_citation_accuracy import LONG, WORK_PATH, _DB, _day, _oa, _work
 
-from citey.services.citation_service import _CITATION_WINDOW_VERSION, process_tracked_work
+from app.services.citation_service import _CITATION_WINDOW_VERSION, process_tracked_work
 
 OTHER = "Measuring agreement between citation indexes across scholarly fields"
 BIO = "Single cell imaging of mitochondrial calcium flux in cultured neurons"
@@ -21,12 +21,12 @@ BIO = "Single cell imaging of mitochondrial calcium flux in cultured neurons"
 async def _check(db, work, *, oa=(), oc=(), epmc=(), hydrate=(), crossref=None, **kw):
     hyd = AsyncMock(return_value=list(hydrate))
     cr = AsyncMock(return_value=crossref)
-    with patch("citey.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=list(oa))), \
-         patch("citey.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
-         patch("citey.services.citation_service.opencitations_svc.get_citing_refs", new=AsyncMock(return_value=list(oc))), \
-         patch("citey.services.citation_service.europe_pmc_svc.get_citing_works", new=AsyncMock(return_value=list(epmc))), \
-         patch("citey.services.citation_service.openalex_svc.get_works_by_ids", new=hyd), \
-         patch("citey.services.citation_service.crossref_svc.get_citing_metadata", new=cr):
+    with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=list(oa))), \
+         patch("app.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
+         patch("app.services.citation_service.opencitations_svc.get_citing_refs", new=AsyncMock(return_value=list(oc))), \
+         patch("app.services.citation_service.europe_pmc_svc.get_citing_works", new=AsyncMock(return_value=list(epmc))), \
+         patch("app.services.citation_service.openalex_svc.get_works_by_ids", new=hyd), \
+         patch("app.services.citation_service.crossref_svc.get_citing_metadata", new=cr):
         result = await process_tracked_work("u1", work, db, **kw)
     return result, hyd, cr
 
@@ -154,10 +154,10 @@ async def test_failed_lookup_keeps_the_baseline_open() -> None:
     oc = [{"doi": "10.9/x", "openalex_id": "https://openalex.org/W6", "pmid": None,
            "publication_date": _day(200)}]
     failures: list[str] = []
-    with patch("citey.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=[])), \
-         patch("citey.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
-         patch("citey.services.citation_service.opencitations_svc.get_citing_refs", new=AsyncMock(return_value=oc)), \
-         patch("citey.services.citation_service.openalex_svc.get_works_by_ids",
+    with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=[])), \
+         patch("app.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
+         patch("app.services.citation_service.opencitations_svc.get_citing_refs", new=AsyncMock(return_value=oc)), \
+         patch("app.services.citation_service.openalex_svc.get_works_by_ids",
                new=AsyncMock(side_effect=SourceUnavailable("openalex", "429"))):
         await process_tracked_work("u1", _work(), db, baseline_done=False, source_failures=failures)
     assert failures == ["opencitations"]
@@ -167,9 +167,9 @@ async def test_failed_lookup_keeps_the_baseline_open() -> None:
 async def test_source_outage_is_a_failure_not_an_empty_list() -> None:
     db = _DB()
     failures: list[str] = []
-    with patch("citey.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=[])), \
-         patch("citey.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
-         patch("citey.services.citation_service.europe_pmc_svc.get_citing_works",
+    with patch("app.services.citation_service.openalex_svc.get_citing_works", new=AsyncMock(return_value=[])), \
+         patch("app.services.citation_service.s2_svc.get_citing_papers", new=AsyncMock(return_value=[])), \
+         patch("app.services.citation_service.europe_pmc_svc.get_citing_works",
                new=AsyncMock(side_effect=SourceUnavailable("europe_pmc", "503"))):
         await process_tracked_work("u1", _work(), db, baseline_done=False, source_failures=failures)
     assert failures == ["europe_pmc"]

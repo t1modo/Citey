@@ -15,12 +15,12 @@ import os
 
 import pytest
 
-from citey.services import openalex as oa_svc
-from citey.services import semantic_scholar as s2_svc
-from citey.services import pubmed as pubmed_svc
-from citey.services import inspire_hep as inspire_svc
-from citey.services import dblp as dblp_svc
-from citey.routers.works import _author_in_paper, _names_match
+from app.services import openalex as oa_svc
+from app.services import semantic_scholar as s2_svc
+from app.services import pubmed as pubmed_svc
+from app.services import inspire_hep as inspire_svc
+from app.services import dblp as dblp_svc
+from app.routers.works import _author_in_paper, _names_match
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("CITEY_LIVE_TESTS") != "1",
