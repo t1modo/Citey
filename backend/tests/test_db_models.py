@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.db import DatabaseNotConfigured, make_engine, sqlalchemy_url
-from app.db_models import (
+from app.models import (
     Alert,
     Citation,
     CitingWork,
@@ -106,7 +106,7 @@ def test_session_needs_a_database_url(monkeypatch) -> None:
 
 @needs_db
 def test_migrations_match_the_models(engine) -> None:
-    # Raises if app/db_models.py changed without a new migration.
+    # Raises if a table in app/models/ changed without a new migration.
     command.check(_alembic_config())
 
 

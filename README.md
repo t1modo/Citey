@@ -74,7 +74,10 @@ Add or upgrade a backend dependency with `uv add <package>`, which updates
 backend/
   src/app/            the API, as the installable package `app`
     main.py           FastAPI app (Vercel entrypoint: src.app.main:app)
-    config.py, db.py, db_models.py, models.py, ...
+    models/           database tables (SQLModel): base.py, user.py, work.py,
+                      citation.py, alert.py, support.py
+    schemas/          API request/response shapes (SQLModel, no table)
+    config.py, db.py, ...
     routers/          one module per /api/... area
     services/         citation sources, email, publication sync
     templates/email/  email templates, shipped inside the package
@@ -89,7 +92,7 @@ tests, scripts, Alembic and `uvicorn app.main:app`.
 ### Database (Postgres)
 
 The Postgres tables are SQLModel models (SQLAlchemy 2.1 ORM tables that are
-also Pydantic models) in `backend/src/app/db_models.py`, and Alembic migrations
+also Pydantic models) in `backend/src/app/models/`, and Alembic migrations
 in `backend/migrations/`. `docker compose up` starts a local Postgres 18 and
 applies the migrations before the API starts; Compose always uses that local
 database, never Neon.
@@ -97,7 +100,7 @@ database, never Neon.
 ```bash
 cd backend
 uv run alembic upgrade head                              # apply migrations
-uv run alembic revision --autogenerate -m "add x to y"   # after editing db_models.py
+uv run alembic revision --autogenerate -m "add x to y"   # after editing app/models/
 uv run alembic check                                     # models and migrations agree?
 ```
 

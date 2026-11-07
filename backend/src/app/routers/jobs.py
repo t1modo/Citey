@@ -25,7 +25,7 @@ from app.async_utils import run_off_loop
 from app.config import Settings, get_settings
 from app.deps import enforce_cooldown
 from app.firebase_client import verify_token
-from app.models import JobRunRequest
+from app.schemas import JobRunRequest
 
 logger = logging.getLogger(__name__)
 

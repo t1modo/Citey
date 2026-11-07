@@ -9,7 +9,7 @@ automatic prepare is turned off.
 
 Two ways in, over the same psycopg driver: ``connect()`` for raw SQL, and
 ``get_session()`` for the SQLModel / SQLAlchemy ORM tables in
-``app.db_models``.
+``app.models``.
 """
 
 from __future__ import annotations
