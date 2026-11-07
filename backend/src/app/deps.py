@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.concurrency import run_blocking
-from app.clerk_auth import verify_token
+from app.clerk_auth import signed_in_email, verify_token
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ async def get_current_user(
         ) from exc
 
     uid: str = decoded.get("uid", "")
+    signed_in_email.set(decoded.get("email"))
     if not uid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

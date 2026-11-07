@@ -11,9 +11,13 @@ All calls block, so callers run them off the event loop.
 
 from __future__ import annotations
 
+import logging
+
 import httpx
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 _API = "https://api.clerk.com/v1"
 _PAGE = 500
@@ -64,13 +68,18 @@ def list_account_uids() -> set[str]:
 def email_for(uid: str) -> str:
     """The primary email of the Clerk user with this ID, or ''."""
     if not configured():
+        logger.warning("Clerk email lookup skipped for uid=%s: CLERK_SECRET_KEY is not set", uid)
         return ""
     try:
         with _client() as client:
             resp = client.get(f"/users/{uid}")
-    except httpx.HTTPError:
+    except httpx.HTTPError as exc:
+        logger.warning("Clerk email lookup failed for uid=%s: %s", uid, type(exc).__name__)
         return ""
     if resp.status_code != 200:
+        # 401: the secret key is wrong or from another instance; 404: no such
+        # user in the instance the key belongs to (e.g. a dev key in production).
+        logger.warning("Clerk email lookup failed for uid=%s: HTTP %s", uid, resp.status_code)
         return ""
     user = resp.json()
     primary = user.get("primary_email_address_id")
