@@ -81,6 +81,65 @@ async def test_deleting_a_user_keeps_shared_papers(pg_session) -> None:
     assert await WorkStore(pg_session).get_by_key(KEY) is not None
 
 
+# --- Pruning untracked papers ---------------------------------------------------
+
+LATER = datetime.now(timezone.utc) + timedelta(days=1)  # past every row's created_at
+
+
+async def test_pruning_removes_a_deleted_users_papers_and_citing_papers(pg_session) -> None:
+    await _user(pg_session)
+    work, _ = await tracking_service.track_paper(pg_session, "ada", KEY, PAPER, now=NOW)
+    await _cite(pg_session, work, "10.9/a", published="2026-11-01")
+    await UserStore(pg_session).delete_by_id("ada")
+
+    assert await WorkStore(pg_session).prune_untracked(LATER, dry_run=True) == {"works": 1, "citing_works": 1}
+    assert await WorkStore(pg_session).get_by_key(KEY) is not None  # a dry run deletes nothing
+
+    assert await WorkStore(pg_session).prune_untracked(LATER) == {"works": 1, "citing_works": 1}
+    for model in (Work, Citation, CitingWork):
+        assert (await pg_session.exec(select(model))).all() == []
+
+
+async def test_pruning_keeps_papers_someone_still_tracks(pg_session) -> None:
+    for uid in ("ada", "grace"):
+        await _user(pg_session, uid)
+    work, _ = await tracking_service.track_paper(pg_session, "ada", KEY, PAPER, now=NOW)
+    await tracking_service.track_paper(pg_session, "grace", KEY, PAPER, now=NOW)
+    await _cite(pg_session, work, "10.9/a", published="2026-11-01")
+    await tracking_service.untrack_paper(pg_session, "ada", KEY)
+
+    assert await WorkStore(pg_session).prune_untracked(LATER) == {"works": 0, "citing_works": 0}
+    assert await WorkStore(pg_session).get_by_key(KEY) is not None
+    assert len((await pg_session.exec(select(CitingWork))).all()) == 1
+
+
+async def test_pruning_keeps_a_citing_paper_shared_with_a_tracked_paper(pg_session) -> None:
+    await _user(pg_session)
+    gone, _ = await tracking_service.track_paper(pg_session, "ada", KEY, PAPER, now=NOW)
+    kept, _ = await tracking_service.track_paper(
+        pg_session, "ada", "10.1__other", {"doi": "10.1/other", "title": "Other"}, now=NOW
+    )
+    await _cite(pg_session, gone, "10.9/both", published="2026-11-01")
+    await _cite(pg_session, kept, "10.9/both", published="2026-11-01")
+    await tracking_service.untrack_paper(pg_session, "ada", KEY)
+
+    assert await WorkStore(pg_session).prune_untracked(LATER, dry_run=True) == {"works": 1, "citing_works": 0}
+    assert await WorkStore(pg_session).prune_untracked(LATER) == {"works": 1, "citing_works": 0}
+    assert len((await pg_session.exec(select(CitingWork))).all()) == 1
+    assert len((await pg_session.exec(select(Citation))).all()) == 1
+
+
+async def test_pruning_skips_rows_newer_than_the_cutoff(pg_session) -> None:
+    await _user(pg_session)
+    work, _ = await tracking_service.track_paper(pg_session, "ada", KEY, PAPER, now=NOW)
+    await _cite(pg_session, work, "10.9/a", published="2026-11-01")
+    await UserStore(pg_session).delete_by_id("ada")
+
+    earlier = datetime.now(timezone.utc) - timedelta(days=1)
+    assert await WorkStore(pg_session).prune_untracked(earlier) == {"works": 0, "citing_works": 0}
+    assert await WorkStore(pg_session).get_by_key(KEY) is not None
+
+
 # --- WorkStore and tracking_service -------------------------------------------
 
 

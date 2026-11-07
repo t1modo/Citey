@@ -497,7 +497,9 @@ async def test_cleanup_deletes_old_notifications(seed, app_db):
     res = await _trigger(fns.notification_cleanup, _cron_event(), _RecordingClient())
 
     assert res.status is mocked.Status.COMPLETED
-    assert res.output == {"users_processed": 2, "notifications_deleted": 1}
+    assert res.output == {
+        "users_processed": 2, "notifications_deleted": 1, "works_deleted": 0, "citing_works_deleted": 0,
+    }
     left = (await app_db.exec(select(Alert))).all()
     assert len(left) == 1 and left[0].created_at > now - timedelta(days=30)
 

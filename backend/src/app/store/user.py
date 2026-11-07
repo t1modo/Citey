@@ -36,7 +36,8 @@ class UserStore(BaseStore[User]):
 
     async def delete_by_id(self, uid: str) -> None:
         """Delete the account. Its tracking and alerts go with it (ON DELETE
-        CASCADE); papers and citations stay."""
+        CASCADE). Papers it alone tracked are removed by the nightly
+        prune_untracked_papers."""
         await self.session.exec(delete(User).where(User.id == uid))
 
     async def ids_after(self, cursor: str | None = None) -> list[str]:

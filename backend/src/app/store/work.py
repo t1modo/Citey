@@ -3,11 +3,11 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import delete, func, literal_column, update
+from sqlalchemy import delete, exists, func, literal_column, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import select
 
-from app.models import UserWork, Work
+from app.models import Alert, Citation, CitingWork, UserWork, Work
 from app.store.base import BaseStore
 
 # Metadata a later add may fill in when the shared row lacks it.
@@ -107,3 +107,36 @@ class WorkStore(BaseStore[Work]):
             select(Work, UserWork).join(UserWork, UserWork.work_id == Work.id).where(UserWork.user_id == uid)
         )
         return list(rows.all())
+
+    async def prune_untracked(self, before: datetime, *, dry_run: bool = False) -> dict[str, int]:
+        """
+        Delete papers nobody tracks any more, and citing papers no citation
+        points at, created before *before*.
+
+        A paper goes when no user_works row and no alert refers to it; its
+        citations go with it (ON DELETE CASCADE). A citing paper goes when no
+        citation is left for it; its identity keys go with it. Rows newer than
+        *before* are kept, so a paper being added while this runs is never
+        removed from under the request adding it.
+        """
+        untracked = [
+            Work.created_at < before,
+            ~exists().where(UserWork.work_id == Work.id),
+            ~exists().where(Alert.citation_id == Citation.id, Citation.work_id == Work.id),
+        ]
+        if dry_run:
+            works = (await self.session.exec(select(func.count()).select_from(Work).where(*untracked))).one()
+            citing_ids = select(CitingWork.id).where(
+                CitingWork.created_at < before,
+                ~exists().where(
+                    Citation.citing_work_id == CitingWork.id,
+                    Citation.work_id.not_in(select(Work.id).where(*untracked)),
+                ),
+            )
+            citing = (await self.session.exec(select(func.count()).select_from(citing_ids.subquery()))).one()
+            return {"works": works, "citing_works": citing}
+
+        works = len((await self.session.exec(delete(Work).where(*untracked).returning(Work.id))).all())
+        orphaned = [CitingWork.created_at < before, ~exists().where(Citation.citing_work_id == CitingWork.id)]
+        citing = len((await self.session.exec(delete(CitingWork).where(*orphaned).returning(CitingWork.id))).all())
+        return {"works": works, "citing_works": citing}

@@ -32,6 +32,7 @@ from app.services import email_service
 from app.services.citation_service import (
     _get_auth_uids,
     cleanup_old_notifications,
+    prune_untracked_papers,
     run_job_for_user,
 )
 from app.services.publication_sync import sync_new_publications_for_user
@@ -300,7 +301,13 @@ async def notification_cleanup(ctx: inngest.Context) -> dict:
     async def cleanup() -> dict:
         return await cleanup_notifications()
 
-    return await ctx.step.run("delete-old-notifications", cleanup)
+    async def prune() -> dict:
+        async with session_scope() as session:
+            return await prune_untracked_papers(session=session)
+
+    summary = await ctx.step.run("delete-old-notifications", cleanup)
+    pruned = await ctx.step.run("delete-untracked-papers", prune)
+    return {**summary, **pruned}
 
 
 @inngest_client.create_function(

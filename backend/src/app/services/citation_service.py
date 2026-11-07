@@ -773,6 +773,28 @@ async def cleanup_old_notifications(session: AsyncSession, dry_run: bool = False
     return summary
 
 
+# Papers and citing papers younger than this are never pruned, so a paper
+# being added while the sweep runs isn't removed from under the request.
+_PRUNE_GRACE = timedelta(days=1)
+
+
+async def prune_untracked_papers(session: AsyncSession, dry_run: bool = False) -> dict:
+    """
+    Delete papers nobody tracks any more (after an account is deleted or the
+    last tracker removes them), with their citations, and citing papers that
+    no citation points at.
+
+    Returns a summary dict: {works_deleted, citing_works_deleted}.
+    """
+    before = datetime.now(tz=timezone.utc) - _PRUNE_GRACE
+    counts = await WorkStore(session).prune_untracked(before, dry_run=dry_run)
+    if not dry_run:
+        await session.commit()
+    summary = {"works_deleted": counts["works"], "citing_works_deleted": counts["citing_works"]}
+    logger.info("Untracked paper cleanup%s: %s", " (dry run)" if dry_run else "", summary)
+    return summary
+
+
 # ---------------------------------------------------------------------------
 # Accounts without a sign-in record
 # ---------------------------------------------------------------------------
@@ -808,8 +830,8 @@ async def _get_auth_uids() -> set[str]:
 async def cleanup_orphan_users(session: AsyncSession, dry_run: bool = False) -> dict:
     """
     Delete accounts with no sign-in record in Firebase Auth or Clerk: their
-    profile, tracking and alerts (papers and citations stay for anyone else
-    tracking them).
+    profile, tracking and alerts. Papers left with no tracker are removed by
+    prune_untracked_papers, which runs after this.
     """
     auth_uids = await _get_auth_uids()
     store = UserStore(session)
@@ -822,9 +844,11 @@ async def cleanup_orphan_users(session: AsyncSession, dry_run: bool = False) -> 
     if not dry_run:
         await session.commit()
     deleted = 0 if dry_run else len(orphans)
+    pruned = await prune_untracked_papers(session, dry_run=dry_run)
     return {
         "orphans_found": len(orphans),
         "orphans_deleted": deleted,
+        **pruned,
         "message": (
             f"Found {len(orphans)} orphaned user(s) — dry run, nothing deleted."
             if dry_run
