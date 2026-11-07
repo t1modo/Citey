@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     # allowance and later requests get 401. Free key from openalex.org (sign in, then API settings)
     openalex_api_key: str = ""
 
+    # Neon Postgres. DATABASE_URL is the pooled connection string for app
+    # traffic; DATABASE_URL_UNPOOLED is the direct one, for migrations.
+    database_url: str = ""
+    database_url_unpooled: str = ""
+
     # OpenCitations. Optional; a free token raises the rate limit:
     # https://opencitations.net/accesstoken
     opencitations_access_token: str = ""

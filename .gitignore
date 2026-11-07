@@ -112,3 +112,4 @@ desktop.ini
 !vercel.json
 service-account*.json
 firebase-adminsdk*.json
+.neon
