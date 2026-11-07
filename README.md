@@ -37,7 +37,7 @@ The backend uses [uv](https://docs.astral.sh/uv/).
 
 ```bash
 # API on :8000
-cd backend && uv sync && uv run uvicorn app.main:app --reload
+cd backend && uv sync && uv run uvicorn main:app --reload
 
 # Site on :3000
 cd frontend && cp .env.example .env.local && npm install && npm run dev
@@ -68,55 +68,10 @@ npx --ignore-scripts=false inngest-cli@latest dev -u http://localhost:8000/api/i
 Add or upgrade a backend dependency with `uv add <package>`, which updates
 `pyproject.toml` and `uv.lock`.
 
-### Backend layout
-
-```
-backend/
-  src/app/            the API, as the installable package `app`
-    main.py           FastAPI app (Vercel entrypoint: src.app.main:app)
-    models/           database tables (SQLModel): base.py, user.py, work.py,
-                      citation.py, alert.py, support.py
-    store/            database access only: base.py (BaseStore), user.py,
-                      work.py, citation.py, alert.py, limit.py
-    schemas/          API request/response shapes (SQLModel, no table)
-    core/             infrastructure: db.py (async Postgres), concurrency.py
-    config.py, ...
-    routers/          one module per /api/... area
-    services/         the rules: tracking, alerts, citation checks, sources,
-                      email, publication sync; they use the stores
-    templates/email/  email templates, shipped inside the package
-  migrations/         Alembic migrations
-  tests/              pytest
-  scripts/            one-off maintenance scripts
-```
-
-`uv sync` installs `app` in editable mode, so `import app` works from the
-tests, scripts, Alembic and `uvicorn app.main:app`.
-
-### Async
-
-The backend is async throughout: every route handler and dependency is
-`async def`, and one event loop serves every request, so nothing may block
-it.
-
-- Postgres goes through `app.core.db`: an async engine and `AsyncSession`
-  (`Depends(get_session)`), or `async with connect()` for raw SQL. Load
-  relationships up front (`selectinload(...)`); lazy loading doesn't work in
-  async code.
-- The blocking SDKs still in use (Firestore, Firebase Auth, Resend) are called
-  through `run_blocking(fn, ...)`, or `run_off_loop(job, ...)` for a whole
-  Firestore-backed job, from `app.core.concurrency`, so they run on worker
-  threads.
-
-`tests/test_async_backend.py` enforces this: every handler and dependency
-must be async, and every route is called against a fake Firestore and fake
-Firebase Auth that fail the test if a blocking call runs on the serving
-loop. A new route goes in that test's `REQUESTS` (or `NO_BLOCKING_IO`).
-
 ### Database (Postgres)
 
 The Postgres tables are SQLModel models (SQLAlchemy 2.1 ORM tables that are
-also Pydantic models) in `backend/src/app/models/`, and Alembic migrations
+also Pydantic models) in `backend/app/db_models.py`, and Alembic migrations
 in `backend/migrations/`. `docker compose up` starts a local Postgres 18 and
 applies the migrations before the API starts; Compose always uses that local
 database, never Neon.
@@ -124,44 +79,15 @@ database, never Neon.
 ```bash
 cd backend
 uv run alembic upgrade head                              # apply migrations
-uv run alembic revision --autogenerate -m "add x to y"   # after editing app/models/
+uv run alembic revision --autogenerate -m "add x to y"   # after editing db_models.py
 uv run alembic check                                     # models and migrations agree?
 ```
 
 Read the generated migration before committing it. The schema tests need a
 throwaway database: with Compose running,
 `TEST_DATABASE_URL=postgresql://citey:citey@localhost:5432/citey_test uv run pytest`.
-CI runs them against its own Postgres. A separate Migrations job:
-- fails if there is more than one Alembic head (two branches each added a
-  migration);
-- applies every migration to an empty database;
-- fails if a model changed without a migration (`alembic check`);
-- downgrades to empty and upgrades again.
-
-On a pull request it also writes a **migration SQL draft** to the job summary:
-the SQL the PR's new migrations will run, and the SQL that undoes them. Read
-it before merging. Locally:
-`DATABASE_URL=postgresql://x@localhost/x ../.github/scripts/migration-draft.sh origin/main`.
-
-Code reaches Postgres in layers: **routers → services → stores → database**.
-
-- `app/store/` does database access and nothing else: `BaseStore` (in
-  `base.py`) holds the request's session, and each area has its own store,
-  `UserStore` (`user.py`), `WorkStore` (`work.py`), `CitationStore`
-  (`citation.py`), `AlertStore` (`alert.py`) and `LimitStore` (`limit.py`).
-  Stores return model rows and never commit.
-- `app/services/` holds the rules and uses the stores: for example
-  `tracking_service.track_paper` creates the shared paper, adds the user as a
-  tracker and announces its recent citations; `convert` turns rows into the
-  API's shapes. The router (or job) commits once per request.
-
-To copy the data from Firestore into Postgres (read-only on the Firestore
-side, every write an upsert, one transaction per user):
-
-```bash
-uv run python scripts/copy_firestore_to_postgres.py --dry-run   # copy, then roll back
-uv run python scripts/copy_firestore_to_postgres.py
-```
+CI runs them against its own Postgres and fails if a model changed without a
+migration.
 
 Production is the Neon project `citey`. Migrations are not run on deploy yet:
 apply them with `DATABASE_URL_UNPOOLED` set to Neon's direct connection
@@ -199,7 +125,7 @@ retired with Render, so those stop working.
 ## Scheduled jobs
 
 [Inngest](https://www.inngest.com/) runs the jobs by calling
-`/api/inngest`; the functions are in `backend/src/app/inngest_functions.py`.
+`/api/inngest`; the functions are in `backend/app/inngest_functions.py`.
 Schedules are in Pacific time and follow daylight saving time.
 
 | Job | When | How |

@@ -1,5 +1,4 @@
-# Only src/ (the app package), the migrations and the uv files are
-# needed in the image.
+# Only main.py, app/, templates/ and the uv files are needed in the image.
 .venv
 **/__pycache__
 **/*.py[cod]

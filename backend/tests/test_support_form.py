@@ -53,7 +53,7 @@ class _DB:
 
 @pytest.fixture()
 def client():
-    from app.main import app
+    from main import app
 
     db = _DB()
     app.dependency_overrides[get_db] = lambda: db

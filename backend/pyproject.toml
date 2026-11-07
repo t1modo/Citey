@@ -21,8 +21,8 @@ dependencies = [
     "python-dotenv==1.2.4",
     "pytz==2024.2",
     "resend==2.51.0",
-    "sqlalchemy[asyncio]==2.1.8",
-    "sqlmodel[asyncio]==0.0.48",
+    "sqlalchemy==2.1.8",
+    "sqlmodel==0.0.48",
     "uvicorn[standard]==0.54.0",
 ]
 
@@ -33,26 +33,10 @@ dev = [
     "respx==0.23.1",
 ]
 
-# The code is the app package in src/app. uv installs it (editable
-# locally, as a wheel in Docker and on Vercel), so `import app` works from
-# tests, scripts, Alembic and uvicorn alike.
-[build-system]
-requires = ["uv_build>=0.9.11,<0.10"]
-build-backend = "uv_build"
-
+# An app, not a library: uv installs the dependencies but never builds or
+# installs the project itself.
 [tool.uv]
-package = true
-# Rebuild the installed wheel whenever the code changes, not only when this
-# file does. Without this, uv reuses its cached build of the project, and
-# Docker and Vercel (which both keep uv's cache) can ship old code.
-cache-keys = [
-    { file = "pyproject.toml" },
-    { file = "uv.lock" },
-    { file = "src/**/*" },
-]
-
-[tool.uv.build-backend]
-module-name = "app"
+package = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

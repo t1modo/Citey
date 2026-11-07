@@ -36,7 +36,7 @@ import json  # noqa: E402
 
 from app.config import get_settings  # noqa: E402
 from app.firebase_client import get_db  # noqa: E402
-from app.schemas import TrackedWork  # noqa: E402
+from app.models import TrackedWork  # noqa: E402
 from app.services.citation_service import process_tracked_work  # noqa: E402
 
 # ---------------------------------------------------------------------------

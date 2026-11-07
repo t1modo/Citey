@@ -1,6 +1,6 @@
 """Create the Postgres schema
 
-The tables in src/app/models/: users, works, user_works, citing_works,
+The tables in app/db_models.py: users, works, user_works, citing_works,
 citing_work_keys, citations, alerts and support_limits. Firestore data is
 not copied here; that is a separate step.
 

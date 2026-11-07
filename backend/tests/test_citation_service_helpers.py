@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.schemas import TrackedWork
+from app.models import TrackedWork
 from app.services.citation_service import (
     _dedup_key,
     _normalize_title,
